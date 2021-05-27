@@ -13,7 +13,7 @@ from .app.link_utilities import (
 )
 
 from .app.dataframe_utilities import minimal_synapse_columns
-from .app.neuron_data_base import NeuronData, table_columns
+from .app.neuron_data_base import NeuronData
 from .app.config import *
 from .app.plots import *
 
@@ -39,18 +39,8 @@ def register_callbacks(app, config):
         return []
 
     @app.callback(
-        Output("response-text", "children"),
-        Input("submit-button", "n_clicks"),
-        State("root_id", "value"),
-    )
-    def update_text(n_clicks, input_value):
-        if len(input_value) == 0:
-            return ""
-        input_root_id = int(input_value)
-        return f"  Running data for {input_root_id}..."
-
-    @app.callback(
         Output("plots", "children"),
+        Output("loading-spinner", "children"),
         Output("plot-response-text", "children"),
         Output("target-synapse-json", "data"),
         Output("source-synapse-json", "data"),
@@ -75,6 +65,7 @@ def register_callbacks(app, config):
         if len(input_value) == 0:
             return (
                 html.Div("No plots to show yet"),
+                "",
                 "",
                 [],
                 [],
@@ -116,6 +107,7 @@ def register_callbacks(app, config):
                 align="center",
                 no_gutters=True,
             ),
+            "",
             f"Data for {input_root_id}",
             pre_targ_df.to_dict("records"),
             post_targ_df.to_dict("records"),

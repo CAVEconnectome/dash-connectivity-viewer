@@ -30,43 +30,76 @@ def dropdown_options():
 header_text = html.H3(f"Neuron Target Info:")
 
 
-input_row = dbc.Row(
-    [
-        dbc.Col(
-            [
-                html.Div("Root ID:"),
-                dcc.Input(id="root_id", value="", type="text"),
-            ],
-            width={"size": 2, "offset": 1},
-            align="center",
-        ),
-        dbc.Col(
-            [
-                html.Div("Cell Type Table: "),
-                dcc.Dropdown(
-                    id="cell_type_table_dropdown",
-                    options=dropdown_options(),
-                    value="allen_soma_coarse_cell_class_model_v1",
-                ),
-            ],
-            width={"size": 2, "offset": 0},
-            align="center",
-        ),
-        dbc.Col(
-            [
-                dbc.Button(
-                    id="submit-button",
-                    children="Submit",
-                    color="primary",
-                    style={"font-size": "16px"},
-                ),
-                html.Div(id="response-text", children=""),
-            ],
-            width=1,
-            align="end",
-        ),
-    ],
-)
+input_row = [
+    dbc.Row(
+        [
+            dbc.Col(
+                [
+                    html.Div("Root ID:"),
+                ],
+                width={"size": 1, "offset": 1},
+                align="end",
+            ),
+            dbc.Col(
+                [
+                    html.Div("Cell Type Table: "),
+                ],
+                width={"size": 2, "offset": 1},
+                align="end",
+            ),
+        ],
+        justify="start",
+    ),
+    dbc.Row(
+        [
+            dbc.Col(
+                [
+                    dcc.Input(id="root_id", value="", type="text"),
+                ],
+                width={"size": 1, "offset": 1},
+                align="center",
+            ),
+            dbc.Col(
+                [
+                    dcc.Dropdown(
+                        id="cell_type_table_dropdown",
+                        options=dropdown_options(),
+                        value="allen_soma_coarse_cell_class_model_v1",
+                    ),
+                ],
+                width={"size": 2, "offset": 1},
+                align="center",
+            ),
+            dbc.Col(
+                [
+                    dbc.Button(
+                        id="submit-button",
+                        children="Submit",
+                        color="primary",
+                        style={"font-size": "16px"},
+                    ),
+                ],
+                width={"size": 1, "offset": 0},
+                align="end",
+            ),
+            dbc.Col(
+                [
+                    html.Div(
+                        dcc.Loading(
+                            id="main_loading",
+                            children=html.Div(id="loading-spinner", children=""),
+                            style={"transform": "scale(0.8)"},
+                            type="default",
+                        )
+                    )
+                ],
+                width={"size": 1, "offset": 0},
+                align="center",
+            ),
+        ],
+        justify="start",
+    ),
+]
 
 
 plot_header = html.H4(id="plot-response-text", children="")

@@ -33,6 +33,16 @@ minimal_synapse_columns = ["pre_pt_root_id", "post_pt_root_id", "ctr_pt_position
 single_soma_cols = [soma_depth_col, soma_position_col, ct_col, valence_col]
 
 
+def categorize_unsure(row):
+    if row["cell_type"] == "Unsure":
+        if row["classification_system"] == "aibs_coarse_excitatory":
+            return "UnsE"
+        elif row["classification_system"] == "aibs_coarse_inhibitory":
+            return "UnsI"
+    else:
+        return row["cell_type"]
+
+
 def assemble_pt_position(row, prefix=""):
     return np.array(
         [
@@ -119,6 +129,10 @@ def get_ct_df(cell_type_table, root_ids, client, timestamp, live_query=True):
         ct_df["pt_position"] = []
     else:
         ct_df["pt_position"] = ct_df.apply(assemble_pt_position, axis=1).values
+
+    if len(ct_df) > 0:
+        ct_df[ct_col] = ct_df.apply(categorize_unsure, axis=1)
+
     ct_df[valence_col] = ct_df[ct_col].apply(lambda x: x in inhib_types)
     ct_df[ct_col] = ct_df[ct_col].astype(cat_dtype)
     ct_df.drop_duplicates(subset="pt_root_id", inplace=True)

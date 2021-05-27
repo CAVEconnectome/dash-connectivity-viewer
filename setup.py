@@ -24,16 +24,15 @@ with open("requirements.txt", "r") as f:
     required = f.read().splitlines()
 
 setup(
-    name="dash-connectivity-viewer",
-    version=find_version("src", "__init__.py"),
+    name="dashconnectivityviewer",
+    version=find_version("dashconnectivityviewer", "__init__.py"),
     description="Dash connectivity viewer for CAVE data",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Casey Schneider-Mizell",
     author_email="caseysm@gmail.com",
     url="https://github.com/ceesem/dash-connectivity-viewer",
-    packages=find_packages("src"),
-    package_dir={"": "src"},
+    packages=["dashconnectivityviewer"],
     include_package_data=True,
     install_requires=[required],  # external packages as dependencies
 )
