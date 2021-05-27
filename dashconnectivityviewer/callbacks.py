@@ -30,7 +30,7 @@ def register_callbacks(app, config):
     server_address = config.get("SERVER_ADDRESS", DEFAULT_SERVER_ADDRESS)
     auth_token = config.get("AUTH_TOKEN", None)
 
-    @app.callback(c
+    @app.callback(
         Output("data-table", "selected_rows"),
         Input("reset-selection", "n_clicks"),
         Input("connectivity-tab", "value"),
@@ -67,7 +67,7 @@ def register_callbacks(app, config):
     def update_data(n_clicks, input_value, ct_table_value):
         if logger is not None:
             t0 = time.time()
-
+        print('auth_token', auth_token)
         client = FrameworkClient(
             datastack_name, server_address=server_address, auth_token=auth_token
         )
