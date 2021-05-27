@@ -28,9 +28,9 @@ def register_callbacks(app, config):
 
     datastack_name = config.get("DATASTACK", DEFAULT_DATASTACK)
     server_address = config.get("SERVER_ADDRESS", DEFAULT_SERVER_ADDRESS)
-    auth_token = config.get("AUTH_TOKEN")
+    auth_token = config.get("AUTH_TOKEN", None)
 
-    @app.callback(
+    @app.callback(c
         Output("data-table", "selected_rows"),
         Input("reset-selection", "n_clicks"),
         Input("connectivity-tab", "value"),
