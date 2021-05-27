@@ -1,0 +1,10 @@
+nglui
+pandas
+numpy
+seaborn
+dash
+dash_bootstrap_components
+requests
+annotationframeworkclient
+plotly
+loguru

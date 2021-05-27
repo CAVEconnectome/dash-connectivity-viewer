@@ -3,6 +3,8 @@ import dash_bootstrap_components as dbc
 from .callbacks import register_callbacks
 from .layout import layout, title
 
+__version__ = "0.0.1"
+
 external_stylesheets = [dbc.themes.FLATLY]
 
 
