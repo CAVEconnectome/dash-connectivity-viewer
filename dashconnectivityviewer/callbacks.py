@@ -65,7 +65,7 @@ def register_callbacks(app, config):
             t0 = time.time()
 
         auth_token = flask.g.get("auth_token", None)
-
+        print('auth_token', auth_token)
         try:
             client = FrameworkClient(
                 datastack_name, server_address=server_address, auth_token=auth_token
