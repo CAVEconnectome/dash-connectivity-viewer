@@ -1,2 +1,2 @@
 include requirements.txt
-include src/app/data/*
+include dashconnectivityviewer/app/data/*
