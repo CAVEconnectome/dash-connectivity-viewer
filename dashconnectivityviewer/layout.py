@@ -3,8 +3,9 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import flask
-from .app.config import table_columns
+from .app.config import DEFAULT_DATASTACK, table_columns
 from .dash_url_helper import create_component_kwargs, State
+
 title = "Connectivity Viewer"
 
 
@@ -28,7 +29,6 @@ def dropdown_options():
 
 
 header_text = html.H3(f"Neuron Target Info:")
-
 
 
 plot_header = html.H4(id="plot-response-text", children="")
@@ -59,15 +59,18 @@ top_link = dbc.Row(
 )
 
 
+url_bar_and_content_div = html.Div(
+    [dcc.Location(id="url", refresh=False), html.Div(id="page-layout")]
+)
 
-
-url_bar_and_content_div = html.Div([
-    dcc.Location(id='url', refresh=False),
-    html.Div(id='page-layout')
-])
 
 def page_layout(state: State = None):
     state = state or {}
+
+    try:
+        datastack_name = state["datastack"]["value"]
+    except:
+        datastack_name = DEFAULT_DATASTACK
 
     input_row = [
         dbc.Row(
@@ -93,9 +96,11 @@ def page_layout(state: State = None):
             [
                 dbc.Col(
                     [
-                        dcc.Input(**create_component_kwargs(
-                            state, 
-                            id_inner="root_id", value="", type="text")),
+                        dcc.Input(
+                            **create_component_kwargs(
+                                state, id_inner="root_id", value="", type="text"
+                            )
+                        ),
                     ],
                     width={"size": 1, "offset": 1},
                     align="center",
@@ -104,10 +109,11 @@ def page_layout(state: State = None):
                     [
                         dcc.Dropdown(
                             **create_component_kwargs(
-                            state,
-                            id_inner="cell_type_table_dropdown",
-                            options=dropdown_options(),
-                            value="allen_soma_coarse_cell_class_model_v1")
+                                state,
+                                id_inner="cell_type_table_dropdown",
+                                options=dropdown_options(),
+                                value="allen_soma_coarse_cell_class_model_v1",
+                            )
                         ),
                     ],
                     width={"size": 2, "offset": 1},
@@ -207,6 +213,7 @@ def page_layout(state: State = None):
             dcc.Store("target-table-json"),
             dcc.Store("source-table-json"),
             dcc.Store("client-info-json"),
+            dcc.Store("datastack-name", data=datastack_name),
         ]
     )
 
@@ -218,7 +225,4 @@ def app_layout():
     if flask.has_request_context():  # for real
         return url_bar_and_content_div
     # validation only
-    return html.Div([
-        url_bar_and_content_div,
-        *page_layout()
-    ])
+    return html.Div([url_bar_and_content_div, *page_layout()])

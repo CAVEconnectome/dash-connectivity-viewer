@@ -19,7 +19,7 @@ from .app.neuron_data_base import NeuronData, table_columns
 from .app.config import *
 from .app.plots import *
 from .dash_url_helper import _COMPONENT_ID_TYPE
-import flask 
+import flask
 
 try:
     from loguru import logger
@@ -53,18 +53,22 @@ def register_callbacks(app, config):
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
         Input("submit-button", "n_clicks"),
-        State({"id_inner":"root_id", "type":_COMPONENT_ID_TYPE}, "value"),
-        State({"id_inner":"cell_type_table_dropdown", "type":_COMPONENT_ID_TYPE}, "value")
+        Input("datastack-name", "data"),
+        State({"id_inner": "root_id", "type": _COMPONENT_ID_TYPE}, "value"),
+        State(
+            {"id_inner": "cell_type_table_dropdown", "type": _COMPONENT_ID_TYPE},
+            "value",
+        ),
     )
-    def update_data(n_clicks, input_value, ct_table_value):
+    def update_data(n_clicks, datastack_name, input_value, ct_table_value):
 
         if logger is not None:
-            t0 = time.time()  
-        #datastack_name = qd.get('datastack', [DEFAULT_DATASTACK])[0]
-        datastack_name = DEFAULT_DATASTACK
-        auth_token = flask.g.get('auth_token', None)
-        print('datastack_name', datastack_name)
-        print('auth_token',auth_token )
+            t0 = time.time()
+        # datastack_name = qd.get('datastack', [DEFAULT_DATASTACK])[0]
+        # datastack_name = DEFAULT_DATASTACK
+        auth_token = flask.g.get("auth_token", None)
+        print("datastack_name", datastack_name)
+        print("auth_token", auth_token)
         client = FrameworkClient(
             datastack_name, server_address=server_address, auth_token=auth_token
         )
@@ -111,7 +115,6 @@ def register_callbacks(app, config):
 
         pre_tab_records = nrn_data.pre_tab_dat().to_dict("records")
         post_tab_records = nrn_data.post_tab_dat().to_dict("records")
-
 
         pre_targ_df = nrn_data.pre_targ_df()[minimal_synapse_columns]
         pre_targ_df = stringify_root_ids(pre_targ_df)
