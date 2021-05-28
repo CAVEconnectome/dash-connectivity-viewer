@@ -80,21 +80,40 @@ def register_callbacks(app, config):
         nrn_data = NeuronData(
             input_root_id, client=client, cell_type_table=ct_table_value
         )
-        vfig = violin_fig(nrn_data, axon_color, dendrite_color, height=500, width=300)
-        sfig = scatter_fig(nrn_data, valence_colors=val_colors, height=500)
-        bfig = bar_fig(nrn_data, val_colors, height=500, width=500)
+        try:
+            vfig = violin_fig(
+                nrn_data, axon_color, dendrite_color, height=500, width=300
+            )
+            sfig = scatter_fig(nrn_data, valence_colors=val_colors, height=500)
+            bfig = bar_fig(nrn_data, val_colors, height=500, width=500)
+        except Exception as e:
+            return (
+                html.Div(str(e)),
+                "",
+                "",
+                [],
+                [],
+                [],
+                [],
+                "Output",
+                "Input",
+                1,
+                client.info.info_cache[datastack_name],
+            )
+
+        pre_tab_records = nrn_data.pre_tab_dat().to_dict("records")
+        post_tab_records = nrn_data.post_tab_dat().to_dict("records")
 
         pre_targ_df = nrn_data.pre_targ_df()[minimal_synapse_columns]
         pre_targ_df = stringify_root_ids(pre_targ_df)
 
         post_targ_df = nrn_data.post_targ_df()[minimal_synapse_columns]
         post_targ_df = stringify_root_ids(post_targ_df)
+
         if logger is not None:
             logger.info(
                 f"Data update for {input_root_id} | time:{time.time() - t0:.2f} s, syn_in: {len(pre_targ_df)} , syn_out: {len(post_targ_df)}"
             )
-        pre_tab_records = nrn_data.pre_tab_dat().to_dict("records")
-        post_tab_records = nrn_data.post_tab_dat().to_dict("records")
 
         return (
             dbc.Row(

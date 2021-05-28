@@ -107,6 +107,7 @@ def get_soma_df(soma_table, root_ids, client, timestamp, live_query=True):
     soma_df[soma_depth_col] = soma_df[soma_position_col].apply(
         lambda x: voxel_resolution[1] * x[1] / 1000
     )
+    soma_df["pt_root_id"] = soma_df["pt_root_id"].astype("Int64")
     return soma_df[soma_table_columns]
 
 
@@ -136,6 +137,8 @@ def get_ct_df(cell_type_table, root_ids, client, timestamp, live_query=True):
     ct_df[valence_col] = ct_df[ct_col].apply(lambda x: x in inhib_types)
     ct_df[ct_col] = ct_df[ct_col].astype(cat_dtype)
     ct_df.drop_duplicates(subset="pt_root_id", inplace=True)
+    ct_df["pt_root_id"] = ct_df["pt_root_id"].astype("Int64")
+
     return ct_df[cell_type_table_columns]
 
 
@@ -191,7 +194,9 @@ def cell_typed_soma_df(
         )
 
     soma_ct_df = ct_df.merge(
-        soma_df.drop_duplicates(subset="pt_root_id"), on="pt_root_id"
+        soma_df.drop_duplicates(subset="pt_root_id"),
+        on="pt_root_id",
+        how="outer",
     )
     multisoma_ind = soma_ct_df.query("num_soma>1").index
     for col in single_soma_cols:
