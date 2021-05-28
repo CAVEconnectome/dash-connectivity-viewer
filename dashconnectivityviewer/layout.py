@@ -59,53 +59,6 @@ top_link = dbc.Row(
 )
 
 
-data_table = html.Div(
-    [
-        dcc.Tabs(
-            id="connectivity-tab",
-            value="tab-pre",
-            children=[
-                dcc.Tab(id="output-tab", label="Output", value="tab-pre"),
-                dcc.Tab(id="input-tab", label="Input", value="tab-post"),
-            ],
-        ),
-        html.Div(
-            dbc.Row(
-                [
-                    dbc.Col(
-                        dash_table.DataTable(
-                            id="data-table",
-                            columns=[{"name": i, "id": i} for i in table_columns],
-                            data=[],
-                            css=[
-                                {
-                                    "selector": "table",
-                                    "rule": "table-layout: fixed",
-                                }
-                            ],
-                            style_cell={
-                                "height": "auto",
-                                "width": "20%",
-                                "minWidth": "20%",
-                                "maxWidth": "20%",
-                                "whiteSpace": "normal",
-                            },
-                            sort_action="native",
-                            sort_mode="multi",
-                            filter_action="native",
-                            row_selectable="multi",
-                            page_current=0,
-                            page_action="native",
-                            page_size=50,
-                        ),
-                        width=10,
-                    ),
-                ],
-                justify="center",
-            )
-        ),
-    ]
-)
 
 
 url_bar_and_content_div = html.Div([
@@ -190,6 +143,54 @@ def page_layout(state: State = None):
             justify="start",
         ),
     ]
+
+    data_table = html.Div(
+        [
+            dcc.Tabs(
+                id="connectivity-tab",
+                value="tab-pre",
+                children=[
+                    dcc.Tab(id="output-tab", label="Output", value="tab-pre"),
+                    dcc.Tab(id="input-tab", label="Input", value="tab-post"),
+                ],
+            ),
+            html.Div(
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            dash_table.DataTable(
+                                id="data-table",
+                                columns=[{"name": i, "id": i} for i in table_columns],
+                                data=[],
+                                css=[
+                                    {
+                                        "selector": "table",
+                                        "rule": "table-layout: fixed",
+                                    }
+                                ],
+                                style_cell={
+                                    "height": "auto",
+                                    "width": "20%",
+                                    "minWidth": "20%",
+                                    "maxWidth": "20%",
+                                    "whiteSpace": "normal",
+                                },
+                                sort_action="native",
+                                sort_mode="multi",
+                                filter_action="native",
+                                row_selectable="multi",
+                                page_current=0,
+                                page_action="native",
+                                page_size=50,
+                            ),
+                            width=10,
+                        ),
+                    ],
+                    justify="center",
+                )
+            ),
+        ]
+    )
 
     layout = html.Div(
         children=[

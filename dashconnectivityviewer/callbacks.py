@@ -18,6 +18,7 @@ from .app.dataframe_utilities import minimal_synapse_columns
 from .app.neuron_data_base import NeuronData, table_columns
 from .app.config import *
 from .app.plots import *
+from .dash_url_helper import _COMPONENT_ID_TYPE
 import flask 
 
 try:
@@ -52,13 +53,14 @@ def register_callbacks(app, config):
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
         Input("submit-button", "n_clicks"),
-        State("root_id", "value"),
-        State("cell_type_table_dropdown", "value"),
+        State({"id_inner":"root_id", "type":_COMPONENT_ID_TYPE}, "value"),
+        State({"id_inner":"cell_type_table_dropdown", "type":_COMPONENT_ID_TYPE}, "value")
     )
-    def update_data(n_clicks, search, input_value, ct_table_value):
+    def update_data(n_clicks, input_value, ct_table_value):
+        print('update_data')
         if logger is not None:
             t0 = time.time()
-        qd = parse_qs(search[1:])
+        #qd = parse_qs(search[1:])
         #datastack_name = qd.get('datastack', [DEFAULT_DATASTACK])[0]
         datastack_name = DEFAULT_DATASTACK
         auth_token = flask.g.get('auth_token', None)
@@ -164,57 +166,57 @@ def register_callbacks(app, config):
         else:
             return []
 
-    @app.callback(
-        Output("ngl_link", "href"),
-        Input("connectivity-tab", "value"),
-        Input("data-table", "derived_virtual_data"),
-        Input("data-table", "derived_virtual_selected_rows"),
-        Input("target-synapse-json", "data"),
-        Input("source-synapse-json", "data"),
-        Input("client-info-json", "data"),
-    )
-    def update_link(
-        tab_value,
-        rows,
-        selected_rows,
-        syn_records_target,
-        syn_records_source,
-        info_cache,
-    ):
-        if rows is None or len(rows) == 0:
-            rows = {}
-            sb = generate_statebuilder(info_cache)
-            return sb.render_state(None, return_as="url")
-        elif len(selected_rows) == 0:
-            if tab_value == "tab-pre":
-                syn_df = pd.DataFrame(syn_records_target)
-                syn_df["pre_pt_root_id"] = syn_df["pre_pt_root_id"].astype(int)
-                syn_df["post_pt_root_id"] = syn_df["post_pt_root_id"].astype(int)
-                sb = generate_statebuilder_pre(info_cache)
-                return sb.render_state(syn_df, return_as="url")
-            elif tab_value == "tab-post":
-                syn_df = pd.DataFrame(syn_records_source)
-                syn_df["pre_pt_root_id"] = syn_df["pre_pt_root_id"].astype(int)
-                syn_df["post_pt_root_id"] = syn_df["post_pt_root_id"].astype(int)
-                sb = generate_statebuilder_post(info_cache)
-            return sb.render_state(syn_df, return_as="url")
-        else:
-            dff = pd.DataFrame(rows)
-            if tab_value == "tab-pre":
-                return generate_url_synapses(
-                    selected_rows,
-                    dff,
-                    pd.DataFrame(syn_records_target),
-                    "pre",
-                    info_cache,
-                )
-            elif tab_value == "tab-post":
-                return generate_url_synapses(
-                    selected_rows,
-                    dff,
-                    pd.DataFrame(syn_records_source),
-                    "post",
-                    info_cache,
-                )
+    # @app.callback(
+    #     Output("ngl_link", "href"),
+    #     Input("connectivity-tab", "value"),
+    #     Input("data-table", "derived_virtual_data"),
+    #     Input("data-table", "derived_virtual_selected_rows"),
+    #     Input("target-synapse-json", "data"),
+    #     Input("source-synapse-json", "data"),
+    #     Input("client-info-json", "data"),
+    # )
+    # def update_link(
+    #     tab_value,
+    #     rows,
+    #     selected_rows,
+    #     syn_records_target,
+    #     syn_records_source,
+    #     info_cache,
+    # ):
+    #     if rows is None or len(rows) == 0:
+    #         rows = {}
+    #         sb = generate_statebuilder(info_cache)
+    #         return sb.render_state(None, return_as="url")
+    #     elif len(selected_rows) == 0:
+    #         if tab_value == "tab-pre":
+    #             syn_df = pd.DataFrame(syn_records_target)
+    #             syn_df["pre_pt_root_id"] = syn_df["pre_pt_root_id"].astype(int)
+    #             syn_df["post_pt_root_id"] = syn_df["post_pt_root_id"].astype(int)
+    #             sb = generate_statebuilder_pre(info_cache)
+    #             return sb.render_state(syn_df, return_as="url")
+    #         elif tab_value == "tab-post":
+    #             syn_df = pd.DataFrame(syn_records_source)
+    #             syn_df["pre_pt_root_id"] = syn_df["pre_pt_root_id"].astype(int)
+    #             syn_df["post_pt_root_id"] = syn_df["post_pt_root_id"].astype(int)
+    #             sb = generate_statebuilder_post(info_cache)
+    #         return sb.render_state(syn_df, return_as="url")
+    #     else:
+    #         dff = pd.DataFrame(rows)
+    #         if tab_value == "tab-pre":
+    #             return generate_url_synapses(
+    #                 selected_rows,
+    #                 dff,
+    #                 pd.DataFrame(syn_records_target),
+    #                 "pre",
+    #                 info_cache,
+    #             )
+    #         elif tab_value == "tab-post":
+    #             return generate_url_synapses(
+    #                 selected_rows,
+    #                 dff,
+    #                 pd.DataFrame(syn_records_source),
+    #                 "post",
+    #                 info_cache,
+    #             )
 
     pass
