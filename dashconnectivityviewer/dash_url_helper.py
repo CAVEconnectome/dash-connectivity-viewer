@@ -47,7 +47,10 @@ def _parse_url_to_state(href: str) -> State:
             id, param = key.split(_ID_PARAM_SEP)
         else:
             id, param = key, 'value'
-        state.setdefault(id, {})[param] = ast.literal_eval(value)
+        try:
+            state.setdefault(id, {})[param] = ast.literal_eval(value)
+        except SyntaxError:
+            state.setdefault(id, {})[param] = value
 
     return state
 
