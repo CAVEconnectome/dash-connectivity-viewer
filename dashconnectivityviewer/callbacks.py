@@ -4,6 +4,7 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
+from urllib.parse import parse_qs
 
 from .app.link_utilities import (
     generate_statebuilder,
@@ -28,9 +29,7 @@ except:
 
 def register_callbacks(app, config):
 
-    datastack_name = config.get("DATASTACK", DEFAULT_DATASTACK)
     server_address = config.get("SERVER_ADDRESS", DEFAULT_SERVER_ADDRESS)
-
 
     @app.callback(
         Output("data-table", "selected_rows"),
@@ -53,16 +52,16 @@ def register_callbacks(app, config):
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
         Input("submit-button", "n_clicks"),
+        Input("location", "search"),
         State("root_id", "value"),
         State("cell_type_table_dropdown", "value"),
     )
-    def update_data(n_clicks, input_value, ct_table_value):
+    def update_data(n_clicks, search, input_value, ct_table_value):
         if logger is not None:
             t0 = time.time()
-
-        
+        qd = parse_qs(search[1:])
+        datastack_name = qd.get('datastack', [DEFAULT_DATASTACK])[0]
         auth_token = flask.g.get('auth_token', None)
-        print('auth_token', auth_token)
 
         client = FrameworkClient(
             datastack_name, server_address=server_address, auth_token=auth_token

@@ -178,9 +178,10 @@ data_table = html.Div(
         ),
     ]
 )
-
+location = dcc.Location(id='location', refresh=False)
 layout = html.Div(
     children=[
+        location,
         html.Div(header_text),
         html.Div(input_row),
         html.Hr(),
