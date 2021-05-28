@@ -53,7 +53,7 @@ def register_callbacks(app, config):
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
         Input("submit-button", "n_clicks"),
-        Input("datastack-name", "data"),
+        Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value"),
         State({"id_inner": "root_id", "type": _COMPONENT_ID_TYPE}, "value"),
         State(
             {"id_inner": "cell_type_table_dropdown", "type": _COMPONENT_ID_TYPE},
@@ -66,9 +66,24 @@ def register_callbacks(app, config):
 
         auth_token = flask.g.get("auth_token", None)
 
-        client = FrameworkClient(
-            datastack_name, server_address=server_address, auth_token=auth_token
-        )
+        try:
+            client = FrameworkClient(
+                datastack_name, server_address=server_address, auth_token=auth_token
+            )
+        except Exception as e:
+            return (
+                html.Div(str(e)),
+                "",
+                "",
+                [],
+                [],
+                [],
+                [],
+                "Output",
+                "Input",
+                1,
+                {"aligned_volumes": {}},
+            )
 
         if len(input_value) == 0:
             return (

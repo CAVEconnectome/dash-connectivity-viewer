@@ -67,11 +67,6 @@ url_bar_and_content_div = html.Div(
 def page_layout(state: State = None):
     state = state or {}
 
-    try:
-        datastack_name = state["datastack"]["value"]
-    except:
-        datastack_name = DEFAULT_DATASTACK
-
     input_row = [
         dbc.Row(
             [
@@ -213,7 +208,16 @@ def page_layout(state: State = None):
             dcc.Store("target-table-json"),
             dcc.Store("source-table-json"),
             dcc.Store("client-info-json"),
-            dcc.Store("datastack-name", data=datastack_name),
+            html.Div(
+                dcc.Input(
+                    **create_component_kwargs(
+                        state,
+                        id_inner="datastack",
+                        value=DEFAULT_DATASTACK,
+                    ),
+                ),
+                style={"display": "none"},
+            ),
         ]
     )
 
