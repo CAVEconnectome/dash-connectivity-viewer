@@ -56,7 +56,7 @@ def register_callbacks(app, config):
         State({"id_inner":"root_id", "type":_COMPONENT_ID_TYPE}, "value"),
         State({"id_inner":"cell_type_table_dropdown", "type":_COMPONENT_ID_TYPE}, "value")
     )
-    def update_data(n_clicks, search, input_value, ct_table_value):
+    def update_data(n_clicks, input_value, ct_table_value):
 
         if logger is not None:
             t0 = time.time()  
