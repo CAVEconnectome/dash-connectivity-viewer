@@ -2,9 +2,9 @@ import dash_table
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
-
+import flask
 from .app.config import table_columns
-
+from .dash_url_helper import create_component_kwargs, State
 title = "Connectivity Viewer"
 
 
@@ -28,78 +28,6 @@ def dropdown_options():
 
 
 header_text = html.H3(f"Neuron Target Info:")
-
-
-input_row = [
-    dbc.Row(
-        [
-            dbc.Col(
-                [
-                    html.Div("Root ID:"),
-                ],
-                width={"size": 1, "offset": 1},
-                align="end",
-            ),
-            dbc.Col(
-                [
-                    html.Div("Cell Type Table: "),
-                ],
-                width={"size": 2, "offset": 1},
-                align="end",
-            ),
-        ],
-        justify="start",
-    ),
-    dbc.Row(
-        [
-            dbc.Col(
-                [
-                    dcc.Input(id="root_id", value="", type="text"),
-                ],
-                width={"size": 1, "offset": 1},
-                align="center",
-            ),
-            dbc.Col(
-                [
-                    dcc.Dropdown(
-                        id="cell_type_table_dropdown",
-                        options=dropdown_options(),
-                        value="allen_soma_coarse_cell_class_model_v1",
-                    ),
-                ],
-                width={"size": 2, "offset": 1},
-                align="center",
-            ),
-            dbc.Col(
-                [
-                    dbc.Button(
-                        id="submit-button",
-                        children="Submit",
-                        color="primary",
-                        style={"font-size": "16px"},
-                    ),
-                ],
-                width={"size": 1, "offset": 0},
-                align="end",
-            ),
-            dbc.Col(
-                [
-                    html.Div(
-                        dcc.Loading(
-                            id="main_loading",
-                            children=html.Div(id="loading-spinner", children=""),
-                            style={"transform": "scale(0.8)"},
-                            type="default",
-                        )
-                    )
-                ],
-                width={"size": 1, "offset": 0},
-                align="center",
-            ),
-        ],
-        justify="start",
-    ),
-]
 
 
 
@@ -178,22 +106,118 @@ data_table = html.Div(
         ),
     ]
 )
-location = dcc.Location(id='location', refresh=False)
-layout = html.Div(
-    children=[
-        location,
-        html.Div(header_text),
-        html.Div(input_row),
-        html.Hr(),
-        html.Div(plot_header),
-        html.Div(id="plots", children=None),
-        html.Hr(),
-        top_link,
-        data_table,
-        dcc.Store("target-synapse-json"),
-        dcc.Store("source-synapse-json"),
-        dcc.Store("target-table-json"),
-        dcc.Store("source-table-json"),
-        dcc.Store("client-info-json"),
+
+
+url_bar_and_content_div = html.Div([
+    dcc.Location(id='url', refresh=False),
+    html.Div(id='page-layout')
+])
+
+def page_layout(state: State = None):
+    state = state or {}
+
+    input_row = [
+        dbc.Row(
+            [
+                dbc.Col(
+                    [
+                        html.Div("Root ID:"),
+                    ],
+                    width={"size": 1, "offset": 1},
+                    align="end",
+                ),
+                dbc.Col(
+                    [
+                        html.Div("Cell Type Table: "),
+                    ],
+                    width={"size": 2, "offset": 1},
+                    align="end",
+                ),
+            ],
+            justify="start",
+        ),
+        dbc.Row(
+            [
+                dbc.Col(
+                    [
+                        dcc.Input(**create_component_kwargs(
+                            state, 
+                            id_inner="root_id", value="", type="text")),
+                    ],
+                    width={"size": 1, "offset": 1},
+                    align="center",
+                ),
+                dbc.Col(
+                    [
+                        dcc.Dropdown(
+                            **create_component_kwargs(
+                            state,
+                            id_inner="cell_type_table_dropdown",
+                            options=dropdown_options(),
+                            value="allen_soma_coarse_cell_class_model_v1")
+                        ),
+                    ],
+                    width={"size": 2, "offset": 1},
+                    align="center",
+                ),
+                dbc.Col(
+                    [
+                        dbc.Button(
+                            id="submit-button",
+                            children="Submit",
+                            color="primary",
+                            style={"font-size": "16px"},
+                        ),
+                    ],
+                    width={"size": 1, "offset": 0},
+                    align="end",
+                ),
+                dbc.Col(
+                    [
+                        html.Div(
+                            dcc.Loading(
+                                id="main_loading",
+                                children=html.Div(id="loading-spinner", children=""),
+                                style={"transform": "scale(0.8)"},
+                                type="default",
+                            )
+                        )
+                    ],
+                    width={"size": 1, "offset": 0},
+                    align="center",
+                ),
+            ],
+            justify="start",
+        ),
     ]
-)
+
+    layout = html.Div(
+        children=[
+            html.Div(header_text),
+            html.Div(input_row),
+            html.Hr(),
+            html.Div(plot_header),
+            html.Div(id="plots", children=None),
+            html.Hr(),
+            top_link,
+            data_table,
+            dcc.Store("target-synapse-json"),
+            dcc.Store("source-synapse-json"),
+            dcc.Store("target-table-json"),
+            dcc.Store("source-table-json"),
+            dcc.Store("client-info-json"),
+        ]
+    )
+
+    return layout
+
+
+def app_layout():
+    # https://dash.plotly.com/urls "Dynamically Create a Layout for Multi-Page App Validation"
+    if flask.has_request_context():  # for real
+        return url_bar_and_content_div
+    # validation only
+    return html.Div([
+        url_bar_and_content_div,
+        *page_layout()
+    ])

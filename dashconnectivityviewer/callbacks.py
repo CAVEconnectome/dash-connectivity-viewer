@@ -52,7 +52,6 @@ def register_callbacks(app, config):
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
         Input("submit-button", "n_clicks"),
-        Input("location", "search"),
         State("root_id", "value"),
         State("cell_type_table_dropdown", "value"),
     )
@@ -60,9 +59,11 @@ def register_callbacks(app, config):
         if logger is not None:
             t0 = time.time()
         qd = parse_qs(search[1:])
-        datastack_name = qd.get('datastack', [DEFAULT_DATASTACK])[0]
+        #datastack_name = qd.get('datastack', [DEFAULT_DATASTACK])[0]
+        datastack_name = DEFAULT_DATASTACK
         auth_token = flask.g.get('auth_token', None)
-
+        print('datastack_name', datastack_name)
+        print('auth_token',auth_token )
         client = FrameworkClient(
             datastack_name, server_address=server_address, auth_token=auth_token
         )
