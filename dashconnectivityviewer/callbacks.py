@@ -13,9 +13,11 @@ from .app.link_utilities import (
 )
 
 from .app.dataframe_utilities import minimal_synapse_columns
-from .app.neuron_data_base import NeuronData
+
+from .app.neuron_data_base import NeuronData, table_columns
 from .app.config import *
 from .app.plots import *
+import flask 
 
 try:
     from loguru import logger
@@ -28,7 +30,7 @@ def register_callbacks(app, config):
 
     datastack_name = config.get("DATASTACK", DEFAULT_DATASTACK)
     server_address = config.get("SERVER_ADDRESS", DEFAULT_SERVER_ADDRESS)
-    auth_token = config.get("AUTH_TOKEN")
+
 
     @app.callback(
         Output("data-table", "selected_rows"),
@@ -58,6 +60,10 @@ def register_callbacks(app, config):
         if logger is not None:
             t0 = time.time()
 
+        
+        auth_token = flask.g.get('auth_token', None)
+        print('auth_token', auth_token)
+
         client = FrameworkClient(
             datastack_name, server_address=server_address, auth_token=auth_token
         )
@@ -80,6 +86,7 @@ def register_callbacks(app, config):
         nrn_data = NeuronData(
             input_root_id, client=client, cell_type_table=ct_table_value
         )
+
         try:
             vfig = violin_fig(
                 nrn_data, axon_color, dendrite_color, height=500, width=300
@@ -103,6 +110,7 @@ def register_callbacks(app, config):
 
         pre_tab_records = nrn_data.pre_tab_dat().to_dict("records")
         post_tab_records = nrn_data.post_tab_dat().to_dict("records")
+
 
         pre_targ_df = nrn_data.pre_targ_df()[minimal_synapse_columns]
         pre_targ_df = stringify_root_ids(pre_targ_df)
