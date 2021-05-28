@@ -13,10 +13,12 @@ from .app.link_utilities import (
 )
 
 from .app.dataframe_utilities import minimal_synapse_columns
+
 from .app.neuron_data_base import NeuronData, table_columns
 from .app.config import *
 from .app.plots import *
 import flask 
+
 try:
     from loguru import logger
     import time
@@ -29,6 +31,7 @@ def register_callbacks(app, config):
     datastack_name = config.get("DATASTACK", DEFAULT_DATASTACK)
     server_address = config.get("SERVER_ADDRESS", DEFAULT_SERVER_ADDRESS)
 
+
     @app.callback(
         Output("data-table", "selected_rows"),
         Input("reset-selection", "n_clicks"),
@@ -38,18 +41,8 @@ def register_callbacks(app, config):
         return []
 
     @app.callback(
-        Output("response-text", "children"),
-        Input("submit-button", "n_clicks"),
-        State("root_id", "value"),
-    )
-    def update_text(n_clicks, input_value):
-        if len(input_value) == 0:
-            return ""
-        input_root_id = int(input_value)
-        return f"  Running data for {input_root_id}..."
-
-    @app.callback(
         Output("plots", "children"),
+        Output("loading-spinner", "children"),
         Output("plot-response-text", "children"),
         Output("target-synapse-json", "data"),
         Output("source-synapse-json", "data"),
@@ -66,9 +59,11 @@ def register_callbacks(app, config):
     def update_data(n_clicks, input_value, ct_table_value):
         if logger is not None:
             t0 = time.time()
+
         
         auth_token = flask.g.get('auth_token', None)
         print('auth_token', auth_token)
+
         client = FrameworkClient(
             datastack_name, server_address=server_address, auth_token=auth_token
         )
@@ -76,6 +71,7 @@ def register_callbacks(app, config):
         if len(input_value) == 0:
             return (
                 html.Div("No plots to show yet"),
+                "",
                 "",
                 [],
                 [],
@@ -90,21 +86,42 @@ def register_callbacks(app, config):
         nrn_data = NeuronData(
             input_root_id, client=client, cell_type_table=ct_table_value
         )
-        vfig = violin_fig(nrn_data, axon_color, dendrite_color, height=500, width=300)
-        sfig = scatter_fig(nrn_data, valence_colors=val_colors, height=500)
-        bfig = bar_fig(nrn_data, val_colors, height=500, width=500)
+
+        try:
+            vfig = violin_fig(
+                nrn_data, axon_color, dendrite_color, height=500, width=300
+            )
+            sfig = scatter_fig(nrn_data, valence_colors=val_colors, height=500)
+            bfig = bar_fig(nrn_data, val_colors, height=500, width=500)
+        except Exception as e:
+            return (
+                html.Div(str(e)),
+                "",
+                "",
+                [],
+                [],
+                [],
+                [],
+                "Output",
+                "Input",
+                1,
+                client.info.info_cache[datastack_name],
+            )
+
+        pre_tab_records = nrn_data.pre_tab_dat().to_dict("records")
+        post_tab_records = nrn_data.post_tab_dat().to_dict("records")
+
 
         pre_targ_df = nrn_data.pre_targ_df()[minimal_synapse_columns]
         pre_targ_df = stringify_root_ids(pre_targ_df)
 
         post_targ_df = nrn_data.post_targ_df()[minimal_synapse_columns]
         post_targ_df = stringify_root_ids(post_targ_df)
+
         if logger is not None:
             logger.info(
                 f"Data update for {input_root_id} | time:{time.time() - t0:.2f} s, syn_in: {len(pre_targ_df)} , syn_out: {len(post_targ_df)}"
             )
-        pre_tab_records = nrn_data.pre_tab_dat().to_dict("records")
-        post_tab_records = nrn_data.post_tab_dat().to_dict("records")
 
         return (
             dbc.Row(
@@ -117,6 +134,7 @@ def register_callbacks(app, config):
                 align="center",
                 no_gutters=True,
             ),
+            "",
             f"Data for {input_root_id}",
             pre_targ_df.to_dict("records"),
             post_targ_df.to_dict("records"),

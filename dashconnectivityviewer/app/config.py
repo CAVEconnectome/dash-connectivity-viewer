@@ -37,8 +37,9 @@ mean_size_col = "mean_syn_size"
 soma_table = "nucleus_neuron_svm"
 soma_table_query = "cell_type == 'neuron'"
 
-inhib_types = ["BC", "MC", "BPC", "NGC"]
-exc_types = ["23P", "4P", "5P_IT", "5P_NP", "5P_PT", "6CT", "6IT"]
+inhib_types = ["BC", "MC", "BPC", "NGC", "UnsI"]
+exc_types = ["23P", "4P", "5P_IT", "5P_NP", "5P_PT", "6CT", "6IT", "UnsE"]
+
 cat_dtype = pd.CategoricalDtype(categories=exc_types + inhib_types, ordered=True)
 
 layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
