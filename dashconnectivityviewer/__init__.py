@@ -11,10 +11,10 @@ __version__ = "0.0.1"
 
 
 
-def create_app(dash_kwargs={}, config={}):
-    if 'external_stylesheets' not in dash_kwargs:
-        dash_kwargs['external_stylesheets']=external_stylesheets
-    app = Dash(__name__, **dash_kwargs)
+def create_app(name=__name__,  config={},  **kwargs):
+    if 'external_stylesheets' not in kwargs:
+        kwargs['external_stylesheets']=external_stylesheets
+    app = Dash(name, **kwargs)
     app.title = title
     app.layout = app_layout
     setup(app, page_layout=page_layout)
