@@ -2,10 +2,10 @@ from dash import Dash
 import dash_bootstrap_components as dbc
 from .callbacks import register_callbacks
 from .layout import layout, title
+from .external_stylesheets import external_stylesheets
 
 __version__ = "0.0.1"
 
-external_stylesheets = [dbc.themes.FLATLY]
 
 
 def create_app(config={}):
