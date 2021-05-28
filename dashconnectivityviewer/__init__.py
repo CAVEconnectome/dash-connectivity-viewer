@@ -1,4 +1,5 @@
 from dash import Dash
+
 import dash_bootstrap_components as dbc
 from .callbacks import register_callbacks
 from .layout import layout, title

@@ -32,8 +32,7 @@ setup(
     author="Casey Schneider-Mizell",
     author_email="caseysm@gmail.com",
     url="https://github.com/ceesem/dash-connectivity-viewer",
-    packages=find_packages(),
-    package_dir={"dashconnectivityviewer": "dashconnectivityviewer"},
+    packages=["dashconnectivityviewer"],
     include_package_data=True,
     install_requires=[required],  # external packages as dependencies
 )
