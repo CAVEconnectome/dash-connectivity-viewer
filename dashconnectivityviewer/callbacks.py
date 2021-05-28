@@ -61,14 +61,11 @@ def register_callbacks(app, config):
         ),
     )
     def update_data(n_clicks, datastack_name, input_value, ct_table_value):
-
         if logger is not None:
             t0 = time.time()
-        # datastack_name = qd.get('datastack', [DEFAULT_DATASTACK])[0]
-        # datastack_name = DEFAULT_DATASTACK
+
         auth_token = flask.g.get("auth_token", None)
-        print("datastack_name", datastack_name)
-        print("auth_token", auth_token)
+
         client = FrameworkClient(
             datastack_name, server_address=server_address, auth_token=auth_token
         )
