@@ -4,6 +4,7 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
+from urllib.parse import parse_qs
 
 from .app.link_utilities import (
     generate_statebuilder,
@@ -17,7 +18,8 @@ from .app.dataframe_utilities import minimal_synapse_columns
 from .app.neuron_data_base import NeuronData, table_columns
 from .app.config import *
 from .app.plots import *
-import flask 
+from .dash_url_helper import _COMPONENT_ID_TYPE
+import flask
 
 try:
     from loguru import logger
@@ -28,7 +30,6 @@ except:
 
 def register_callbacks(app, config):
 
-    datastack_name = config.get("DATASTACK", DEFAULT_DATASTACK)
     server_address = config.get("SERVER_ADDRESS", DEFAULT_SERVER_ADDRESS)
 
 
@@ -53,20 +54,39 @@ def register_callbacks(app, config):
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
         Input("submit-button", "n_clicks"),
-        State("root_id", "value"),
-        State("cell_type_table_dropdown", "value"),
+        Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value"),
+        State({"id_inner": "root_id", "type": _COMPONENT_ID_TYPE}, "value"),
+        State(
+            {"id_inner": "cell_type_table_dropdown", "type": _COMPONENT_ID_TYPE},
+            "value",
+        ),
     )
-    def update_data(n_clicks, input_value, ct_table_value):
+    def update_data(n_clicks, datastack_name, input_value, ct_table_value):
         if logger is not None:
             t0 = time.time()
 
-        
-        auth_token = flask.g.get('auth_token', None)
-        print('auth_token', auth_token)
 
-        client = FrameworkClient(
-            datastack_name, server_address=server_address, auth_token=auth_token
-        )
+        auth_token = flask.g.get("auth_token", None)
+        print('auth_token', auth_token)
+        try:
+            client = FrameworkClient(
+                datastack_name, server_address=server_address, auth_token=auth_token
+            )
+        except Exception as e:
+            return (
+                html.Div(str(e)),
+                "",
+                "",
+                [],
+                [],
+                [],
+                [],
+                "Output",
+                "Input",
+                1,
+                {"aligned_volumes": {}},
+            )
+
 
         if len(input_value) == 0:
             return (
