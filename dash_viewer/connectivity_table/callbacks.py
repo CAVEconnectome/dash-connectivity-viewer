@@ -183,7 +183,7 @@ def register_callbacks(app, config):
         return (
             pre_targ_df.to_dict("records"),
             post_targ_df.to_dict("records"),
-            f"Output (n = {n_syn_pre}",
+            f"Output (n = {n_syn_pre})",
             f"Input (n = {n_syn_post})",
             1,
             info_cache,
