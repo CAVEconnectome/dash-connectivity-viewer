@@ -160,6 +160,10 @@ def register_callbacks(app, config):
                 f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {n_syn_post} , syn_out: {n_syn_pre}"
             )
 
+        if live_query == "live":
+            output_message = f"Current connectivity for root id {root_id}"
+        else:
+            output_message = f"Connectivity for root id {root_id} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
         return (
             pre_targ_df.to_dict("records"),
             post_targ_df.to_dict("records"),
@@ -168,7 +172,7 @@ def register_callbacks(app, config):
             1,
             info_cache,
             "",
-            f"Connectivity for root id {root_id}",
+            output_message,
         )
 
     @app.callback(
