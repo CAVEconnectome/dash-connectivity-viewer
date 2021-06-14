@@ -1,9 +1,12 @@
+from dash_html_components.A import A
+from dash_html_components.I import I
 from dash_viewer.common.neuron_data_base import NeuronData
 from annotationframeworkclient.frameworkclient import FrameworkClient
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
+from dash import callback_context
 
 from ..common.link_utilities import (
     generate_statebuider_syn_grouped,
@@ -12,6 +15,7 @@ from ..common.link_utilities import (
     generate_statebuilder_post,
     generate_url_synapses,
     EMPTY_INFO_CACHE,
+    MAX_URL_LENGTH,
 )
 from ..common.dataframe_utilities import (
     stringify_root_ids,
@@ -60,13 +64,14 @@ def register_callbacks(app, config):
         Output("client-info-json", "data"),
         Output("loading-spinner", "children"),
         Output("message-text", "children"),
+        Output("message-text", "color"),
         Input("submit-button", "n_clicks"),
         InputDatastack,
         StateAnnoID,
         StateAnnoType,
         StateLiveQuery,
     )
-    def update_data(_, datastack_name, anno_id, id_type, live_query):
+    def update_data(_, datastack_name, anno_id, id_type, live_query_toggle):
         if logger is not None:
             t0 = time.time()
 
@@ -84,6 +89,7 @@ def register_callbacks(app, config):
                 EMPTY_INFO_CACHE,
                 "",
                 str(e),
+                "danger",
             )
 
         if len(anno_id) == 0:
@@ -96,11 +102,17 @@ def register_callbacks(app, config):
                 info_cache,
                 "",
                 "No annotation id selected",
+                "info",
             )
 
         if len(anno_id) == 0:
             anno_id = None
             id_type = "anno_id"
+
+        if len(live_query_toggle) == 1:
+            live_query = "live"
+        else:
+            live_query = "static"
 
         if live_query == "static":
             timestamp = client.materialize.get_timestamp()
@@ -153,6 +165,7 @@ def register_callbacks(app, config):
                 EMPTY_INFO_CACHE,
                 "",
                 str(e),
+                "danger",
             )
 
         if logger is not None:
@@ -162,8 +175,11 @@ def register_callbacks(app, config):
 
         if live_query == "live":
             output_message = f"Current connectivity for root id {root_id}"
+            output_status = "success"
         else:
             output_message = f"Connectivity for root id {root_id} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
+            output_status = "success"
+
         return (
             pre_targ_df.to_dict("records"),
             post_targ_df.to_dict("records"),
@@ -173,6 +189,7 @@ def register_callbacks(app, config):
             info_cache,
             "",
             output_message,
+            output_status,
         )
 
     @app.callback(
@@ -195,6 +212,9 @@ def register_callbacks(app, config):
 
     @app.callback(
         Output("ngl_link", "href"),
+        Output("ngl_link", "children"),
+        Output("ngl_link", "disabled"),
+        Output("link-loading", "children"),
         Input("connectivity-tab", "value"),
         Input("data-table", "derived_virtual_data"),
         Input("data-table", "derived_virtual_selected_rows"),
@@ -206,10 +226,13 @@ def register_callbacks(app, config):
         selected_rows,
         info_cache,
     ):
+        large_state_text = "State Too Large - Please Filter"
+        small_state_text = "Neuroglancer Link"
+
         if rows is None or len(rows) == 0:
             rows = {}
             sb = generate_statebuilder(info_cache)
-            return sb.render_state(None, return_as="url")
+            return sb.render_state(None, return_as="url"), small_state_text, False, ""
         else:
             syn_df = pd.DataFrame(rows)
             if len(selected_rows) == 0:
@@ -219,7 +242,7 @@ def register_callbacks(app, config):
                     sb = generate_statebuilder_post(info_cache)
                 else:
                     raise ValueError('tab must be "tab-pre" or "tab-post"')
-                return sb.render_state(
+                url = sb.render_state(
                     syn_df.sort_values(by=num_syn_col, ascending=False), return_as="url"
                 )
             else:
@@ -230,6 +253,95 @@ def register_callbacks(app, config):
                 sb = generate_statebuider_syn_grouped(
                     info_cache, anno_layer, preselect=len(selected_rows) == 1
                 )
-                return sb.render_state(syn_df.iloc[selected_rows], return_as="url")
+                url = sb.render_state(syn_df.iloc[selected_rows], return_as="url")
+
+        if len(url) > MAX_URL_LENGTH:
+            return "", large_state_text, True, ""
+        else:
+            return url, small_state_text, False, ""
+
+    @app.callback(
+        Output("all-input-link", "children"),
+        Input("all-input-link-button", "n_clicks"),
+        Input("submit-button", "n_clicks"),
+        Input("source-table-json", "data"),
+        Input("client-info-json", "data"),
+        InputDatastack,
+        prevent_initial_call=True,
+    )
+    def generate_all_input_link(_1, _2, rows, info_cache, datastack):
+        ctx = callback_context
+        if not ctx.triggered:
+            return ""
+        trigger_src = ctx.triggered[0]["prop_id"].split(".")[0]
+        if (
+            trigger_src == "submit-button"
+            or trigger_src == "client-info-json"
+            or trigger_src == "source-table-json"
+        ):
+            return ""
+
+        if rows is None or len(rows) == 0:
+            return html.Div("No inputs to show")
+        else:
+            syn_df = pd.DataFrame(rows)
+            sb = generate_statebuilder_post(info_cache)
+            url = sb.render_state(
+                syn_df.sort_values(by=num_syn_col, ascending=False), return_as="url"
+            )
+        if len(url) > MAX_URL_LENGTH:
+            try:
+                client = make_client(datastack, config)
+                state = sb.render_state(
+                    syn_df.sort_values(by=num_syn_col, ascending=False),
+                    return_as="dict",
+                )
+                state_id = client.state.upload_state_json(state)
+                url = client.state.build_neuroglancer_url(state_id)
+            except Exception as e:
+                return html.Div(str(e))
+        return html.A("All Input Link", href=url, target="_blank")
+
+    @app.callback(
+        Output("all-output-link", "children"),
+        Input("all-output-link-button", "n_clicks"),
+        Input("submit-button", "n_clicks"),
+        Input("target-table-json", "data"),
+        Input("client-info-json", "data"),
+        InputDatastack,
+        prevent_initial_call=True,
+    )
+    def generate_all_output_link(_1, _2, rows, info_cache, datastack):
+        ctx = callback_context
+        if not ctx.triggered:
+            return ""
+        trigger_src = ctx.triggered[0]["prop_id"].split(".")[0]
+        if (
+            trigger_src == "submit-button"
+            or trigger_src == "client-info-json"
+            or trigger_src == "source-table-json"
+        ):
+            return ""
+
+        if rows is None or len(rows) == 0:
+            return html.Div("No outputs to show")
+        else:
+            syn_df = pd.DataFrame(rows)
+            sb = generate_statebuilder_pre(info_cache)
+            url = sb.render_state(
+                syn_df.sort_values(by=num_syn_col, ascending=False), return_as="url"
+            )
+        if len(url) > MAX_URL_LENGTH:
+            try:
+                client = make_client(datastack, config)
+                state = sb.render_state(
+                    syn_df.sort_values(by=num_syn_col, ascending=False),
+                    return_as="dict",
+                )
+                state_id = client.state.upload_state_json(state)
+                url = client.state.build_neuroglancer_url(state_id)
+            except Exception as e:
+                return html.Div(str(e))
+        return html.A("All Output Link", href=url, target="_blank")
 
     pass

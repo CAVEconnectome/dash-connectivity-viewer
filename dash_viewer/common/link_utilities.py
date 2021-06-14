@@ -5,6 +5,7 @@ from seaborn import color_palette
 from itertools import cycle
 
 EMPTY_INFO_CACHE = {"aligned_volume": {}}
+MAX_URL_LENGTH = 1_750_000
 
 
 def image_source(info_cache):
@@ -39,7 +40,6 @@ def generate_statebuilder(
     anno_column="post_pt_root_id",
     anno_layer="syns",
 ):
-    print(info_cache)
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
     )

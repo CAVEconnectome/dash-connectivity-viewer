@@ -26,7 +26,6 @@ def page_layout(state: State = None):
                     [
                         html.Div("Cell ID:"),
                     ],
-                    width={"size": 2, "offset": 1},
                     align="end",
                 ),
             ],
@@ -36,18 +35,35 @@ def page_layout(state: State = None):
             [
                 dbc.Col(
                     [
-                        dcc.Input(
+                        dbc.Input(
                             **create_component_kwargs(
                                 state,
                                 id_inner="anno-id",
                                 value="",
                                 type="text",
-                                style={"font-size": "18px"},
+                                # style={"font-size": "18px"},
                             )
                         ),
                     ],
-                    width={"size": 1, "offset": 1},
                     align="start",
+                ),
+                dbc.Col(
+                    [
+                        dbc.Checklist(
+                            **create_component_kwargs(
+                                state,
+                                id_inner="live-query-toggle",
+                                options=[
+                                    {"label": "Live Query", "value": 1},
+                                ],
+                                value=[
+                                    1,
+                                ],
+                                switch=True,
+                            )
+                        ),
+                    ],
+                    align="center",
                 ),
                 dbc.Col(
                     [
@@ -55,25 +71,7 @@ def page_layout(state: State = None):
                             id="submit-button",
                             children="Submit",
                             color="primary",
-                            style={"font-size": "16px"},
-                        ),
-                    ],
-                    width={"size": 1, "offset": 1},
-                    align="start",
-                ),
-                dbc.Col(
-                    [
-                        dcc.RadioItems(
-                            **create_component_kwargs(
-                                state,
-                                id_inner="live-query-toggle",
-                                value="live",
-                                options=[
-                                    {"label": "Live", "value": "live"},
-                                    {"label": "Static", "value": "static"},
-                                ],
-                                labelStyle={"font-size": "14px", "display": "block"},
-                            ),
+                            style={"font-size": "16px", "align": "left"},
                         ),
                     ],
                     align="start",
@@ -89,7 +87,6 @@ def page_layout(state: State = None):
                             )
                         )
                     ],
-                    width={"size": 1, "offset": 0},
                     align="center",
                 ),
             ],
@@ -111,7 +108,7 @@ def page_layout(state: State = None):
                             )
                         ),
                     ],
-                    width={"size": 2, "offset": 1},
+                    width=2,
                     align="end",
                 ),
             ],
@@ -119,15 +116,19 @@ def page_layout(state: State = None):
         ),
     ]
 
-    message_row = dbc.Row(
-        [
-            dbc.Col(
-                [html.Div(id="message-text", children="Please select a neuron id")],
-                width={"size": 6, "offset": 1},
-                align="start",
-            )
-        ]
+    message_row = dbc.Alert(
+        id="message-text",
+        children="Please select a neuron id",
+        color="info",
     )
+    # message_row = dbc.Row(
+    #     [
+    #         dbc.Col(
+    #             [html.Div(id="message-text", children="Please select a neuron id")],
+    #             align="start",
+    #         )
+    #     ]
+    # )
 
     data_table = html.Div(
         [
@@ -135,8 +136,8 @@ def page_layout(state: State = None):
                 id="connectivity-tab",
                 value="tab-pre",
                 children=[
-                    dcc.Tab(id="output-tab", label="Output", value="tab-pre"),
                     dcc.Tab(id="input-tab", label="Input", value="tab-post"),
+                    dcc.Tab(id="output-tab", label="Output", value="tab-pre"),
                 ],
             ),
             html.Div(
@@ -173,6 +174,37 @@ def page_layout(state: State = None):
                     ],
                     justify="center",
                 )
+            ),
+        ]
+    )
+
+    cell_links = html.Div(
+        [
+            dbc.Row(
+                [
+                    dbc.Col(
+                        dbc.Button(
+                            "Generate All Input Link",
+                            id="all-input-link-button",
+                            color="secondary",
+                        ),
+                    ),
+                    dbc.Col(
+                        dbc.Button(
+                            "Generate All Output Link",
+                            id="all-output-link-button",
+                            color="secondary",
+                        )
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div("", id="all-input-link"),
+                    ),
+                    dbc.Col(html.Div("", id="all-output-link")),
+                ]
             ),
         ]
     )
@@ -221,20 +253,27 @@ def page_layout(state: State = None):
     top_link = dbc.Row(
         [
             dbc.Col(
+                dbc.Spinner(size="sm", children=html.Div(id="link-loading")),
+                width=1,
+                align="center",
+            ),
+            dbc.Col(
                 [
-                    html.A(
-                        "Neuroglancer Link",
+                    dbc.Button(
+                        children="Neuroglancer Link",
+                        color="primary",
+                        external_link=True,
+                        target="_blank",
                         id="ngl_link",
                         href="",
-                        target="_blank",
-                        style={"font-size": "20px"},
+                        disabled=False,
                     ),
                 ],
-                width={"size": 2, "offset": 1},
+                width={"size": 2, "offset": 0},
             ),
             dbc.Col(
                 dbc.Button(
-                    id="reset-selection", children="Reset Selection", color="primary"
+                    id="reset-selection", children="Reset Selection", color="warning"
                 ),
                 width={"size": 2, "offset": 0},
             ),
@@ -250,11 +289,11 @@ def page_layout(state: State = None):
                 fluid=True,
             ),
             html.Hr(),
-            html.Div(message_row),
+            dbc.Container(message_row),
             # html.Hr(),
-            # cell_links,
+            dbc.Container(cell_links),
             html.Hr(),
-            top_link,
+            dbc.Container(top_link, fluid=True),
             data_table,
             dcc.Store("target-table-json"),
             dcc.Store("source-table-json"),
