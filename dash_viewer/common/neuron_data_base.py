@@ -17,12 +17,12 @@ class NeuronData(object):
         self,
         oid: int,
         client: FrameworkClient,
+        synapse_table: str = None,
+        cell_type_table: str = None,
+        soma_table: str = None,
         timestamp: Union[datetime.datetime, None] = None,
         axon_only: bool = False,
         split_threshold: float = 0.7,
-        synapse_table: str = synapse_table,
-        cell_type_table: str = cell_type_table,
-        soma_table: str = soma_table,
         live_query: bool = True,
     ) -> None:
         self._oid = oid
@@ -36,6 +36,8 @@ class NeuronData(object):
         self._timestamp = timestamp
         self.axon_only = axon_only
 
+        if synapse_table is None:
+            synapse_table = client.info.get_datastack_info()["synapse_table"]
         self.synapse_table = synapse_table
         self.soma_table = soma_table
         self.cell_type_table = cell_type_table
@@ -69,12 +71,42 @@ class NeuronData(object):
             self._get_syn_df()
         return self._post_syn_df
 
+    @lru_cache(maxsize=1)
+    def pre_targ_simple_df(self) -> pd.DataFrame:
+        syn_df_grp = self.pre_syn_df().groupby("post_pt_root_id")
+        targ_simple_df = self._make_simple_targ_df(syn_df_grp)
+        return targ_simple_df.rename(columns={"post_pt_root_id": "root_id"})
+
+    @lru_cache(maxsize=1)
+    def post_targ_simple_df(self) -> pd.DataFrame:
+        syn_df_grp = self.post_syn_df().groupby("pre_pt_root_id")
+        targ_simple_df = self._make_simple_targ_df(syn_df_grp)
+        return targ_simple_df.rename(columns={"pre_pt_root_id": "root_id"})
+
+    def _make_simple_targ_df(self, df_grp):
+        pts = df_grp["ctr_pt_position"].agg(list)
+        net_size = df_grp["size"].agg(sum)
+        mean_size = df_grp["size"].agg(np.mean)
+        num_syn = df_grp["ctr_pt_position"].agg(len)
+        return (
+            pd.DataFrame(
+                {
+                    "ctr_pt_position": pts,
+                    "num_syn": num_syn,
+                    "net_syn_size": net_size,
+                    "mean_syn_size": mean_size.astype(int),
+                }
+            )
+            .sort_values(by="num_syn", ascending=False)
+            .reset_index()
+        )
+
     def _get_syn_df(self):
         self._pre_syn_df, self._post_syn_df = synapse_data(
             self.synapse_table, self.oid, self.client, self.timestamp
         )
 
-    @lru_cache(maxsize=5)
+    @lru_cache(maxsize=1)
     def syn_df(self) -> pd.DataFrame:
         pre_df = self.pre_syn_df()
         pre_df["direction"] = "pre"
@@ -128,8 +160,10 @@ class NeuronData(object):
             own_soma_loc = own_soma_df["pt_position"].values[0]
         return own_soma_loc
 
-    @lru_cache(maxsize=5)
+    @lru_cache(maxsize=1)
     def soma_location(self) -> np.ndarray:
+        if self.soma_table is None:
+            return None
         return np.array(self._get_own_soma_loc())
 
     def soma_location_list(self, length: int) -> list:

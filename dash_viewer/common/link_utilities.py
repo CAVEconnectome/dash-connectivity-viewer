@@ -1,23 +1,34 @@
+from logging import info
 from nglui import statebuilder
 import pandas as pd
 from seaborn import color_palette
 from itertools import cycle
 
+EMPTY_INFO_CACHE = {"aligned_volume": {}}
+
 
 def image_source(info_cache):
-    return info_cache["aligned_volume"]["image_source"]
+    return info_cache["aligned_volume"].get("image_source", "")
 
 
 def seg_source(info_cache):
-    return info_cache["segmentation_source"]
+    return info_cache.get("segmentation_source", "")
 
 
 def viewer_site(info_cache):
-    return info_cache["viewer_site"]
+    return info_cache.get("viewer_site", "")
 
 
 def state_server(info_cache):
-    return f"{info_cache['local_server']}/nglstate/api/v1/post"
+    return f"{info_cache.get('global_server', '')}/nglstate/api/v1/post"
+
+
+def root_id(info_cache):
+    return int(info_cache.get("root_id", None))
+
+
+def timestamp(info_cache):
+    return info_cache.get("ngl_timestamp", None)
 
 
 def generate_statebuilder(
@@ -28,6 +39,7 @@ def generate_statebuilder(
     anno_column="post_pt_root_id",
     anno_layer="syns",
 ):
+    print(info_cache)
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
     )
@@ -48,12 +60,14 @@ def generate_statebuilder(
         fixed_ids=base_root_id,
         fixed_id_colors=base_color,
         alpha_3d=0.8,
+        timestamp=timestamp(info_cache),
     )
 
     points = statebuilder.PointMapper(
         "ctr_pt_position",
         linked_segmentation_column=anno_column,
         group_column=anno_column,
+        multipoint=True,
         set_position=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
@@ -70,7 +84,7 @@ def generate_statebuilder(
     return sb
 
 
-def generate_statebuilder_pre(info_cache):
+def generate_statebuilder_pre(info_cache, preselect=False):
 
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
@@ -80,13 +94,16 @@ def generate_statebuilder_pre(info_cache):
     )
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),
-        selected_ids_column=["pre_pt_root_id"],
+        fixed_ids=[root_id(info_cache)],
+        fixed_id_colors=["#ffffff"],
         alpha_3d=0.8,
+        timestamp=timestamp(info_cache),
     )
     points = statebuilder.PointMapper(
         "ctr_pt_position",
-        linked_segmentation_column="post_pt_root_id",
+        linked_segmentation_column="root_id",
         set_position=True,
+        multipoint=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
         "output_syns", mapping_rules=points, linked_segmentation_layer=seg.name
@@ -103,15 +120,19 @@ def generate_statebuilder_post(info_cache):
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
     )
+
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),
-        selected_ids_column=["post_pt_root_id"],
+        fixed_ids=[root_id(info_cache)],
+        fixed_id_colors=["#ffffff"],
         alpha_3d=0.8,
+        timestamp=timestamp(info_cache),
     )
     points = statebuilder.PointMapper(
         "ctr_pt_position",
-        linked_segmentation_column="pre_pt_root_id",
+        linked_segmentation_column="root_id",
         set_position=True,
+        multipoint=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
         "input_syns", mapping_rules=points, linked_segmentation_layer=seg.name
@@ -121,6 +142,54 @@ def generate_statebuilder_post(info_cache):
         url_prefix=viewer_site(info_cache),
         state_server=state_server(info_cache),
     )
+    return sb
+
+
+def generate_statebuider_syn_grouped(
+    info_cache, anno_name, fixed_id_color="#FFFFFF", preselect=False
+):
+    points = statebuilder.PointMapper(
+        point_column="ctr_pt_position",
+        linked_segmentation_column="root_id",
+        group_column="root_id",
+        multipoint=True,
+        set_position=True,
+    )
+
+    img = statebuilder.ImageLayerConfig(
+        image_source(info_cache),
+        contrast_controls=True,
+        black=0.35,
+        white=0.65,
+    )
+
+    if preselect:
+        selected_ids_column = "root_id"
+    else:
+        selected_ids_column = None
+
+    seg = statebuilder.SegmentationLayerConfig(
+        seg_source(info_cache),
+        fixed_ids=[root_id(info_cache)],
+        fixed_id_colors=[fixed_id_color],
+        selected_ids_column=selected_ids_column,
+        alpha_3d=0.8,
+        timestamp=timestamp(info_cache),
+    )
+
+    anno = statebuilder.AnnotationLayerConfig(
+        anno_name,
+        mapping_rules=points,
+        linked_segmentation_layer=seg.name,
+        filter_by_segmentation=True,
+    )
+
+    sb = statebuilder.StateBuilder(
+        [img, seg, anno],
+        url_prefix=viewer_site(info_cache),
+        state_server=state_server(info_cache),
+    )
+
     return sb
 
 

@@ -3,8 +3,8 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import flask
-from .app.config import DEFAULT_DATASTACK, table_columns
-from .dash_url_helper import create_component_kwargs, State
+from .config import DEFAULT_DATASTACK, table_columns
+from ..common.dash_url_helper import create_component_kwargs, State
 
 title = "Connectivity Viewer"
 
@@ -193,6 +193,47 @@ def page_layout(state: State = None):
         ]
     )
 
+    cell_links = dbc.Row(
+        [
+            dbc.Col(
+                [
+                    html.A(
+                        "All Inputs",
+                        id="input_ngl_link",
+                        href="",
+                        target="_blank",
+                        style={"font-size": "20px"},
+                    ),
+                ],
+                width={"size": 1, "offset": 1},
+            ),
+            dbc.Col(
+                [
+                    html.A(
+                        "All Outputs",
+                        id="output_ngl_link",
+                        href="",
+                        target="_blank",
+                        style={"font-size": "20px"},
+                    ),
+                ],
+                width={"size": 1, "offset": 0},
+            ),
+            dbc.Col(
+                [
+                    html.A(
+                        "Whole Cell",
+                        id="whole_cell_ngl_link",
+                        href="",
+                        target="_blank",
+                        style={"font-size": "20px"},
+                    )
+                ]
+            ),
+        ],
+        align="end",
+    )
+
     layout = html.Div(
         children=[
             html.Div(header_text),
@@ -200,6 +241,8 @@ def page_layout(state: State = None):
             html.Hr(),
             html.Div(plot_header),
             html.Div(id="plots", children=None),
+            html.Hr(),
+            cell_links,
             html.Hr(),
             top_link,
             data_table,

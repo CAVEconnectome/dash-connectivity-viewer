@@ -3,7 +3,7 @@ import pandas as pd
 import re
 import numpy as np
 from .config import *
-
+import orjson
 
 soma_table_columns = [
     "pt_root_id",
@@ -33,7 +33,6 @@ minimal_synapse_columns = ["pre_pt_root_id", "post_pt_root_id", "ctr_pt_position
 single_soma_cols = [soma_depth_col, soma_position_col, ct_col, valence_col]
 
 
-
 def categorize_unsure(row):
     if row["cell_type"] == "Unsure":
         if row["classification_system"] == "aibs_coarse_excitatory":
@@ -42,6 +41,7 @@ def categorize_unsure(row):
             return "UnsI"
     else:
         return row["cell_type"]
+
 
 def assemble_pt_position(row, prefix=""):
     return np.array(
@@ -141,7 +141,6 @@ def get_ct_df(cell_type_table, root_ids, client, timestamp, live_query=True):
     ct_df.drop_duplicates(subset="pt_root_id", inplace=True)
     ct_df["pt_root_id"] = ct_df["pt_root_id"].astype("Int64")
 
-
     return ct_df[cell_type_table_columns]
 
 
@@ -197,11 +196,9 @@ def cell_typed_soma_df(
         )
 
     soma_ct_df = ct_df.merge(
-
         soma_df.drop_duplicates(subset="pt_root_id"),
         on="pt_root_id",
         how="outer",
-
     )
     multisoma_ind = soma_ct_df.query("num_soma>1").index
     for col in single_soma_cols:
@@ -289,4 +286,16 @@ def stringify_root_ids(df, stringify_cols=None):
         stringify_cols = [col for col in df.columns if re.search("_root_id$", col)]
     for col in stringify_cols:
         df[col] = df[col].astype(str)
+    return df
+
+
+def stringify_point_array(df, stringify_cols):
+    for col in stringify_cols:
+        df[col] = df[col].apply(lambda x: str(np.vstack(x).tolist()))
+    return df
+
+
+def unstringify_point_array(df, stringify_cols):
+    for col in stringify_cols:
+        df[col] = df[col].apply(orjson.loads)
     return df

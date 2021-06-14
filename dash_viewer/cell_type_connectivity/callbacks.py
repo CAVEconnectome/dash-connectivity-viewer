@@ -1,24 +1,24 @@
 from annotationframeworkclient.frameworkclient import FrameworkClient
-from .app.dataframe_utilities import stringify_root_ids
+from ..common.dataframe_utilities import stringify_root_ids
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
 from urllib.parse import parse_qs
 
-from .app.link_utilities import (
+from ..common.link_utilities import (
     generate_statebuilder,
     generate_statebuilder_pre,
     generate_statebuilder_post,
     generate_url_synapses,
 )
 
-from .app.dataframe_utilities import minimal_synapse_columns
+from ..common.dataframe_utilities import minimal_synapse_columns
 
-from .app.neuron_data_base import NeuronData, table_columns
-from .app.config import *
-from .app.plots import *
-from .dash_url_helper import _COMPONENT_ID_TYPE
+from ..common.neuron_data_base import NeuronData, table_columns
+from .config import *
+from .plots import *
+from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 import flask
 
 try:
@@ -27,11 +27,41 @@ try:
 except:
     logger = None
 
+EMPTY_INFO_CACHE = {"aligned_volume": {}}
+
+InputDatastack = Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
+StateRootID = State({"id_inner": "root_id", "type": _COMPONENT_ID_TYPE}, "value")
+StateCellTypeTable = (
+    State(
+        {"id_inner": "cell_type_table_dropdown", "type": _COMPONENT_ID_TYPE},
+        "value",
+    ),
+)
+
+
+def make_client(datastack, config):
+    auth_token = flask.g.get("auth_token", None)
+    server_address = config.get("SERVER_ADDRESS", DEFAULT_SERVER_ADDRESS)
+    client = FrameworkClient(
+        datastack, server_address=server_address, auth_token=auth_token
+    )
+    return client
+
+
+NUCLEUS_TABLE = "nucleus_neuron_svm"
+
+
+def get_root_id_from_nuc_id(nuc_id, client, timestamp, nucleus_table=NUCLEUS_TABLE):
+    df = client.materialize.live_query(
+        nucleus_table, timestamp=timestamp, filter_equal_dict={"id": nuc_id}
+    )
+    if len(df) == 0:
+        return None
+    else:
+        return df.iloc[0]["pt_root_id"]
+
 
 def register_callbacks(app, config):
-
-    server_address = config.get("SERVER_ADDRESS", DEFAULT_SERVER_ADDRESS)
-
     @app.callback(
         Output("data-table", "selected_rows"),
         Input("reset-selection", "n_clicks"),
@@ -53,24 +83,24 @@ def register_callbacks(app, config):
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
         Input("submit-button", "n_clicks"),
-        Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value"),
-        State({"id_inner": "root_id", "type": _COMPONENT_ID_TYPE}, "value"),
-        State(
-            {"id_inner": "cell_type_table_dropdown", "type": _COMPONENT_ID_TYPE},
-            "value",
-        ),
+        InputDatastack,
+        StateRootID,
+        StateCellTypeTable,
     )
     def update_data(n_clicks, datastack_name, input_value, ct_table_value):
         if logger is not None:
             t0 = time.time()
 
         auth_token = flask.g.get("auth_token", None)
-        print('auth_token', auth_token)
+        print("auth_token", auth_token)
         try:
             client = FrameworkClient(
                 datastack_name, server_address=server_address, auth_token=auth_token
             )
+            info_cache = client.info.info_cache[datastack_name]
+            info_cache["global_server"] = client.server_address
         except Exception as e:
+            print(e)
             return (
                 html.Div(str(e)),
                 "",
@@ -82,7 +112,7 @@ def register_callbacks(app, config):
                 "Output",
                 "Input",
                 1,
-                {"aligned_volumes": {}},
+                EMPTY_INFO_CACHE,
             )
 
         if len(input_value) == 0:
@@ -97,7 +127,7 @@ def register_callbacks(app, config):
                 "Output",
                 "Input",
                 1,
-                client.info.info_cache[datastack_name],
+                info_cache,
             )
         input_root_id = int(input_value)
         nrn_data = NeuronData(
@@ -122,7 +152,7 @@ def register_callbacks(app, config):
                 "Output",
                 "Input",
                 1,
-                client.info.info_cache[datastack_name],
+                info_cache,
             )
 
         pre_tab_records = nrn_data.pre_tab_dat().to_dict("records")
@@ -159,7 +189,7 @@ def register_callbacks(app, config):
             f"Output (n = {pre_targ_df.shape[0]})",
             f"Input (n = {post_targ_df.shape[0]})",
             np.random.randint(30_000_000),
-            client.info.info_cache[datastack_name],
+            info_cache,
         )
 
     @app.callback(
@@ -197,12 +227,17 @@ def register_callbacks(app, config):
         syn_records_source,
         info_cache,
     ):
+        if info_cache is None or len(info_cache) == 0:
+            info_cache = EMPTY_INFO_CACHE
+
         if rows is None or len(rows) == 0:
             rows = {}
             sb = generate_statebuilder(info_cache)
             return sb.render_state(None, return_as="url")
+
         elif len(selected_rows) == 0:
             if tab_value == "tab-pre":
+
                 syn_df = pd.DataFrame(syn_records_target)
                 syn_df["pre_pt_root_id"] = syn_df["pre_pt_root_id"].astype(int)
                 syn_df["post_pt_root_id"] = syn_df["post_pt_root_id"].astype(int)
@@ -214,6 +249,7 @@ def register_callbacks(app, config):
                 syn_df["post_pt_root_id"] = syn_df["post_pt_root_id"].astype(int)
                 sb = generate_statebuilder_post(info_cache)
             return sb.render_state(syn_df, return_as="url")
+
         else:
             dff = pd.DataFrame(rows)
             if tab_value == "tab-pre":
