@@ -300,7 +300,9 @@ def register_callbacks(app, config):
                 url = client.state.build_neuroglancer_url(state_id)
             except Exception as e:
                 return html.Div(str(e))
-        return html.A("All Input Link", href=url, target="_blank")
+        return html.A(
+            "All Input Link", href=url, target="_blank", style={"font-size": "20px"}
+        )
 
     @app.callback(
         Output("all-output-link", "children"),
@@ -342,6 +344,8 @@ def register_callbacks(app, config):
                 url = client.state.build_neuroglancer_url(state_id)
             except Exception as e:
                 return html.Div(str(e))
-        return html.A("All Output Link", href=url, target="_blank")
+        return html.A(
+            "All Output Link", href=url, target="_blank", style={"font-size": "20px"}
+        )
 
     pass
