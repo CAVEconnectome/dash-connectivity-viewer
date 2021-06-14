@@ -269,13 +269,13 @@ def page_layout(state: State = None):
                         disabled=False,
                     ),
                 ],
-                width={"size": 2, "offset": 0},
+                # width={"size": 2, "offset": 0},
             ),
             dbc.Col(
                 dbc.Button(
                     id="reset-selection", children="Reset Selection", color="warning"
                 ),
-                width={"size": 2, "offset": 0},
+                # width={"size": 2, "offset": 0},
             ),
         ],
         justify="left",

@@ -319,7 +319,7 @@ def register_callbacks(app, config):
         if (
             trigger_src == "submit-button"
             or trigger_src == "client-info-json"
-            or trigger_src == "source-table-json"
+            or trigger_src == "target-table-json"
         ):
             return ""
 
