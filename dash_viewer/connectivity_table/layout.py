@@ -121,14 +121,6 @@ def page_layout(state: State = None):
         children="Please select a neuron id",
         color="info",
     )
-    # message_row = dbc.Row(
-    #     [
-    #         dbc.Col(
-    #             [html.Div(id="message-text", children="Please select a neuron id")],
-    #             align="start",
-    #         )
-    #     ]
-    # )
 
     data_table = html.Div(
         [
@@ -156,10 +148,15 @@ def page_layout(state: State = None):
                                 ],
                                 style_cell={
                                     "height": "auto",
-                                    "width": "20%",
-                                    "minWidth": "20%",
-                                    "maxWidth": "20%",
+                                    "width": "12%",
+                                    "minWidth": "10%",
+                                    "maxWidth": "15%",
                                     "whiteSpace": "normal",
+                                    "font-size": "11px",
+                                },
+                                style_header={
+                                    "font-size": "12px",
+                                    "fontWeight": "bold",
                                 },
                                 sort_action="native",
                                 sort_mode="multi",
@@ -209,47 +206,6 @@ def page_layout(state: State = None):
         ]
     )
 
-    # cell_links = dbc.Row(
-    #     [
-    #         dbc.Col(
-    #             [
-    #                 html.A(
-    #                     "All Inputs",
-    #                     id="input_ngl_link",
-    #                     href="",
-    #                     target="_blank",
-    #                     style={"font-size": "20px"},
-    #                 ),
-    #             ],
-    #             width={"size": 1, "offset": 1},
-    #         ),
-    #         dbc.Col(
-    #             [
-    #                 html.A(
-    #                     "All Outputs",
-    #                     id="output_ngl_link",
-    #                     href="",
-    #                     target="_blank",
-    #                     style={"font-size": "20px"},
-    #                 ),
-    #             ],
-    #             width={"size": 1, "offset": 0},
-    #         ),
-    #         dbc.Col(
-    #             [
-    #                 html.A(
-    #                     "Whole Cell",
-    #                     id="whole_cell_ngl_link",
-    #                     href="",
-    #                     target="_blank",
-    #                     style={"font-size": "20px"},
-    #                 )
-    #             ]
-    #         ),
-    #     ],
-    #     align="end",
-    # )
-
     top_link = dbc.Row(
         [
             dbc.Col(
@@ -273,7 +229,10 @@ def page_layout(state: State = None):
             ),
             dbc.Col(
                 dbc.Button(
-                    id="reset-selection", children="Reset Selection", color="warning"
+                    id="reset-selection",
+                    children="Reset Selection",
+                    color="warning",
+                    size="sm",
                 ),
                 # width={"size": 2, "offset": 0},
             ),

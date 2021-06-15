@@ -1,9 +1,4 @@
-from dash_html_components.A import A
-from dash_html_components.I import I
 from dash_viewer.common.neuron_data_base import NeuronData
-from annotationframeworkclient.frameworkclient import FrameworkClient
-import dash_core_components as dcc
-import dash_bootstrap_components as dbc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
 from dash import callback_context
@@ -13,14 +8,11 @@ from ..common.link_utilities import (
     generate_statebuilder,
     generate_statebuilder_pre,
     generate_statebuilder_post,
-    generate_url_synapses,
     EMPTY_INFO_CACHE,
     MAX_URL_LENGTH,
 )
 from ..common.dataframe_utilities import (
     stringify_root_ids,
-    stringify_point_array,
-    unstringify_point_array,
 )
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 from ..common.lookup_utilities import make_client, get_root_id_from_nuc_id

@@ -220,7 +220,7 @@ def generate_url_synapses(selected_rows, edge_df, syn_df, direction, info_cache)
     return sb.render_state(syn_df.query(f"{other_col} in @other_oids"), return_as="url")
 
 
-def generate_url_cell_types(selected_rows, df, info_cache):
+def generate_url_cell_types(selected_rows, df, info_cache, return_as="url"):
     if len(selected_rows) > 0 or selected_rows is None:
         df = df.iloc[selected_rows].reset_index(drop=True)
     cell_types = pd.unique(df["cell_type"])
@@ -257,5 +257,5 @@ def generate_url_cell_types(selected_rows, df, info_cache):
             )
         )
         dfs.append(df.query("cell_type == @ct"))
-    csb = statebuilder.ChainedStateBuilder(sbs, url_prefix=viewer_site(info_cache))
-    return csb.render_state(dfs, return_as="url")
+    csb = statebuilder.ChainedStateBuilder(sbs)
+    return csb.render_state(dfs, return_as=return_as)

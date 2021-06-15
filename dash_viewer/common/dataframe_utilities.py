@@ -3,7 +3,6 @@ import pandas as pd
 import re
 import numpy as np
 from .config import *
-import orjson
 
 soma_table_columns = [
     "pt_root_id",
@@ -286,16 +285,4 @@ def stringify_root_ids(df, stringify_cols=None):
         stringify_cols = [col for col in df.columns if re.search("_root_id$", col)]
     for col in stringify_cols:
         df[col] = df[col].astype(str)
-    return df
-
-
-def stringify_point_array(df, stringify_cols):
-    for col in stringify_cols:
-        df[col] = df[col].apply(lambda x: str(np.vstack(x).tolist()))
-    return df
-
-
-def unstringify_point_array(df, stringify_cols):
-    for col in stringify_cols:
-        df[col] = df[col].apply(orjson.loads)
     return df
