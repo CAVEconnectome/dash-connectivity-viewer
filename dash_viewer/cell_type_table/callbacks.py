@@ -95,7 +95,7 @@ def register_callbacks(app, config):
     ):
         try:
             client = make_client(datastack, config)
-            info_cache = client.info.info_cache[datastack]
+            info_cache = client.info.get_datastack_info()
             info_cache["global_server"] = client.server_address
         except Exception as e:
             return [], str(e), "", EMPTY_INFO_CACHE, "danger"
@@ -209,6 +209,8 @@ def register_callbacks(app, config):
         if rows is None or len(rows) == 0:
             sb = generate_statebuilder(info_cache, anno_layer="anno")
             url = sb.render_state(None, return_as="url")
+            link_name = "Filtered/Selected Rows — Neuroglancer Link"
+            link_color = True,
         else:
             df = pd.DataFrame(rows)
             if len(df) > MAX_DATAFRAME_LENGTH:

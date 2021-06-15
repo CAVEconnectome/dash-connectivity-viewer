@@ -69,11 +69,11 @@ def page_layout(state: State = {}):
                                         1,
                                     ],
                                     switch=True,
-                                    style={"bottom-margin": "10px"},
+                                    style={"bottom-margin": "10px", 'font-size': '16px'},
                                 )
                             ),
                         ],
-                        width={"size": 1, "offset": 1},
+                        width={"size": 1, "offset": 0},
                         align="center",
                     ),
                     dbc.Col(
@@ -142,6 +142,7 @@ def page_layout(state: State = {}):
                                         "margin-left": "12px",
                                         "font-size": "12px",
                                     },
+                                    clearable=False,
                                 )
                             ),
                         ],

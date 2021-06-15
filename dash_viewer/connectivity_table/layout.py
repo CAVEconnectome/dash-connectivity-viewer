@@ -105,6 +105,7 @@ def page_layout(state: State = None):
                                     {"label": "Nucleus ID", "value": "nucleus_id"},
                                 ],
                                 value="root_id",
+                                clearable=False,
                             )
                         ),
                     ],

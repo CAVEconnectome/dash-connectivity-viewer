@@ -1,5 +1,5 @@
-from dash_viewer.common.neuron_data_base import NeuronData
 import dash_html_components as html
+from ..common.neuron_data_base import NeuronData
 from dash.dependencies import Input, Output, State
 from dash import callback_context
 
@@ -20,7 +20,6 @@ from .config import *
 
 import datetime
 import flask
-import numpy as np
 import pandas as pd
 
 try:
