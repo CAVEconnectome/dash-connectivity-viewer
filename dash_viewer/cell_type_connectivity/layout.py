@@ -8,7 +8,6 @@ from ..common.dash_url_helper import create_component_kwargs, State
 
 title = "Connectivity Viewer"
 
-
 def dropdown_options():
     # Should be made a callback
     options = [

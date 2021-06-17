@@ -252,13 +252,17 @@ class NeuronData(object):
         xaxis: Union[str, None] = None,
         yaxis: Union[str, None] = None,
     ) -> go.Scattergl:
-        pre_targ_df = self.pre_targ_df().dropna()
+        pre_targ_df = self.pre_targ_df().dropna(subset=[syn_depth_col, soma_depth_col, valence_col])
+        if len(pre_targ_df)>0:
+            color_vec = pre_targ_df[valence_col].astype(int)
+        else:
+            color_vec = 0
         return go.Scattergl(
             x=pre_targ_df[soma_depth_col],
             y=pre_targ_df[syn_depth_col],
             mode="markers",
             marker=dict(
-                color=valence_colors[pre_targ_df[valence_col].astype(int)],
+                color=valence_colors[color_vec],
                 line_width=0,
                 size=5,
                 opacity=0.5,
@@ -268,7 +272,7 @@ class NeuronData(object):
         )
 
     def bar_data(self) -> pd.Series:
-        pre_targ_df = self.pre_targ_df().dropna()
+        pre_targ_df = self.pre_targ_df().dropna(subset=['cell_type'])
         return pre_targ_df.groupby(ct_col).count()["size"]
 
     def _bar_plot(self, name, indices, color):
