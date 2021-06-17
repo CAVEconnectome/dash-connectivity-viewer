@@ -2,7 +2,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from .config import ticklocs, height_bnds
 
-
 def bar_fig(nrn_data, val_colors, height=350, width=450):
 
     bar_e = nrn_data.excitatory_bar_plot(val_colors[0])
@@ -60,7 +59,6 @@ def violin_fig(
         gridwidth=2,
         automargin=True,
     )
-
     return fig
 
 
@@ -97,7 +95,6 @@ def scatter_fig(nrn_data, valence_colors, ticklocs=ticklocs, height=350):
         gridcolor="#CCC",
         gridwidth=2,
     )
-
     return fig
 
 

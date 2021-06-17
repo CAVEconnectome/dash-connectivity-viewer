@@ -236,6 +236,7 @@ def generate_url_cell_types(selected_rows, df, info_cache, position_column='pt_p
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),
         alpha_3d=0.8,
+        timestamp=timestamp(info_cache),
     )
     sbs = [
         statebuilder.StateBuilder(
@@ -288,6 +289,7 @@ def generate_statebuilder_syn_cell_types(
         seg_source(info_cache),
         alpha_3d=0.8,
         fixed_ids=[int(info_cache['root_id'])],
+        timestamp=timestamp(info_cache),
     )
     sbs = [
         statebuilder.StateBuilder(

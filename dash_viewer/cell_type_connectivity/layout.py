@@ -1,4 +1,3 @@
-from dash_html_components.A import A
 import dash_table
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
@@ -151,10 +150,16 @@ def page_layout(state: State = None):
         ]
     )
 
-    message_row = dbc.Alert(
-        id="message-text",
-        children="Please select a root id and press Submit",
-        color="info",
+    message_row = dbc.Row(
+        dbc.Col(
+            dbc.Alert(
+            id="message-text",
+            children="Please select a root id and press Submit",
+            color="info",
+            ),
+            width=10,
+        ),
+        justify='center',
     )
 
     top_link = dbc.Row(
@@ -193,30 +198,6 @@ def page_layout(state: State = None):
         ],
         justify='start'
     )
-
-    # top_link = dbc.Row(
-    #     [
-    #         dbc.Col(
-    #             [
-    #                 html.A(
-    #                     "Neuroglancer Link",
-    #                     id="ngl_link",
-    #                     href="",
-    #                     target="_blank",
-    #                     style={"font-size": "20px"},
-    #                 ),
-    #             ],
-    #             width={"size": 2, "offset": 1},
-    #         ),
-    #         dbc.Col(
-    #             dbc.Button(
-    #                 id="reset-selection", children="Reset Selection", color="primary"
-    #             ),
-    #             width={"size": 2, "offset": 0},
-    #         ),
-    #     ],
-    #     justify="left",
-    # )
 
     data_table = html.Div(
         [
@@ -267,70 +248,170 @@ def page_layout(state: State = None):
             ),
         ]
     )
-    
-    cell_links = html.Div(
-        [
-            dbc.Row(
+
+    input_tab = dbc.Row(
                 [
                     dbc.Col(
-                        dbc.Button(
-                            "Generate All Input Link",
-                            id="all-input-link-button",
-                            color="secondary",
-                        ),
+                            dbc.Card(
+                                [
+                                    dbc.CardBody(
+                                        [
+                                            html.H4("All Inputs", className="card-title"),
+                                            html.Div(
+                                                children=[
+                                                    dbc.Button(
+                                                        "Generate Link",
+                                                        id="all-input-link-button",
+                                                        color="secondary",
+                                                        # className="mb-3",
+                                                        block=True,
+                                                    ),
+                                                ]
+                                            ),
+                                            dbc.Spinner(html.Div("", id="all-input-link", className='card-text'), size='sm'),
+                                        ]
+                                    )
+                                ]
+                            ),
                     ),
                     dbc.Col(
-                        dbc.Button(
-                            "Generate Cell-typed Input Link",
-                            id="cell-typed-input-link-button",
-                            color="secondary",
-                        ),
+                            dbc.Card(
+                                [
+                                    dbc.CardBody(
+                                        [
+                                            html.H4("Cell-typed Inputs", className="card-title"),
+                                            html.Div(
+                                                children=[
+                                                    dbc.Button(
+                                                        "Generate Link",
+                                                        id="cell-typed-input-link-button",
+                                                        color="secondary",
+                                                        block=True,
+                                                    ),
+                                                ]
+                                            ),
+                                            dbc.Spinner(html.Div("", id="cell-typed-input-link", className='card-text'), size='sm'),
+                                        ]
+                                    )
+                                ]
+                            ),
                     ),
-                    dbc.Col(
-                        dbc.Button(
-                            "Generate All Output Link",
-                            id="all-output-link-button",
-                            color="secondary",
-                        )
-                    ),
-                    dbc.Col(
-                        dbc.Button(
-                            "Generate Cell-typed Output Link",
-                            id="cell-typed-output-link-button",
-                            color="secondary",
-                        )
-                    ),
-                ]
-            ),
-            dbc.Row(
+                ],
+            )
+
+    output_tab = dbc.Row(
                 [
                     dbc.Col(
-                        dbc.Spinner(html.Div(" ", id="all-input-link"), color='info')
+                            dbc.Card(
+                                [
+                                    dbc.CardBody(
+                                        [
+                                            html.H4("All Outputs", className="card-title"),
+                                            html.Div(
+                                                children=[
+                                                    dbc.Button(
+                                                        "Generate Link",
+                                                        id="all-output-link-button",
+                                                        color="secondary",
+                                                        # className="mb-3",
+                                                        block=True,
+                                                    ),
+                                                ]
+                                            ),
+                                            dbc.Spinner(html.Div("", id="all-output-link", className='card-text'), size='sm'),
+                                        ]
+                                    )
+                                ]
+                            ),
                     ),
                     dbc.Col(
-                        dbc.Spinner(html.Div(" ", id='cell-typed-input-link'), color='info')
+                            dbc.Card(
+                                [
+                                    dbc.CardBody(
+                                        [
+                                            html.H4("Cell-typed Outputs", className="card-title"),
+                                            html.Div(
+                                                children=[
+                                                    dbc.Button(
+                                                        "Generate Link",
+                                                        id="cell-typed-output-link-button",
+                                                        color="secondary",
+                                                        block=True,
+                                                    ),
+                                                ]
+                                            ),
+                                            dbc.Spinner(html.Div("", id="cell-typed-output-link", className='card-text'), size='sm'),
+                                        ]
+                                    )
+                                ]
+                            ),
                     ),
-                    dbc.Col(
-                        dbc.Spinner(html.Div(" ", id="all-output-link"), color='info')
+                ],
+            )
+    cell_links = dbc.Row(
+        dbc.Col(
+            html.Div(
+                [
+                    dbc.Button(
+                        html.H5('Whole Cell Links (click to toggle visibility)'),
+                        id='collapse-button',
+                        color='secondary',
+                        block=True,
                     ),
-                    dbc.Col(
-                        dbc.Spinner(html.Div(" ", id="cell-typed-output-link"), color='info')
-                    ),
+                    dbc.Collapse(
+                        dbc.Card(
+                            [
+                                dbc.Tabs(
+                                    [
+                                        dbc.Tab(input_tab, label='Input Links'),
+                                        dbc.Tab(output_tab, label='Output Links'),
+                                    ]
+                                )
+                            ]
+                        ),
+                        id='collapse-card',
+                        is_open=False,
+                    )
                 ]
             ),
-        ]
+            width=6,
+        ),
+        justify='center',
     )
 
+    plot_data = dbc.Row(
+        dbc.Col(
+            html.Div(
+                [
+                    dbc.Button(
+                        html.H5('Output Plots (click to toggle visibility)'),
+                        id='plot-collapse-button',
+                        color='secondary',
+                        block=True,
+                    ),
+                    dbc.Collapse(
+                        [
+                            html.Br(),
+                            html.Div("", id='plot-content'),
+                        ],
+                        id='plot-collapse',
+                        is_open=False,
+                    )
+                ]
+            )
+        )
+    )
 
     layout = html.Div(
         children=[
             html.Div(header_text),
             dbc.Container(input_row, fluid=True),
+            html.Br(),
+            html.Div(message_row),
             html.Hr(),
-            dbc.Container(message_row),
+            dbc.Container(plot_data),
+            html.Hr(),
             dbc.Container(cell_links),
-            # html.Div(plot_header),
-            # html.Div(id="plots", children=None),
             html.Hr(),
             top_link,
             data_table,

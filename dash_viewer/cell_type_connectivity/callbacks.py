@@ -1,4 +1,6 @@
 from annotationframeworkclient.frameworkclient import FrameworkClient
+from dash_bootstrap_components._components.CardBody import CardBody
+from dash_bootstrap_components._components.CardHeader import CardHeader
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
@@ -25,7 +27,7 @@ from ..common.neuron_data_base import NeuronData
 from ..common.config import syn_pt_position_col
 
 from .config import *
-from .plots import *
+from .plots import bar_fig, violin_fig, scatter_fig
 
 import datetime
 try:
@@ -73,6 +75,37 @@ def generic_syn_link_generation(sb_function, rows, info_cache, datastack, config
         link_text, href=url, target="_blank", style={"font-size": "20px"}
     )
 
+def make_plots(nrn_data):
+    if nrn_data is None:
+        return html.Div("")
+    violin = violin_fig(nrn_data, axon_color, dendrite_color, height=350)
+    scatter = scatter_fig(nrn_data, val_colors, height=350)
+    bars = bar_fig(nrn_data, val_colors, height=350)
+    plot_content = dbc.Row(
+        [
+            dbc.Col(
+                [
+                    html.H5('Input/Output Depth', style={'text-align': 'center'}),
+                    dcc.Graph(figure=violin),
+                ]
+            ),
+            dbc.Col(
+                [
+                    html.H5('Synapse/Target Synapse Depth', style={'text-align': 'center'}),
+                    dcc.Graph(figure=scatter),
+                ]
+            ),
+            dbc.Col(
+                [
+                    html.H5('Target Synapse by Cell Type', style={'text-align': 'center'}),
+                    dcc.Graph(figure=bars),
+                ]
+            ),
+        ]
+    )
+    
+    return html.Div(plot_content)
+
 def register_callbacks(app, config):
     @app.callback(
         Output("data-table", "selected_rows"),
@@ -92,6 +125,7 @@ def register_callbacks(app, config):
         Output("input-tab", "label"),
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
+        Output('plot-content', 'children'),
         Input("submit-button", "n_clicks"),
         InputDatastack,
         StateRootID,
@@ -118,6 +152,7 @@ def register_callbacks(app, config):
                 "Input",
                 1,
                 EMPTY_INFO_CACHE,
+                make_plots(None),
             )
 
         if len(query_toggle) == 1:
@@ -130,8 +165,22 @@ def register_callbacks(app, config):
         else:
             timestamp = client.materialize.get_timestamp()
         
+        if live_query == "static":
+            info_cache["ngl_timestamp"] = timestamp.timestamp()
+
         if anno_id is None or len(anno_id) == 0:
-            return html.Div('Please select a root id and press Submit'), 'info', "", [], [], "Output", "Input", 1, EMPTY_INFO_CACHE
+            return (
+                html.Div('Please select a root id and press Submit'),
+                'info',
+                "",
+                [],
+                [],
+                "Output",
+                "Input",
+                1,
+                EMPTY_INFO_CACHE,
+                make_plots(None),
+            )
         else:
             if id_type == 'root_id':
                 root_id = int(anno_id)
@@ -183,6 +232,7 @@ def register_callbacks(app, config):
             f"Input (n = {n_syn_post})",
             1,
             info_cache,
+            make_plots(nrn_data),
         )
 
     @app.callback(
@@ -219,8 +269,8 @@ def register_callbacks(app, config):
         selected_rows,
         info_cache,
     ):
-        large_state_text = "Table Too Large - Please Filter or Use Menu Above"
-        small_state_text = "Neuroglancer Link"
+        large_state_text = "Table Too Large - Please Filter or Use Whole Cell Neuroglancer Links"
+        small_state_text = "Table View Neuroglancer Link"
 
         if rows is None or len(rows) == 0:
             rows = {}
@@ -255,29 +305,34 @@ def register_callbacks(app, config):
 
     @app.callback(
         Output("all-input-link", "children"),
+        Output('all-input-link-button', 'children'),
+        Output('all-input-link-button', 'disabled'),
         Input("all-input-link-button", "n_clicks"),
+        Input('all-input-link-button', 'children'),
         Input("submit-button", "n_clicks"),
         Input("source-table-json", "data"),
         Input("client-info-json", "data"),
         InputDatastack,
         prevent_initial_call=True,
     )
-    def generate_all_input_link(_1, _2, rows, info_cache, datastack):
+    def generate_all_input_link(_1, _2, curr, rows, info_cache, datastack):
         if not allowed_action_trigger(callback_context, ['all-input-link-button']):
-            return ""
+            return "  ", 'Generate Link', False
         return generic_syn_link_generation(
             generate_statebuilder_post,
             rows,
             info_cache,
             datastack,
             config,
-            'All Input Link',
+            'Neuroglancer Link',
             'Inputs',
-        )
+        ), 'Link Generated', True
    
     
     @app.callback(
         Output("cell-typed-input-link", "children"),
+        Output('cell-typed-input-link-button', 'children'),
+        Output('cell-typed-input-link-button', 'disabled'),
         Input("cell-typed-input-link-button", "n_clicks"),
         Input("submit-button", "n_clicks"),
         Input("source-table-json", "data"),
@@ -287,7 +342,7 @@ def register_callbacks(app, config):
     )
     def generate_cell_typed_input_link(_1, _2, rows, info_cache, datastack):
         if not allowed_action_trigger(callback_context, ['cell-typed-input-link-button']):
-            return ""
+            return "  ", 'Generate Link', False
         sb, dfs = generate_statebuilder_syn_cell_types(
             info_cache,
             rows,
@@ -302,10 +357,12 @@ def register_callbacks(app, config):
             return html.Div(str(e))
         return html.A(
             'Cell Typed Input Link', href=url, target="_blank", style={"font-size": "20px"}
-        )
+        ), 'Link Generated', True
 
     @app.callback(
         Output("all-output-link", "children"),
+        Output('all-output-link-button', 'children'),
+        Output('all-output-link-button', 'disabled'),
         Input("all-output-link-button", "n_clicks"),
         Input("submit-button", "n_clicks"),
         Input("target-table-json", "data"),
@@ -315,11 +372,13 @@ def register_callbacks(app, config):
     )
     def generate_all_output_link(_1, _2, rows, info_cache, datastack):
         if not allowed_action_trigger(callback_context, ['all-output-link-button']):
-            return ""
-        return generic_syn_link_generation(generate_statebuilder_pre, rows, info_cache, datastack, config, 'All Output Link', 'Outputs')
+            return "", 'Generate Link', False
+        return generic_syn_link_generation(generate_statebuilder_pre, rows, info_cache, datastack, config, 'All Output Link', 'Outputs'), 'Link Generated', True
 
     @app.callback(
         Output("cell-typed-output-link", "children"),
+        Output('cell-typed-output-link-button', 'children'),
+        Output('cell-typed-output-link-button', 'disabled'),
         Input("cell-typed-output-link-button", "n_clicks"),
         Input("submit-button", "n_clicks"),
         Input("target-table-json", "data"),
@@ -329,7 +388,7 @@ def register_callbacks(app, config):
     )
     def generate_cell_typed_output_link(_1, _2, rows, info_cache, datastack):
         if not allowed_action_trigger(callback_context, ['cell-typed-output-link-button']):
-            return ""
+            return "  ", 'Generate Link', False
         sb, dfs = generate_statebuilder_syn_cell_types(
             info_cache,
             rows,
@@ -344,6 +403,27 @@ def register_callbacks(app, config):
             return html.Div(str(e))
         return html.A(
             'Cell Typed Output Link', href=url, target="_blank", style={"font-size": "20px"}
-        )
+        ), 'Link Generated', True
+    
+    @app.callback(
+        Output("collapse-card", "is_open"),
+        Input("collapse-button", "n_clicks"),
+        State("collapse-card", "is_open"),
+    )
+    def toggle_collapse(n, is_open):
+        if n:
+            return not is_open
+        return is_open
+
+    @app.callback(
+        Output("plot-collapse", "is_open"),
+        Input("plot-collapse-button", "n_clicks"),
+        State("plot-collapse", "is_open"),
+    )
+    def toggle_plot_collapse(n, is_open):
+        if n:
+            return not is_open
+        return is_open
+
 
     pass
