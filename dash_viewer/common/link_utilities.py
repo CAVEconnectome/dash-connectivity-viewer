@@ -3,6 +3,8 @@ from nglui import statebuilder
 import pandas as pd
 from seaborn import color_palette
 from itertools import cycle
+from .lookup_utilities import make_client
+from .config import root_id_col, syn_pt_position_col, cell_pt_position_col
 
 EMPTY_INFO_CACHE = {"aligned_volume": {}}
 MAX_URL_LENGTH = 1_750_000
@@ -64,7 +66,7 @@ def generate_statebuilder(
     )
 
     points = statebuilder.PointMapper(
-        "ctr_pt_position",
+        syn_pt_position_col,
         linked_segmentation_column=anno_column,
         group_column=anno_column,
         multipoint=True,
@@ -100,8 +102,8 @@ def generate_statebuilder_pre(info_cache, preselect=False):
         timestamp=timestamp(info_cache),
     )
     points = statebuilder.PointMapper(
-        "ctr_pt_position",
-        linked_segmentation_column="root_id",
+        syn_pt_position_col,
+        linked_segmentation_column=root_id_col,
         set_position=True,
         multipoint=True,
     )
@@ -129,8 +131,8 @@ def generate_statebuilder_post(info_cache):
         timestamp=timestamp(info_cache),
     )
     points = statebuilder.PointMapper(
-        "ctr_pt_position",
-        linked_segmentation_column="root_id",
+        syn_pt_position_col,
+        linked_segmentation_column=root_id_col,
         set_position=True,
         multipoint=True,
     )
@@ -150,8 +152,8 @@ def generate_statebuider_syn_grouped(
 ):
     points = statebuilder.PointMapper(
         point_column="ctr_pt_position",
-        linked_segmentation_column="root_id",
-        group_column="root_id",
+        linked_segmentation_column=root_id_col,
+        group_column=root_id_col,
         multipoint=True,
         set_position=True,
     )
@@ -164,7 +166,7 @@ def generate_statebuider_syn_grouped(
     )
 
     if preselect:
-        selected_ids_column = "root_id"
+        selected_ids_column = root_id_col
     else:
         selected_ids_column = None
 
@@ -220,10 +222,14 @@ def generate_url_synapses(selected_rows, edge_df, syn_df, direction, info_cache)
     return sb.render_state(syn_df.query(f"{other_col} in @other_oids"), return_as="url")
 
 
-def generate_url_cell_types(selected_rows, df, info_cache, return_as="url"):
+def generate_url_cell_types(selected_rows, df, info_cache, position_column='pt_position', multipoint=False, fill_null=None, return_as="url"):
     if len(selected_rows) > 0 or selected_rows is None:
         df = df.iloc[selected_rows].reset_index(drop=True)
-    cell_types = pd.unique(df["cell_type"])
+    if fill_null:
+        df['cell_type'].cat.add_categories(fill_null, inplace=True)
+        df['cell_type'].fillna(fill_null, inplace=True)
+        
+    cell_types = pd.unique(df["cell_type"].dropna())
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
     )
@@ -245,9 +251,10 @@ def generate_url_cell_types(selected_rows, df, info_cache, return_as="url"):
             color=clr,
             linked_segmentation_layer=seg.name,
             mapping_rules=statebuilder.PointMapper(
-                "pt_position",
+                position_column,
                 linked_segmentation_column="pt_root_id",
                 set_position=True,
+                multipoint=multipoint,
             ),
         )
         sbs.append(
@@ -259,3 +266,67 @@ def generate_url_cell_types(selected_rows, df, info_cache, return_as="url"):
         dfs.append(df.query("cell_type == @ct"))
     csb = statebuilder.ChainedStateBuilder(sbs)
     return csb.render_state(dfs, return_as=return_as)
+
+
+def generate_statebuilder_syn_cell_types(
+    info_cache,
+    rows,
+    cell_type_column='cell_type',
+    position_column=syn_pt_position_col,
+    multipoint=False,
+    fill_null=None,
+    ):
+    df = pd.DataFrame(rows)
+    if fill_null:
+        df[cell_type_column].fillna(fill_null, inplace=True)
+        
+    cell_types = pd.unique(df[cell_type_column].dropna())
+    img = statebuilder.ImageLayerConfig(
+        image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
+    )
+    seg = statebuilder.SegmentationLayerConfig(
+        seg_source(info_cache),
+        alpha_3d=0.8,
+        fixed_ids=[int(info_cache['root_id'])],
+    )
+    sbs = [
+        statebuilder.StateBuilder(
+            [img, seg],
+            state_server=state_server(info_cache),
+        )
+    ]
+    dfs = [None]
+    colors = color_palette("tab20").as_hex()
+    for ct, clr in zip(cell_types, cycle(colors)):
+        anno = statebuilder.AnnotationLayerConfig(
+            ct,
+            color=clr,
+            linked_segmentation_layer=seg.name,
+            mapping_rules=statebuilder.PointMapper(
+                position_column,
+                linked_segmentation_column=root_id_col,
+                set_position=True,
+                multipoint=multipoint,
+            ),
+        )
+        sbs.append(
+            statebuilder.StateBuilder(
+                [anno],
+                state_server=state_server(info_cache),
+            )
+        )
+        dfs.append(df.query(f"{cell_type_column} == @ct"))
+    csb = statebuilder.ChainedStateBuilder(sbs)
+    return csb, dfs
+
+def make_url_robust(df, sb, datastack, config):
+    """Generate a url from a neuroglancer state. If too long, return through state server
+    """
+    url = sb.render_state(df, return_as="url")
+    if len(url) > MAX_URL_LENGTH:
+        client = make_client(datastack, config)
+        state = sb.render_state(df,return_as="dict")
+        state_id = client.state.upload_state_json(state)
+        url = client.state.build_neuroglancer_url(state_id)
+    return url
+

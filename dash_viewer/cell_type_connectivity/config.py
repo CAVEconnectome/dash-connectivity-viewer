@@ -2,9 +2,11 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 import os
+import pathlib 
 
 DEFAULT_DATASTACK = "minnie65_phase3_v1"
 DEFAULT_SERVER_ADDRESS = "https://global.daf-apis.com"
+NUCLEUS_TABLE = 'nucleus_neuron_svm'
 
 TARGET_ROOT_ID_PER_CALL = 200
 MAX_CHUNKS = 20
@@ -15,8 +17,8 @@ dendrite_color = (0.894, 0.102, 0.110)
 axon_color = (0.227, 0.459, 0.718)
 clrs = np.array([axon_color, dendrite_color])
 
-base_dir = os.path.dirname(__file__)
-data_path = f"{base_dir}/data"
+base_dir = pathlib.Path(os.path.dirname(__file__))
+data_path = base_dir.parent.joinpath('common/data')
 
 cell_type_table = "allen_soma_coarse_cell_class_model_v1"
 ct_col = "cell_type"
@@ -59,7 +61,7 @@ split_threshold = 0.7
 voxel_resolution = np.array([4, 4, 40])
 
 table_columns = [
-    "pt_root_id",
+    "root_id",
     num_syn_col,
     net_size_col,
     mean_size_col,

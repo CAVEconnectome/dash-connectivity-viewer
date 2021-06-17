@@ -103,7 +103,7 @@ class NeuronData(object):
 
     def _get_syn_df(self):
         self._pre_syn_df, self._post_syn_df = synapse_data(
-            self.synapse_table, self.oid, self.client, self.timestamp
+            self.synapse_table, self.oid, self.client, self.timestamp, live_query=self.live_query
         )
 
     @lru_cache(maxsize=1)
@@ -152,7 +152,7 @@ class NeuronData(object):
 
     def _get_own_soma_loc(self):
         own_soma_df = get_specific_soma(
-            self.soma_table, self.oid, self.client, self.timestamp
+            self.soma_table, self.oid, self.client, self.timestamp, live_query=self.live_query
         )
         if len(own_soma_df) != 1:
             own_soma_loc = np.nan
@@ -176,6 +176,7 @@ class NeuronData(object):
             target_ids,
             self.client,
             self.timestamp,
+            live_query=self.live_query,
         )
         return targ_ct_soma_df
 
@@ -297,6 +298,7 @@ class NeuronData(object):
             df = self.post_targ_df()
             merge_column = "pre_pt_root_id"
         if len(df) == 0:
+            df['ctr_pt_position'] = []
             df[num_syn_col] = []
             df[net_size_col] = []
             df[mean_size_col] = []
@@ -314,9 +316,14 @@ class NeuronData(object):
                 .groupby(merge_column)
                 .transform("mean")["size"]
             ).astype(int)
+
         df_unique = df.drop_duplicates(subset=merge_column).drop(
-            columns=["size", "ctr_pt_position"]
-        )
+            columns=["size"]
+        ).drop(columns='ctr_pt_position')
+
+        pt_df =  df.groupby(merge_column)["ctr_pt_position"].agg(list)
+        df_unique = df_unique.merge(pt_df, left_on=merge_column, right_index=True)
+
         tab_dat = df_unique.sort_values(by=num_syn_col, ascending=False)
         tab_dat[merge_column] = tab_dat[merge_column].astype(
             str
@@ -329,7 +336,7 @@ class NeuronData(object):
             self._compute_tab_dat("pre")
             .fillna(np.nan)
             .drop(columns=["pre_pt_root_id"])
-            .rename(columns={"post_pt_root_id": "pt_root_id"})
+            .rename(columns={"post_pt_root_id": "root_id"})
         )
 
     @lru_cache(maxsize=5)
@@ -338,5 +345,5 @@ class NeuronData(object):
             self._compute_tab_dat("post")
             .fillna(np.nan)
             .drop(columns=["post_pt_root_id"])
-            .rename(columns={"pre_pt_root_id": "pt_root_id"})
+            .rename(columns={"pre_pt_root_id": "root_id"})
         )

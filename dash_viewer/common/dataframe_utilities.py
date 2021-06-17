@@ -76,7 +76,7 @@ def get_specific_soma(soma_table, root_id, client, timestamp, live_query=True):
     return soma_df
 
 
-def get_soma_df(soma_table, root_ids, client, timestamp, live_query=True):
+def get_soma_df(soma_table, root_ids, client, timestamp=None, live_query=True):
     if live_query:
         soma_df = client.materialize.live_query(
             soma_table,
@@ -112,7 +112,7 @@ def get_soma_df(soma_table, root_ids, client, timestamp, live_query=True):
     return soma_df[soma_table_columns]
 
 
-def get_ct_df(cell_type_table, root_ids, client, timestamp, live_query=True):
+def get_ct_df(cell_type_table, root_ids, client, timestamp=None, live_query=True):
     if live_query:
         ct_df = client.materialize.live_query(
             cell_type_table,
@@ -157,11 +157,11 @@ def _multirun_get_ct_soma(
         out_ct = []
         with ThreadPoolExecutor(max_workers=(2 * n_split)) as exe:
             out_soma = [
-                exe.submit(get_soma_df, soma_table, rid, client, timestamp)
+                exe.submit(get_soma_df, soma_table, rid, client, timestamp, live_query=True)
                 for rid in root_ids_split
             ]
             out_ct = [
-                exe.submit(get_ct_df, cell_type_table, rid, client, timestamp)
+                exe.submit(get_ct_df, cell_type_table, rid, client, timestamp, live_query=True)
                 for rid in root_ids_split
             ]
 
@@ -177,8 +177,8 @@ def _multirun_get_ct_soma(
 
 def _static_get_ct_soma(soma_table, cell_type_table, root_ids, client):
     with ThreadPoolExecutor(2) as exe:
-        soma_out = exe.submit(get_soma_df, soma_table, root_ids, client)
-        ct_out = exe.submit(get_ct_df, cell_type_table, root_ids, client)
+        soma_out = exe.submit(get_soma_df, soma_table, root_ids, client, live_query=False)
+        ct_out = exe.submit(get_ct_df, cell_type_table, root_ids, client, live_query=False)
     return soma_out.result(), ct_out.result()
 
 

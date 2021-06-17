@@ -187,6 +187,7 @@ def page_layout(state: State = None):
                             color="secondary",
                         ),
                     ),
+
                     dbc.Col(
                         dbc.Button(
                             "Generate All Output Link",

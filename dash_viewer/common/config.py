@@ -20,9 +20,12 @@ data_path = f"{base_dir}/data"
 
 cell_type_table = "allen_soma_coarse_cell_class_model_v1"
 ct_col = "cell_type"
+syn_pt_position_col = 'ctr_pt_position'
+cell_pt_position_col = 'pt_position'
 
 own_soma_col = "own_soma_pt_position"
 
+root_id_col = 'root_id'
 soma_depth_col = "soma_y_um"
 valence_col = "is_inhib"
 num_soma_col = "num_soma"
@@ -59,7 +62,7 @@ split_threshold = 0.7
 voxel_resolution = np.array([4, 4, 40])
 
 table_columns = [
-    "pt_root_id",
+    root_id_col,
     num_syn_col,
     net_size_col,
     mean_size_col,

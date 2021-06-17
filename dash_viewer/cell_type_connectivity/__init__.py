@@ -1,13 +1,10 @@
 from dash import Dash
 
-import dash_bootstrap_components as dbc
 from .callbacks import register_callbacks
 from .layout import title, page_layout, app_layout
 from .external_stylesheets import external_stylesheets
 from ..common.dash_url_helper import setup
 import flask
-
-__version__ = "0.0.1"
 
 
 def create_app(name=__name__, config={}, **kwargs):

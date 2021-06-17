@@ -137,6 +137,7 @@ def register_callbacks(app, config):
                 client,
                 timestamp=timestamp,
                 live_query=live_query == "live",
+                soma_table=NUCLEUS_TABLE,
             )
             pre_targ_df = nrn_data.pre_targ_simple_df()
             pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=["root_id"])
@@ -217,7 +218,7 @@ def register_callbacks(app, config):
         selected_rows,
         info_cache,
     ):
-        large_state_text = "State Too Large - Please Filter"
+        large_state_text = "ate Too Large - Please Filter"
         small_state_text = "Neuroglancer Link"
 
         if rows is None or len(rows) == 0:
