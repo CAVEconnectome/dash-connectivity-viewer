@@ -61,3 +61,6 @@ def get_root_id_from_nuc_id(nuc_id, client, nucleus_table, timestamp=None, live=
         return None
     else:
         return df.iloc[0]["pt_root_id"]
+
+
+def get_root_id_from_point(point_string, client, timestamp):

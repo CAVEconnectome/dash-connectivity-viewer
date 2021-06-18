@@ -1,4 +1,4 @@
-from dash_viewer.cell_type_table import create_app
+from dash_connectivity_viewer.cell_type_table import create_app
 
 
 if __name__ == "__main__":

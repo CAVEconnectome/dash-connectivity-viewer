@@ -25,7 +25,7 @@ with open("requirements.txt", "r") as f:
 
 setup(
     name="dashconnectivityviewer",
-    version=find_version("dashconnectivityviewer", "__init__.py"),
+    version=find_version("dash_connectivity_viewer", "__init__.py"),
     description="Dash connectivity viewer for CAVE data",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
