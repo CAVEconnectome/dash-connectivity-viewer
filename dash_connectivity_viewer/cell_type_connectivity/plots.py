@@ -2,7 +2,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from .config import ticklocs, height_bnds
 
-
 def bar_fig(nrn_data, val_colors, height=350, width=450):
 
     bar_e = nrn_data.excitatory_bar_plot(val_colors[0])
@@ -26,6 +25,8 @@ def bar_fig(nrn_data, val_colors, height=350, width=450):
         paper_bgcolor="White",
         template="plotly_white",
         showlegend=False,
+        margin=dict(l=20, r=20, t=20, b=20),
+
     )
 
     return fig
@@ -49,6 +50,7 @@ def violin_fig(
         paper_bgcolor="White",
         template="plotly_white",
         showlegend=False,
+        margin=dict(l=40, r=20, t=20, b=20),
     )
 
     fig.update_yaxes(
@@ -58,9 +60,8 @@ def violin_fig(
         range=height_bnds.astype(int)[::-1].tolist(),
         gridcolor="#CCC",
         gridwidth=2,
-        automargin=True,
+        # automargin=True,
     )
-
     return fig
 
 
@@ -78,6 +79,7 @@ def scatter_fig(nrn_data, valence_colors, ticklocs=ticklocs, height=350):
         paper_bgcolor="White",
         template="plotly_white",
         showlegend=False,
+        margin=dict(l=20, r=20, t=20, b=20),
     )
 
     fig.update_xaxes(
@@ -97,7 +99,6 @@ def scatter_fig(nrn_data, valence_colors, ticklocs=ticklocs, height=350):
         gridcolor="#CCC",
         gridwidth=2,
     )
-
     return fig
 
 
@@ -139,7 +140,7 @@ def morpho_fig(
         autorange="reversed",
         gridcolor="#CCC",
         gridwidth=2,
-        automargin=True,
+        # automargin=True,
     )
 
     fig.update_layout(

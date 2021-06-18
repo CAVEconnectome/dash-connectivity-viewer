@@ -1,10 +1,12 @@
-nglui
+nglui>=2.7.2
 pandas
 numpy
 seaborn
+flask
 dash
 dash_bootstrap_components
 requests
 annotationframeworkclient
 plotly
 loguru
+orjson

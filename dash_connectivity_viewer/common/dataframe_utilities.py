@@ -4,7 +4,6 @@ import re
 import numpy as np
 from .config import *
 
-
 soma_table_columns = [
     "pt_root_id",
     soma_depth_col,
@@ -33,7 +32,6 @@ minimal_synapse_columns = ["pre_pt_root_id", "post_pt_root_id", "ctr_pt_position
 single_soma_cols = [soma_depth_col, soma_position_col, ct_col, valence_col]
 
 
-
 def categorize_unsure(row):
     if row["cell_type"] == "Unsure":
         if row["classification_system"] == "aibs_coarse_excitatory":
@@ -42,6 +40,7 @@ def categorize_unsure(row):
             return "UnsI"
     else:
         return row["cell_type"]
+
 
 def assemble_pt_position(row, prefix=""):
     return np.array(
@@ -77,7 +76,7 @@ def get_specific_soma(soma_table, root_id, client, timestamp, live_query=True):
     return soma_df
 
 
-def get_soma_df(soma_table, root_ids, client, timestamp, live_query=True):
+def get_soma_df(soma_table, root_ids, client, timestamp=None, live_query=True):
     if live_query:
         soma_df = client.materialize.live_query(
             soma_table,
@@ -113,7 +112,7 @@ def get_soma_df(soma_table, root_ids, client, timestamp, live_query=True):
     return soma_df[soma_table_columns]
 
 
-def get_ct_df(cell_type_table, root_ids, client, timestamp, live_query=True):
+def get_ct_df(cell_type_table, root_ids, client, timestamp=None, live_query=True):
     if live_query:
         ct_df = client.materialize.live_query(
             cell_type_table,
@@ -141,7 +140,6 @@ def get_ct_df(cell_type_table, root_ids, client, timestamp, live_query=True):
     ct_df.drop_duplicates(subset="pt_root_id", inplace=True)
     ct_df["pt_root_id"] = ct_df["pt_root_id"].astype("Int64")
 
-
     return ct_df[cell_type_table_columns]
 
 
@@ -159,11 +157,11 @@ def _multirun_get_ct_soma(
         out_ct = []
         with ThreadPoolExecutor(max_workers=(2 * n_split)) as exe:
             out_soma = [
-                exe.submit(get_soma_df, soma_table, rid, client, timestamp)
+                exe.submit(get_soma_df, soma_table, rid, client, timestamp, live_query=True)
                 for rid in root_ids_split
             ]
             out_ct = [
-                exe.submit(get_ct_df, cell_type_table, rid, client, timestamp)
+                exe.submit(get_ct_df, cell_type_table, rid, client, timestamp, live_query=True)
                 for rid in root_ids_split
             ]
 
@@ -179,8 +177,8 @@ def _multirun_get_ct_soma(
 
 def _static_get_ct_soma(soma_table, cell_type_table, root_ids, client):
     with ThreadPoolExecutor(2) as exe:
-        soma_out = exe.submit(get_soma_df, soma_table, root_ids, client)
-        ct_out = exe.submit(get_ct_df, cell_type_table, root_ids, client)
+        soma_out = exe.submit(get_soma_df, soma_table, root_ids, client, live_query=False)
+        ct_out = exe.submit(get_ct_df, cell_type_table, root_ids, client, live_query=False)
     return soma_out.result(), ct_out.result()
 
 
@@ -197,11 +195,9 @@ def cell_typed_soma_df(
         )
 
     soma_ct_df = ct_df.merge(
-
         soma_df.drop_duplicates(subset="pt_root_id"),
         on="pt_root_id",
         how="outer",
-
     )
     multisoma_ind = soma_ct_df.query("num_soma>1").index
     for col in single_soma_cols:
