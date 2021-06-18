@@ -43,7 +43,14 @@ def dropdown_options():
 def page_layout(state: State = None):
     state = state or {}
 
-    header_text = html.H3(f"Neuron Target Info:")
+    header_text = dbc.Row(
+        [
+            dbc.Col(
+                html.H3(f"Neuron Target Info:"),
+                width={"size": 6, "offset": 1},
+            ),
+        ],
+    )
 
     input_row = html.Div(
         [

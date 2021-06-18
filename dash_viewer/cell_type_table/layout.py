@@ -302,29 +302,6 @@ def page_layout(state: State = {}):
             ),
         ]
     )
-    # whole_column_link = dbc.Row(
-    #     [
-    #         dbc.Col(
-    #             dbc.Spinner(
-    #                 size="sm", children=html.Div(id="whole-table-link-loading")
-    #             ),
-    #             width=1,
-    #             align="center",
-    #         ),
-    #         dbc.Col(
-    #             dbc.Button(
-    #                 "Generate Whole Table Link",
-    #                 id="whole-table-link-button",
-    #                 color="secondary",
-    #                 style={"font-size": "16px"},
-    #             ),
-    #             width=2,
-    #             align="center",
-    #         ),
-    #         dbc.Col(html.Div("", id="whole-table-link"), align="center"),
-    #     ],
-    #     justify="start",
-    # )
 
     datastack_comp = (
         dcc.Input(
