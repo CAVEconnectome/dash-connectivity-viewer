@@ -30,6 +30,7 @@ from .config import *
 from .plots import bar_fig, violin_fig, scatter_fig
 
 import datetime
+
 try:
     from loguru import logger
     import time
@@ -49,13 +50,17 @@ StateLiveQuery = State(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
 )
 
+
 def allowed_action_trigger(ctx, allowed_buttons):
     if not ctx.triggered:
         return False
     trigger_src = ctx.triggered[0]["prop_id"].split(".")[0]
     return trigger_src in allowed_buttons
 
-def generic_syn_link_generation(sb_function, rows, info_cache, datastack, config, link_text, item_name='synapses'):
+
+def generic_syn_link_generation(
+    sb_function, rows, info_cache, datastack, config, link_text, item_name="synapses"
+):
     if rows is None or len(rows) == 0:
         return html.Div("No {item_name} to show")
     else:
@@ -71,9 +76,8 @@ def generic_syn_link_generation(sb_function, rows, info_cache, datastack, config
     except Exception as e:
         return html.Div(str(e))
 
-    return html.A(
-        link_text, href=url, target="_blank", style={"font-size": "20px"}
-    )
+    return html.A(link_text, href=url, target="_blank", style={"font-size": "20px"})
+
 
 def make_plots(nrn_data):
     if nrn_data is None:
@@ -85,26 +89,31 @@ def make_plots(nrn_data):
         [
             dbc.Col(
                 [
-                    html.H5('Input/Output Depth', style={'text-align': 'center'}),
-                    dcc.Graph(figure=violin),
+                    html.H5("Input/Output Depth", style={"text-align": "center"}),
+                    dcc.Graph(figure=violin, style={"width": "100%", "height": "100%"}),
                 ]
             ),
             dbc.Col(
                 [
-                    html.H5('Synapse/Target Synapse Depth', style={'text-align': 'center'}),
-                    dcc.Graph(figure=scatter),
+                    html.H5(
+                        "Synapse/Target Synapse Depth", style={"text-align": "center"}
+                    ),
+                    dcc.Graph(figure=scatter, style={"text-align": "center"}),
                 ]
             ),
             dbc.Col(
                 [
-                    html.H5('Target Synapse by Cell Type', style={'text-align': 'center'}),
-                    dcc.Graph(figure=bars),
+                    html.H5(
+                        "Target Synapse by Cell Type", style={"text-align": "center"}
+                    ),
+                    dcc.Graph(figure=bars, style={"text-align": "center"}),
                 ]
             ),
-        ]
+        ],
     )
-    
+
     return html.Div(plot_content)
+
 
 def register_callbacks(app, config):
     @app.callback(
@@ -116,16 +125,16 @@ def register_callbacks(app, config):
         return []
 
     @app.callback(
-        Output("message-text", 'children'),
-        Output('message-text', 'color'),
-        Output('main-loading-placeholder', 'children'),
+        Output("message-text", "children"),
+        Output("message-text", "color"),
+        Output("main-loading-placeholder", "children"),
         Output("target-table-json", "data"),
         Output("source-table-json", "data"),
         Output("output-tab", "label"),
         Output("input-tab", "label"),
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
-        Output('plot-content', 'children'),
+        Output("plot-content", "children"),
         Input("submit-button", "n_clicks"),
         InputDatastack,
         StateRootID,
@@ -164,14 +173,12 @@ def register_callbacks(app, config):
             timestamp = datetime.datetime.now()
         else:
             timestamp = client.materialize.get_timestamp()
-        
-        if live_query == "static":
             info_cache["ngl_timestamp"] = timestamp.timestamp()
 
         if anno_id is None or len(anno_id) == 0:
             return (
-                html.Div('Please select a root id and press Submit'),
-                'info',
+                html.Div("Please select a root id and press Submit"),
+                "info",
                 "",
                 [],
                 [],
@@ -182,9 +189,9 @@ def register_callbacks(app, config):
                 make_plots(None),
             )
         else:
-            if id_type == 'root_id':
+            if id_type == "root_id":
                 root_id = int(anno_id)
-            elif id_type == 'nucleus_id':
+            elif id_type == "nucleus_id":
                 root_id = get_root_id_from_nuc_id(
                     nuc_id=int(anno_id),
                     client=client,
@@ -192,10 +199,10 @@ def register_callbacks(app, config):
                     timestamp=timestamp,
                     live=live_query,
                 )
-            info_cache['root_id'] = str(root_id)
+            info_cache["root_id"] = str(root_id)
 
         nrn_data = NeuronData(
-            root_id,    
+            root_id,
             client=client,
             cell_type_table=ct_table_value,
             soma_table=NUCLEUS_TABLE,
@@ -204,10 +211,10 @@ def register_callbacks(app, config):
         )
 
         pre_targ_df = nrn_data.pre_tab_dat()
-        pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=['root_id'])
+        pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=["root_id"])
 
         post_targ_df = nrn_data.post_tab_dat()
-        post_targ_df = stringify_root_ids(post_targ_df, stringify_cols=['root_id'])
+        post_targ_df = stringify_root_ids(post_targ_df, stringify_cols=["root_id"])
 
         n_syn_pre = pre_targ_df[num_syn_col].sum()
         n_syn_post = post_targ_df[num_syn_col].sum()
@@ -224,10 +231,10 @@ def register_callbacks(app, config):
 
         return (
             html.Div(message_text),
-            'success',
+            "success",
             "",
-            pre_targ_df.to_dict('records'),
-            post_targ_df.to_dict('records'),
+            pre_targ_df.to_dict("records"),
+            post_targ_df.to_dict("records"),
             f"Output (n = {n_syn_pre})",
             f"Input (n = {n_syn_post})",
             1,
@@ -269,7 +276,9 @@ def register_callbacks(app, config):
         selected_rows,
         info_cache,
     ):
-        large_state_text = "Table Too Large - Please Filter or Use Whole Cell Neuroglancer Links"
+        large_state_text = (
+            "Table Too Large - Please Filter or Use Whole Cell Neuroglancer Links"
+        )
         small_state_text = "Table View Neuroglancer Link"
 
         if rows is None or len(rows) == 0:
@@ -305,10 +314,10 @@ def register_callbacks(app, config):
 
     @app.callback(
         Output("all-input-link", "children"),
-        Output('all-input-link-button', 'children'),
-        Output('all-input-link-button', 'disabled'),
+        Output("all-input-link-button", "children"),
+        Output("all-input-link-button", "disabled"),
         Input("all-input-link-button", "n_clicks"),
-        Input('all-input-link-button', 'children'),
+        Input("all-input-link-button", "children"),
         Input("submit-button", "n_clicks"),
         Input("source-table-json", "data"),
         Input("client-info-json", "data"),
@@ -316,23 +325,26 @@ def register_callbacks(app, config):
         prevent_initial_call=True,
     )
     def generate_all_input_link(_1, _2, curr, rows, info_cache, datastack):
-        if not allowed_action_trigger(callback_context, ['all-input-link-button']):
-            return "  ", 'Generate Link', False
-        return generic_syn_link_generation(
-            generate_statebuilder_post,
-            rows,
-            info_cache,
-            datastack,
-            config,
-            'Neuroglancer Link',
-            'Inputs',
-        ), 'Link Generated', True
-   
-    
+        if not allowed_action_trigger(callback_context, ["all-input-link-button"]):
+            return "  ", "Generate Link", False
+        return (
+            generic_syn_link_generation(
+                generate_statebuilder_post,
+                rows,
+                info_cache,
+                datastack,
+                config,
+                "Neuroglancer Link",
+                "Inputs",
+            ),
+            "Link Generated",
+            True,
+        )
+
     @app.callback(
         Output("cell-typed-input-link", "children"),
-        Output('cell-typed-input-link-button', 'children'),
-        Output('cell-typed-input-link-button', 'disabled'),
+        Output("cell-typed-input-link-button", "children"),
+        Output("cell-typed-input-link-button", "disabled"),
         Input("cell-typed-input-link-button", "n_clicks"),
         Input("submit-button", "n_clicks"),
         Input("source-table-json", "data"),
@@ -341,28 +353,37 @@ def register_callbacks(app, config):
         prevent_initial_call=True,
     )
     def generate_cell_typed_input_link(_1, _2, rows, info_cache, datastack):
-        if not allowed_action_trigger(callback_context, ['cell-typed-input-link-button']):
-            return "  ", 'Generate Link', False
+        if not allowed_action_trigger(
+            callback_context, ["cell-typed-input-link-button"]
+        ):
+            return "  ", "Generate Link", False
         sb, dfs = generate_statebuilder_syn_cell_types(
             info_cache,
             rows,
-            cell_type_column='cell_type',
+            cell_type_column="cell_type",
             position_column=syn_pt_position_col,
             multipoint=True,
-            fill_null='NoType',
+            fill_null="NoType",
         )
         try:
             url = make_url_robust(dfs, sb, datastack, config)
         except Exception as e:
             return html.Div(str(e))
-        return html.A(
-            'Cell Typed Input Link', href=url, target="_blank", style={"font-size": "20px"}
-        ), 'Link Generated', True
+        return (
+            html.A(
+                "Cell Typed Input Link",
+                href=url,
+                target="_blank",
+                style={"font-size": "20px"},
+            ),
+            "Link Generated",
+            True,
+        )
 
     @app.callback(
         Output("all-output-link", "children"),
-        Output('all-output-link-button', 'children'),
-        Output('all-output-link-button', 'disabled'),
+        Output("all-output-link-button", "children"),
+        Output("all-output-link-button", "disabled"),
         Input("all-output-link-button", "n_clicks"),
         Input("submit-button", "n_clicks"),
         Input("target-table-json", "data"),
@@ -371,14 +392,26 @@ def register_callbacks(app, config):
         prevent_initial_call=True,
     )
     def generate_all_output_link(_1, _2, rows, info_cache, datastack):
-        if not allowed_action_trigger(callback_context, ['all-output-link-button']):
-            return "", 'Generate Link', False
-        return generic_syn_link_generation(generate_statebuilder_pre, rows, info_cache, datastack, config, 'All Output Link', 'Outputs'), 'Link Generated', True
+        if not allowed_action_trigger(callback_context, ["all-output-link-button"]):
+            return "", "Generate Link", False
+        return (
+            generic_syn_link_generation(
+                generate_statebuilder_pre,
+                rows,
+                info_cache,
+                datastack,
+                config,
+                "All Output Link",
+                "Outputs",
+            ),
+            "Link Generated",
+            True,
+        )
 
     @app.callback(
         Output("cell-typed-output-link", "children"),
-        Output('cell-typed-output-link-button', 'children'),
-        Output('cell-typed-output-link-button', 'disabled'),
+        Output("cell-typed-output-link-button", "children"),
+        Output("cell-typed-output-link-button", "disabled"),
         Input("cell-typed-output-link-button", "n_clicks"),
         Input("submit-button", "n_clicks"),
         Input("target-table-json", "data"),
@@ -387,24 +420,33 @@ def register_callbacks(app, config):
         prevent_initial_call=True,
     )
     def generate_cell_typed_output_link(_1, _2, rows, info_cache, datastack):
-        if not allowed_action_trigger(callback_context, ['cell-typed-output-link-button']):
-            return "  ", 'Generate Link', False
+        if not allowed_action_trigger(
+            callback_context, ["cell-typed-output-link-button"]
+        ):
+            return "  ", "Generate Link", False
         sb, dfs = generate_statebuilder_syn_cell_types(
             info_cache,
             rows,
-            cell_type_column='cell_type',
+            cell_type_column="cell_type",
             position_column=syn_pt_position_col,
             multipoint=True,
-            fill_null='NoType',
+            fill_null="NoType",
         )
         try:
             url = make_url_robust(dfs, sb, datastack, config)
         except Exception as e:
             return html.Div(str(e))
-        return html.A(
-            'Cell Typed Output Link', href=url, target="_blank", style={"font-size": "20px"}
-        ), 'Link Generated', True
-    
+        return (
+            html.A(
+                "Cell Typed Output Link",
+                href=url,
+                target="_blank",
+                style={"font-size": "20px"},
+            ),
+            "Link Generated",
+            True,
+        )
+
     @app.callback(
         Output("collapse-card", "is_open"),
         Input("collapse-button", "n_clicks"),
@@ -424,6 +466,5 @@ def register_callbacks(app, config):
         if n:
             return not is_open
         return is_open
-
 
     pass

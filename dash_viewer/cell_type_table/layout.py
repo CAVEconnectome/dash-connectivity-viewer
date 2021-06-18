@@ -1,3 +1,4 @@
+from dash_html_components.A import A
 import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
@@ -69,7 +70,10 @@ def page_layout(state: State = {}):
                                         1,
                                     ],
                                     switch=True,
-                                    style={"bottom-margin": "10px", 'font-size': '16px'},
+                                    style={
+                                        "bottom-margin": "10px",
+                                        "font-size": "16px",
+                                    },
                                 )
                             ),
                         ],
@@ -232,7 +236,7 @@ def page_layout(state: State = {}):
             ),
             dbc.Col(
                 dbc.Button(
-                    children="Filtered/Selected Rows — Neuroglancer Link",
+                    children="Table View Neuroglancer Link",
                     id="ngl-link",
                     href="",
                     target="_blank",
@@ -253,6 +257,16 @@ def page_layout(state: State = {}):
                 ),
                 width=1,
             ),
+            dbc.Col(
+                html.A(
+                    "Instructions for filtering the table",
+                    href="https://dash.plotly.com/datatable/filtering",
+                    style={"font-size": "15px"},
+                    target="_blank",
+                ),
+                align="center",
+                width={"size": 2, "offset": 3},
+            ),
         ],
         justify="start",
     )
@@ -260,26 +274,57 @@ def page_layout(state: State = {}):
     whole_column_link = dbc.Row(
         [
             dbc.Col(
-                dbc.Spinner(
-                    size="sm", children=html.Div(id="whole-table-link-loading")
+                dbc.Card(
+                    [
+                        dbc.CardBody(
+                            [
+                                html.H4("Whole Table Link", className="card-title"),
+                                html.Div(
+                                    children=[
+                                        dbc.Button(
+                                            "Generate Link",
+                                            id="whole-table-link-button",
+                                            color="secondary",
+                                            block=True,
+                                        ),
+                                    ]
+                                ),
+                                dbc.Spinner(
+                                    html.Div(
+                                        "", id="whole-table-link", className="card-text"
+                                    ),
+                                    size="sm",
+                                ),
+                            ]
+                        )
+                    ]
                 ),
-                width=1,
-                align="center",
             ),
-            dbc.Col(
-                dbc.Button(
-                    "Generate Table Link",
-                    id="whole-table-link-button",
-                    color="secondary",
-                    style={"font-size": "16px"},
-                ),
-                width=2,
-                align="center",
-            ),
-            dbc.Col(html.Div("", id="whole-table-link"), align="center"),
-        ],
-        justify="start",
+        ]
     )
+    # whole_column_link = dbc.Row(
+    #     [
+    #         dbc.Col(
+    #             dbc.Spinner(
+    #                 size="sm", children=html.Div(id="whole-table-link-loading")
+    #             ),
+    #             width=1,
+    #             align="center",
+    #         ),
+    #         dbc.Col(
+    #             dbc.Button(
+    #                 "Generate Whole Table Link",
+    #                 id="whole-table-link-button",
+    #                 color="secondary",
+    #                 style={"font-size": "16px"},
+    #             ),
+    #             width=2,
+    #             align="center",
+    #         ),
+    #         dbc.Col(html.Div("", id="whole-table-link"), align="center"),
+    #     ],
+    #     justify="start",
+    # )
 
     datastack_comp = (
         dcc.Input(
@@ -306,7 +351,7 @@ def page_layout(state: State = {}):
             title_row,
             dbc.Container(cell_type_query, fluid=True),
             dbc.Container(message_row),
-            dbc.Container(whole_column_link, fluid=True),
+            dbc.Container(whole_column_link),
             html.Hr(),
             html.Div(ngl_link),
             html.Div(data_table),

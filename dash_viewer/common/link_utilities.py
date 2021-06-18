@@ -222,13 +222,21 @@ def generate_url_synapses(selected_rows, edge_df, syn_df, direction, info_cache)
     return sb.render_state(syn_df.query(f"{other_col} in @other_oids"), return_as="url")
 
 
-def generate_url_cell_types(selected_rows, df, info_cache, position_column='pt_position', multipoint=False, fill_null=None, return_as="url"):
+def generate_url_cell_types(
+    selected_rows,
+    df,
+    info_cache,
+    position_column="pt_position",
+    multipoint=False,
+    fill_null=None,
+    return_as="url",
+):
     if len(selected_rows) > 0 or selected_rows is None:
         df = df.iloc[selected_rows].reset_index(drop=True)
     if fill_null:
-        df['cell_type'].cat.add_categories(fill_null, inplace=True)
-        df['cell_type'].fillna(fill_null, inplace=True)
-        
+        df["cell_type"].cat.add_categories(fill_null, inplace=True)
+        df["cell_type"].fillna(fill_null, inplace=True)
+
     cell_types = pd.unique(df["cell_type"].dropna())
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
@@ -272,15 +280,15 @@ def generate_url_cell_types(selected_rows, df, info_cache, position_column='pt_p
 def generate_statebuilder_syn_cell_types(
     info_cache,
     rows,
-    cell_type_column='cell_type',
+    cell_type_column="cell_type",
     position_column=syn_pt_position_col,
     multipoint=False,
     fill_null=None,
-    ):
+):
     df = pd.DataFrame(rows)
     if fill_null:
         df[cell_type_column].fillna(fill_null, inplace=True)
-        
+
     cell_types = pd.unique(df[cell_type_column].dropna())
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
@@ -288,7 +296,7 @@ def generate_statebuilder_syn_cell_types(
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),
         alpha_3d=0.8,
-        fixed_ids=[int(info_cache['root_id'])],
+        fixed_ids=[int(info_cache["root_id"])],
         timestamp=timestamp(info_cache),
     )
     sbs = [
@@ -321,14 +329,13 @@ def generate_statebuilder_syn_cell_types(
     csb = statebuilder.ChainedStateBuilder(sbs)
     return csb, dfs
 
+
 def make_url_robust(df, sb, datastack, config):
-    """Generate a url from a neuroglancer state. If too long, return through state server
-    """
+    """Generate a url from a neuroglancer state. If too long, return through state server"""
     url = sb.render_state(df, return_as="url")
     if len(url) > MAX_URL_LENGTH:
         client = make_client(datastack, config)
-        state = sb.render_state(df,return_as="dict")
+        state = sb.render_state(df, return_as="dict")
         state_id = client.state.upload_state_json(state)
         url = client.state.build_neuroglancer_url(state_id)
     return url
-

@@ -107,15 +107,13 @@ def register_callbacks(app, config):
             anno_id = None
             id_type = "anno_id"
 
-        if len(live_query_toggle) == 1:
-            live_query = "live"
-        else:
-            live_query = "static"
+        live_query = len(live_query_toggle) == 1
 
-        if live_query == "static":
-            timestamp = client.materialize.get_timestamp()
-        else:
+        if live_query:
             timestamp = datetime.datetime.now()
+        else:
+            timestamp = client.materialize.get_timestamp()
+            info_cache["ngl_timestamp"] = timestamp.timestamp()
 
         if anno_id is None:
             root_id = None
@@ -209,8 +207,8 @@ def register_callbacks(app, config):
         if rows is None or len(rows) == 0:
             sb = generate_statebuilder(info_cache, anno_layer="anno")
             url = sb.render_state(None, return_as="url")
-            link_name = "Filtered/Selected Rows — Neuroglancer Link"
-            link_color = True,
+            link_name = "Table View Neuroglancer Link"
+            link_color = (True,)
         else:
             df = pd.DataFrame(rows)
             if len(df) > MAX_DATAFRAME_LENGTH:
@@ -225,13 +223,14 @@ def register_callbacks(app, config):
                     link_name = "State Too Large"
                     link_color = True
                 else:
-                    link_name = "Filtered/Selected Rows — Neuroglancer Link"
+                    link_name = "Table View Neuroglancer Link"
                     link_color = False
         return url, link_name, link_color, ""
 
     @app.callback(
         Output("whole-table-link", "children"),
-        Output("whole-table-link-loading", "children"),
+        Output("whole-table-link-button", "children"),
+        Output("whole-table-link-button", "disabled"),
         Input("whole-table-link-button", "n_clicks"),
         Input("submit-button", "n_clicks"),
         Input("data-table", "data"),
@@ -242,17 +241,17 @@ def register_callbacks(app, config):
     def update_whole_table_link(_1, _2, rows, info_cache, datastack):
         ctx = callback_context
         if not ctx.triggered:
-            return "", ""
+            return ""
         trigger_src = ctx.triggered[0]["prop_id"].split(".")[0]
         if trigger_src in [
             "submit-button",
             "client-info-json",
             "data-table",
         ]:
-            return "", ""
+            return "", "Generate Link", False
 
         if rows is None or len(rows) == 0:
-            return html.Div("No items to show")
+            return html.Div("No items to show"), "Error", True
 
         df = pd.DataFrame(rows)
         if len(df) > MAX_SERVER_DATAFRAME_LENGTH:
@@ -270,18 +269,19 @@ def register_callbacks(app, config):
                 state_id = client.state.upload_state_json(state)
                 url = client.state.build_neuroglancer_url(state_id)
             except Exception as e:
-                return html.Div(str(e)), ""
+                return html.Div(str(e)), "Error", True
         else:
             url = generate_url_cell_types([], df, info_cache)
 
         if sampled:
-            link_text = f"Table Data Link (State very large — Random {MAX_SERVER_DATAFRAME_LENGTH} shown)"
+            link_text = f"Neuroglancer Link (State very large — Random {MAX_SERVER_DATAFRAME_LENGTH} shown)"
         else:
-            link_text = f"Table Data Link"
+            link_text = f"Neuroglancer Link"
 
         return (
             html.A(link_text, href=url, target="_blank", style={"font-size": "20px"}),
-            "",
+            "Link Generated",
+            True,
         )
 
     pass
