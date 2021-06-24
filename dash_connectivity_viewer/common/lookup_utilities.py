@@ -1,5 +1,5 @@
 import flask
-from annotationframeworkclient import FrameworkClient
+from caveclient import CAVEclient
 
 
 def make_client(datastack, config, server_address=None):
@@ -22,9 +22,7 @@ def make_client(datastack, config, server_address=None):
     auth_token = flask.g.get("auth_token", None)
     if server_address is None:
         server_address = config.get("SERVER_ADDRESS")
-    client = FrameworkClient(
-        datastack, server_address=server_address, auth_token=auth_token
-    )
+    client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token)
     return client
 
 
@@ -35,8 +33,8 @@ def get_root_id_from_nuc_id(nuc_id, client, nucleus_table, timestamp=None, live=
     ----------
     nuc_id : int
         Annotation id from a nucleus
-    client : FrameworkClient
-        FrameworkClient for the server in question
+    client : CAVEclient
+        CAVEclient for the server in question
     nucleus_table : str
         Name of the table whose annotation ids are nucleus lookups.
     timestamp : datetime.datetime, optional

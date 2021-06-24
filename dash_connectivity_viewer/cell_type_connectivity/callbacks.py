@@ -1,4 +1,4 @@
-from annotationframeworkclient.frameworkclient import FrameworkClient
+from caveclient.CAVEclient import CAVEclient
 from dash_bootstrap_components._components.CardBody import CardBody
 from dash_bootstrap_components._components.CardHeader import CardHeader
 import dash_core_components as dcc

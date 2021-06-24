@@ -3,7 +3,7 @@ import numpy as np
 import datetime
 from functools import lru_cache
 from typing import *
-from annotationframeworkclient import FrameworkClient
+from caveclient import CAVEclient
 import datetime
 
 import plotly.graph_objects as go
@@ -16,7 +16,7 @@ class NeuronData(object):
     def __init__(
         self,
         oid: int,
-        client: FrameworkClient,
+        client: CAVEclient,
         synapse_table: str = None,
         cell_type_table: str = None,
         soma_table: str = None,
@@ -50,7 +50,7 @@ class NeuronData(object):
         return self._oid
 
     @property
-    def client(self) -> FrameworkClient:
+    def client(self) -> CAVEclient:
         return self._client
 
     @property
@@ -103,7 +103,11 @@ class NeuronData(object):
 
     def _get_syn_df(self):
         self._pre_syn_df, self._post_syn_df = synapse_data(
-            self.synapse_table, self.oid, self.client, self.timestamp, live_query=self.live_query
+            self.synapse_table,
+            self.oid,
+            self.client,
+            self.timestamp,
+            live_query=self.live_query,
         )
 
     @lru_cache(maxsize=1)
@@ -152,7 +156,11 @@ class NeuronData(object):
 
     def _get_own_soma_loc(self):
         own_soma_df = get_specific_soma(
-            self.soma_table, self.oid, self.client, self.timestamp, live_query=self.live_query
+            self.soma_table,
+            self.oid,
+            self.client,
+            self.timestamp,
+            live_query=self.live_query,
         )
         if len(own_soma_df) != 1:
             own_soma_loc = np.nan
@@ -252,8 +260,10 @@ class NeuronData(object):
         xaxis: Union[str, None] = None,
         yaxis: Union[str, None] = None,
     ) -> go.Scattergl:
-        pre_targ_df = self.pre_targ_df().dropna(subset=[syn_depth_col, soma_depth_col, valence_col])
-        if len(pre_targ_df)>0:
+        pre_targ_df = self.pre_targ_df().dropna(
+            subset=[syn_depth_col, soma_depth_col, valence_col]
+        )
+        if len(pre_targ_df) > 0:
             color_vec = pre_targ_df[valence_col].astype(int)
         else:
             color_vec = 0
@@ -272,7 +282,7 @@ class NeuronData(object):
         )
 
     def bar_data(self) -> pd.Series:
-        pre_targ_df = self.pre_targ_df().dropna(subset=['cell_type'])
+        pre_targ_df = self.pre_targ_df().dropna(subset=["cell_type"])
         return pre_targ_df.groupby(ct_col).count()["size"]
 
     def _bar_plot(self, name, indices, color):
@@ -302,7 +312,7 @@ class NeuronData(object):
             df = self.post_targ_df()
             merge_column = "pre_pt_root_id"
         if len(df) == 0:
-            df['ctr_pt_position'] = []
+            df["ctr_pt_position"] = []
             df[num_syn_col] = []
             df[net_size_col] = []
             df[mean_size_col] = []
@@ -321,11 +331,13 @@ class NeuronData(object):
                 .transform("mean")["size"]
             ).astype(int)
 
-        df_unique = df.drop_duplicates(subset=merge_column).drop(
-            columns=["size"]
-        ).drop(columns='ctr_pt_position')
+        df_unique = (
+            df.drop_duplicates(subset=merge_column)
+            .drop(columns=["size"])
+            .drop(columns="ctr_pt_position")
+        )
 
-        pt_df =  df.groupby(merge_column)["ctr_pt_position"].agg(list)
+        pt_df = df.groupby(merge_column)["ctr_pt_position"].agg(list)
         df_unique = df_unique.merge(pt_df, left_on=merge_column, right_index=True)
 
         tab_dat = df_unique.sort_values(by=num_syn_col, ascending=False)

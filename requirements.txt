@@ -6,7 +6,7 @@ flask
 dash
 dash_bootstrap_components
 requests
-annotationframeworkclient
+caveclient
 plotly
 loguru
 orjson
