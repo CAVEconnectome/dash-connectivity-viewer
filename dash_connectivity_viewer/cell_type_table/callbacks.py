@@ -57,18 +57,22 @@ def register_callbacks(app, config):
         InputDatastack,
     )
     def cell_type_dropdown(datastack):
-        try:
-            client = make_client(datastack, config)
-        except:
-            return []
+        options = config.get('cell_type_dropdown_options')
+        if options is not None:
+            return options
+        else:
+            try:
+                client = make_client(datastack, config)
+            except:
+                return []
 
-        tables = client.materialize.get_tables()
-        ct_tables = []
-        for t in tables:
-            meta = client.materialize.get_table_metadata(t)
-            if meta["schema"] == "cell_type_local":
-                ct_tables.append(t)
-        return [{"label": t, "value": t} for t in ct_tables]
+            tables = client.materialize.get_tables()
+            ct_tables = []
+            for t in tables:
+                meta = client.materialize.get_table_metadata(t)
+                if meta["schema"] == "cell_type_local":
+                    ct_tables.append(t)
+            return [{"label": t, "value": t} for t in ct_tables]
 
     @app.callback(
         Output("data-table", "data"),
