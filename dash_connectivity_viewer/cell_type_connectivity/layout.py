@@ -9,37 +9,6 @@ from ..common.dash_url_helper import create_component_kwargs, State
 title = "Connectivity Viewer"
 
 
-def dropdown_options():
-    # Should be made a callback
-    options = [
-        {
-            "label": "All Soma Prediction",
-            "value": "allen_soma_coarse_cell_class_model_v1",
-        },
-        {
-            "label": "Column Census (slanted)",
-            "value": "allen_v1_column_types_slanted",
-        },
-        {
-            "label": "Column Census (straight)",
-            "value": "allen_v1_column_types_v2",
-        },
-        {
-            "label": "Thalamic Axons",
-            "value": "allen_v1_column_thalamic",
-        },
-        {
-            "label": "Layer 5 IT PyC Subtypes",
-            "value": "allen_column_l5it_types",
-        },
-        {
-            "label": "Basket Subtypes",
-            "value": "allen_column_basket_molecular",
-        },
-    ]
-    return options
-
-
 def page_layout(state: State = None):
     state = state or {}
 
@@ -103,7 +72,10 @@ def page_layout(state: State = None):
                                     state,
                                     id_inner="live-query-toggle",
                                     options=[
-                                        {"label": "Live Query", "value": 1},
+                                        {
+                                            "label": "Live Query",
+                                            "value": 1,
+                                        },
                                     ],
                                     value=[
                                         1,
@@ -153,7 +125,7 @@ def page_layout(state: State = None):
                                 **create_component_kwargs(
                                     state,
                                     id_inner="cell-type-table-dropdown",
-                                    options=dropdown_options(),
+                                    options=[],
                                     value="allen_soma_coarse_cell_class_model_v1",
                                     clearable=False,
                                 )

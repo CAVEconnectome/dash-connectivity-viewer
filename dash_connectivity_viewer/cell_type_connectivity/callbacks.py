@@ -39,12 +39,19 @@ except:
 
 InputDatastack = Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
 StateRootID = State({"id_inner": "anno-id", "type": _COMPONENT_ID_TYPE}, "value")
-StateCellTypeTable = (
-    State(
-        {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
-        "value",
-    ),
+StateCellTypeTable = State(
+    {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
+    "value",
 )
+OutputCellTypeOptions = Output(
+    {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
+    "options",
+)
+InputCellTypeOptions = Input(
+    {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
+    "options",
+)
+
 StateAnnoType = State({"id_inner": "id-type", "type": _COMPONENT_ID_TYPE}, "value")
 StateLiveQuery = State(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
@@ -123,6 +130,21 @@ def register_callbacks(app, config):
     )
     def reset_selection(n_clicks, tab_value):
         return []
+
+    @app.callback(
+        OutputCellTypeOptions,
+        InputCellTypeOptions,
+    )
+    def dropdown_options(_):
+        options = config.get("cell_type_dropdown_options")
+        if not options:
+            options = [
+                {
+                    "label": "No cell type tables configured",
+                    "value": "",
+                }
+            ]
+        return options
 
     @app.callback(
         Output("message-text", "children"),
