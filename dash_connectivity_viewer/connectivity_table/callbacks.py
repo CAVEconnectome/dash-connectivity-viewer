@@ -218,7 +218,7 @@ def register_callbacks(app, config):
         selected_rows,
         info_cache,
     ):
-        large_state_text = "ate Too Large - Please Filter"
+        large_state_text = "State Too Large - Please Filter"
         small_state_text = "Neuroglancer Link"
 
         if rows is None or len(rows) == 0:
