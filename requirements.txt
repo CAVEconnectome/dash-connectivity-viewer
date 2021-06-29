@@ -6,7 +6,7 @@ flask
 dash
 dash_bootstrap_components
 requests
-caveclient
+caveclient>=4.1.1
 plotly
 loguru
 orjson
