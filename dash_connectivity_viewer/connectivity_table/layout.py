@@ -5,6 +5,7 @@ import dash_html_components as html
 import flask
 from .config import DEFAULT_DATASTACK, table_columns, hidden_columns
 from ..common.dash_url_helper import create_component_kwargs, State
+from functools import partial
 
 title = "Synapse Table Viewer"
 
@@ -16,9 +17,9 @@ url_bar_and_content_div = html.Div(
 )
 
 
-def page_layout(state: State = None):
+def page_layout(state: State = None, config=None):
     state = state or {}
-
+    config = config or {}
     input_row = [
         dbc.Row(
             [
@@ -54,7 +55,10 @@ def page_layout(state: State = None):
                                 state,
                                 id_inner="live-query-toggle",
                                 options=[
-                                    {"label": "Live Query", "value": 1},
+                                    {
+                                        "label": "Live Query",
+                                        "value": config.get("LIVE_VALUE_DEFAULT", 1),
+                                    },
                                 ],
                                 value=[
                                     1,
@@ -187,7 +191,6 @@ def page_layout(state: State = None):
                             color="secondary",
                         ),
                     ),
-
                     dbc.Col(
                         dbc.Button(
                             "Generate All Output Link",
@@ -275,9 +278,10 @@ def page_layout(state: State = None):
     return layout
 
 
-def app_layout():
+def app_layout(config):
     # https://dash.plotly.com/urls "Dynamically Create a Layout for Multi-Page App Validation"
     if flask.has_request_context():  # for real
         return url_bar_and_content_div
     # validation only
-    return html.Div([url_bar_and_content_div, *page_layout()])
+    pl = partial(page_layout, config=config)
+    return html.Div([url_bar_and_content_div, *pl()])
