@@ -1,5 +1,17 @@
 import flask
 from caveclient import CAVEclient
+from .config import soma_table_query
+
+
+def get_all_schema_tables(schema, datastack, config, server_address=None):
+    client = make_client(datastack, config, server_address=server_address)
+    tables = client.materialize.get_tables()
+    schema_tables = []
+    for t in tables:
+        meta = client.materialize.get_table_metadata(t)
+        if meta["schema"] == schema:
+            schema_tables.append(t)
+    return [{"label": t, "value": t} for t in schema_tables]
 
 
 def make_client(datastack, config, server_address=None):
@@ -22,11 +34,20 @@ def make_client(datastack, config, server_address=None):
     auth_token = flask.g.get("auth_token", None)
     if server_address is None:
         server_address = config.get("SERVER_ADDRESS")
+
+    print(datastack, server_address, auth_token)
     client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token)
     return client
 
 
-def get_root_id_from_nuc_id(nuc_id, client, nucleus_table, timestamp=None, live=True):
+def get_root_id_from_nuc_id(
+    nuc_id,
+    client,
+    nucleus_table,
+    cell_root_id_column,
+    soma_id_column,
+    timestamp=None,
+):
     """Look up current root id from a nucleus id
 
     Parameters
@@ -47,15 +68,33 @@ def get_root_id_from_nuc_id(nuc_id, client, nucleus_table, timestamp=None, live=
     [type]
         [description]
     """
-    if live:
-        df = client.materialize.live_query(
-            nucleus_table, timestamp=timestamp, filter_equal_dict={"id": nuc_id}
-        )
-    else:
-        df = client.materialize.query_table(
-            nucleus_table, filter_equal_dict={"id": nuc_id}
-        )
+    df = client.materialize.query_table(
+        nucleus_table,
+        filter_equal_dict={soma_id_column: nuc_id},
+        timestamp=timestamp,
+    )
     if len(df) == 0:
         return None
     else:
-        return df.iloc[0]["pt_root_id"]
+        return df.iloc[0][cell_root_id_column]
+
+
+def get_nucleus_id_from_root_id(
+    root_id, client, nucleus_table, cell_root_id_column, soma_id_column, timestamp=None
+):
+
+    df = client.materialize.query_table(
+        nucleus_table,
+        filter_equal_dict={cell_root_id_column: root_id},
+        timestamp=timestamp,
+    )
+
+    if soma_table_query is not None:
+        df = df.query(soma_table_query)
+
+    if len(df) == 0:
+        return None
+    elif len(df) == 1:
+        return df[soma_id_column].values[0]
+    else:
+        return df[soma_id_column].values

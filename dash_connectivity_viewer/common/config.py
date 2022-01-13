@@ -1,74 +1,64 @@
 import numpy as np
-import seaborn as sns
-import pandas as pd
 import os
 
-DEFAULT_DATASTACK = "minnie65_phase3_v1"
-DEFAULT_SERVER_ADDRESS = "https://global.daf-apis.com"
+###########################################
+### Default data and request parameters ###
+###########################################
 
-TARGET_ROOT_ID_PER_CALL = 200
-MAX_CHUNKS = 20
+DEFAULT_DATASTACK = os.environ.get("DEFAULT_DATASTACK")
+print("config says: ", DEFAULT_DATASTACK)
+DEFAULT_SERVER_ADDRESS = os.environ.get("DEFAULT_SERVER_ADDRESS")
 
-synapse_table = "synapses_pni_2"
+# Sets how cell type and soma location information is chunked for multithreaded queries
+TARGET_ROOT_ID_PER_CALL = os.environ.get("TARGET_ROOT_ID_PER_CALL", 200)
+MAX_CHUNKS = os.environ.get("MAX_CHUNKS", 20)
 
-dendrite_color = (0.894, 0.102, 0.110)
-axon_color = (0.227, 0.459, 0.718)
-clrs = np.array([axon_color, dendrite_color])
+VOXEL_RESOLUTION = os.environ.get("VOXEL_RESOLUTION")
+if VOXEL_RESOLUTION is not None:
+    voxel_resolution = [float(x) for x in VOXEL_RESOLUTION.split(",")]
+else:
+    voxel_resolution = None
+##############################
+### Link generation limits ###
+##############################
 
-base_dir = os.path.dirname(__file__)
-data_path = f"{base_dir}/data"
+# Length of dataframe allowed for automatic table link generation
+MAX_DATAFRAME_LENGTH = os.environ.get("MAX_DATAFRAME_LENGTH", 8_000)
 
-cell_type_table = "allen_soma_coarse_cell_class_model_v1"
-ct_col = "cell_type"
-syn_pt_position_col = 'ctr_pt_position'
-cell_pt_position_col = 'pt_position'
+# Length of dataframe before switching over to manual link shortener
+MAX_SERVER_DATAFRAME_LENGTH = os.environ.get("MAX_SERVER_DATAFRAME_LENGTH", 20_000)
 
-own_soma_col = "own_soma_pt_position"
+##################
+### Key tables ###
+##################
 
-root_id_col = 'root_id'
-soma_depth_col = "soma_y_um"
-valence_col = "is_inhib"
+# Used to look up 'Nucleus Id'
+NUCLEUS_TABLE = os.environ.get("NUCLEUS_TABLE")
+
+# Used to look up number of neurons per root id
+soma_table = os.environ.get("SOMA_TABLE", NUCLEUS_TABLE)
+
+# Used to look up connectivity
+SYNAPSE_TABLE = os.environ.get("SYNAPSE_TABLE")
+
+####################
+### Column names ###
+####################
+
+syn_pt_position_col = os.environ.get("SYN_POSITION_COLUMN", "ctr_pt")
+cell_pt_position_col = os.environ.get("SOMA_POSITION_COLUMN", "pt")
+
+ct_col = os.environ.get("CELL_TYPE_COLUMN", "cell_type")
+soma_table_cell_category = os.environ.get("SOMA_TABLE_CELL_TYPE", "neuron")
+if ct_col and soma_table_cell_category:
+    soma_table_query = f"{ct_col} == '{soma_table_cell_category}'"
+else:
+    soma_table_query = None
+
 num_soma_col = "num_soma"
-soma_position_col = "soma_pt_position"
-soma_dist_col = "soma_distance_um"
-
-syn_depth_col = "syn_y_um"
 num_syn_col = "num_syn"
 net_size_col = "net_syn_size"
 mean_size_col = "mean_syn_size"
-
-soma_table = "nucleus_neuron_svm"
-soma_table_query = "cell_type == 'neuron'"
-
-inhib_types = ["BC", "MC", "BPC", "NGC", "UnsI"]
-exc_types = ["23P", "4P", "5P_IT", "5P_NP", "5P_PT", "6CT", "6IT", "UnsE"]
-
-cat_dtype = pd.CategoricalDtype(categories=exc_types + inhib_types, ordered=True)
-
-layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
-height_bnds = np.load(f"{data_path}/height_bounds_v1.npy")
-ticklocs = np.concatenate([height_bnds[0:1], layer_bnds, height_bnds[1:]])
-
-e_colors = sns.color_palette("RdPu", n_colors=9)
-i_colors = sns.color_palette("Greens", n_colors=9)
-
-base_ind = 6
-e_color = e_colors[base_ind]
-i_color = i_colors[base_ind]
-
-val_colors = np.array([e_color, i_color])
-
-split_threshold = 0.7
-voxel_resolution = np.array([4, 4, 40])
-
-table_columns = [
-    root_id_col,
-    num_syn_col,
-    net_size_col,
-    mean_size_col,
-    soma_dist_col,
-    ct_col,
-    soma_depth_col,
-    valence_col,
-    num_soma_col,
-]
+root_id_col = "root_id"
+own_soma_col = "own_soma_pt_position"
+soma_position_col = "soma_pt_position"
