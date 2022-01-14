@@ -3,7 +3,7 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import flask
-from .config import DEFAULT_DATASTACK, table_columns, hidden_columns
+from .config import DEFAULT_DATASTACK, table_columns
 from ..common.dash_url_helper import create_component_kwargs, State
 
 title = "Synapse Table Viewer"
@@ -187,7 +187,6 @@ def page_layout(state: State = None):
                             color="secondary",
                         ),
                     ),
-
                     dbc.Col(
                         dbc.Button(
                             "Generate All Output Link",

@@ -1,10 +1,16 @@
 from logging import info
 from nglui import statebuilder
 import pandas as pd
+import numpy as np
 from seaborn import color_palette
 from itertools import cycle
 from .lookup_utilities import make_client
-from .config import root_id_col, syn_pt_position_col, cell_pt_position_col
+from .config import (
+    root_id_col,
+    syn_pt_position_col,
+    bound_pt_root_id,
+    bound_pt_position,
+)
 
 EMPTY_INFO_CACHE = {"aligned_volume": {}}
 MAX_URL_LENGTH = 1_750_000
@@ -32,6 +38,26 @@ def root_id(info_cache):
 
 def timestamp(info_cache):
     return info_cache.get("ngl_timestamp", None)
+
+
+def voxel_resolution_from_info(info_cache):
+    try:
+        vr = [
+            int(info_cache.get("viewer_resolution_x")),
+            int(info_cache.get("viewer_resolution_y")),
+            int(info_cache.get("viewer_resolution_z")),
+        ]
+        return vr
+    except:
+        return None
+
+
+def statebuilder_kwargs(info_cache):
+    return dict(
+        url_prefix=viewer_site(info_cache),
+        state_server=state_server(info_cache),
+        resolution=voxel_resolution_from_info(info_cache),
+    )
 
 
 def generate_statebuilder(
@@ -66,7 +92,7 @@ def generate_statebuilder(
     )
 
     points = statebuilder.PointMapper(
-        syn_pt_position_col,
+        bound_pt_position(syn_pt_position_col),
         linked_segmentation_column=anno_column,
         group_column=anno_column,
         multipoint=True,
@@ -78,10 +104,10 @@ def generate_statebuilder(
         linked_segmentation_layer=seg.name,
         filter_by_segmentation=True,
     )
+
     sb = statebuilder.StateBuilder(
         [img, seg, anno],
-        url_prefix=viewer_site(info_cache),
-        state_server=state_server(info_cache),
+        **statebuilder_kwargs(info_cache),
     )
     return sb
 
@@ -102,7 +128,7 @@ def generate_statebuilder_pre(info_cache, preselect=False):
         timestamp=timestamp(info_cache),
     )
     points = statebuilder.PointMapper(
-        syn_pt_position_col,
+        bound_pt_position(syn_pt_position_col),
         linked_segmentation_column=root_id_col,
         set_position=True,
         multipoint=True,
@@ -112,8 +138,7 @@ def generate_statebuilder_pre(info_cache, preselect=False):
     )
     sb = statebuilder.StateBuilder(
         [img, seg, anno],
-        url_prefix=viewer_site(info_cache),
-        state_server=state_server(info_cache),
+        **statebuilder_kwargs(info_cache),
     )
     return sb
 
@@ -131,7 +156,7 @@ def generate_statebuilder_post(info_cache):
         timestamp=timestamp(info_cache),
     )
     points = statebuilder.PointMapper(
-        syn_pt_position_col,
+        pt_position(syn_pt_position_col),
         linked_segmentation_column=root_id_col,
         set_position=True,
         multipoint=True,
@@ -141,8 +166,7 @@ def generate_statebuilder_post(info_cache):
     )
     sb = statebuilder.StateBuilder(
         [img, seg, anno],
-        url_prefix=viewer_site(info_cache),
-        state_server=state_server(info_cache),
+        **statebuilder_kwargs(info_cache),
     )
     return sb
 
@@ -151,7 +175,7 @@ def generate_statebuider_syn_grouped(
     info_cache, anno_name, fixed_id_color="#FFFFFF", preselect=False
 ):
     points = statebuilder.PointMapper(
-        point_column="ctr_pt_position",
+        point_column=bound_pt_position(syn_pt_position_col),
         linked_segmentation_column=root_id_col,
         group_column=root_id_col,
         multipoint=True,
@@ -188,38 +212,37 @@ def generate_statebuider_syn_grouped(
 
     sb = statebuilder.StateBuilder(
         [img, seg, anno],
-        url_prefix=viewer_site(info_cache),
-        state_server=state_server(info_cache),
+        **statebuilder_kwargs(info_cache),
     )
 
     return sb
 
 
-def generate_url_synapses(selected_rows, edge_df, syn_df, direction, info_cache):
-    if direction == "pre":
-        other_col = "post_pt_root_id"
-        self_col = "pre_pt_root_id"
-        anno_layer = "output_syns"
-    else:
-        other_col = "pre_pt_root_id"
-        self_col = "post_pt_root_id"
-        anno_layer = "input_syn"
+# def generate_url_synapses(selected_rows, edge_df, syn_df, direction, info_cache):
+#     if direction == "pre":
+#         other_col = "post_pt_root_id"
+#         self_col = "pre_pt_root_id"
+#         anno_layer = "output_syns"
+#     else:
+#         other_col = "pre_pt_root_id"
+#         self_col = "post_pt_root_id"
+#         anno_layer = "input_syn"
 
-    syn_df[other_col] = syn_df[other_col].astype(int)
-    syn_df[self_col] = syn_df[self_col].astype(int)
+#     syn_df[other_col] = syn_df[other_col].astype(int)
+#     syn_df[self_col] = syn_df[self_col].astype(int)
 
-    edge_df["pt_root_id"] = edge_df["pt_root_id"].astype(int)
-    other_oids = edge_df.iloc[selected_rows]["pt_root_id"].values
+#     edge_df["pt_root_id"] = edge_df["pt_root_id"].astype(int)
+#     other_oids = edge_df.iloc[selected_rows]["pt_root_id"].values
 
-    preselect = len(other_oids) == 1  # Only show all targets if just one is selected
-    sb = generate_statebuilder(
-        info_cache,
-        syn_df[self_col].iloc[0],
-        preselect_all=preselect,
-        anno_column=other_col,
-        anno_layer=anno_layer,
-    )
-    return sb.render_state(syn_df.query(f"{other_col} in @other_oids"), return_as="url")
+#     preselect = len(other_oids) == 1  # Only show all targets if just one is selected
+#     sb = generate_statebuilder(
+#         info_cache,
+#         syn_df[self_col].iloc[0],
+#         preselect_all=preselect,
+#         anno_column=other_col,
+#         anno_layer=anno_layer,
+#     )
+#     return sb.render_state(syn_df.query(f"{other_col} in @other_oids"), return_as="url")
 
 
 def generate_url_cell_types(
@@ -249,7 +272,7 @@ def generate_url_cell_types(
     sbs = [
         statebuilder.StateBuilder(
             [img, seg],
-            state_server=state_server(info_cache),
+            **statebuilder_kwargs(info_cache),
         )
     ]
     dfs = [None]
@@ -269,7 +292,7 @@ def generate_url_cell_types(
         sbs.append(
             statebuilder.StateBuilder(
                 [anno],
-                state_server=state_server(info_cache),
+                **statebuilder_kwargs(info_cache),
             )
         )
         dfs.append(df.query("cell_type == @ct"))
@@ -302,7 +325,7 @@ def generate_statebuilder_syn_cell_types(
     sbs = [
         statebuilder.StateBuilder(
             [img, seg],
-            state_server=state_server(info_cache),
+            **statebuilder_kwargs(info_cache),
         )
     ]
     dfs = [None]
@@ -313,7 +336,7 @@ def generate_statebuilder_syn_cell_types(
             color=clr,
             linked_segmentation_layer=seg.name,
             mapping_rules=statebuilder.PointMapper(
-                position_column,
+                bound_pt_position(position_column),
                 linked_segmentation_column=root_id_col,
                 set_position=True,
                 multipoint=multipoint,
@@ -322,7 +345,7 @@ def generate_statebuilder_syn_cell_types(
         sbs.append(
             statebuilder.StateBuilder(
                 [anno],
-                state_server=state_server(info_cache),
+                **statebuilder_kwargs(info_cache),
             )
         )
         dfs.append(df.query(f"{cell_type_column} == @ct"))

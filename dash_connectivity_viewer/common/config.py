@@ -1,4 +1,3 @@
-import numpy as np
 import os
 
 ###########################################
@@ -34,6 +33,7 @@ MAX_SERVER_DATAFRAME_LENGTH = os.environ.get("MAX_SERVER_DATAFRAME_LENGTH", 20_0
 
 # Used to look up 'Nucleus Id'
 NUCLEUS_TABLE = os.environ.get("NUCLEUS_TABLE")
+NUCLEUS_ID_COLUMN = os.environ.get("NUCLEUS_ID_COLUMN", "id")
 
 # Used to look up number of neurons per root id
 soma_table = os.environ.get("SOMA_TABLE", NUCLEUS_TABLE)
@@ -62,3 +62,11 @@ mean_size_col = "mean_syn_size"
 root_id_col = "root_id"
 own_soma_col = "own_soma_pt_position"
 soma_position_col = "soma_pt_position"
+
+
+def bound_pt_position(pt):
+    return f"{pt}_position"
+
+
+def bound_pt_root_id(pt):
+    return f"{pt}_root_id"

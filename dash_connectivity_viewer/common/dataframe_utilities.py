@@ -328,8 +328,10 @@ def _get_single_table(
     root_ids,
     root_id_column,
     include_columns,
+    aggregate_map,
     client,
     timestamp,
+    table_filter=None,
 ):
     keep_columns = [root_id_column] + include_columns
     df = client.materialize.query_table(
@@ -337,6 +339,17 @@ def _get_single_table(
         filter_in_dict={root_id_column: root_ids},
         timestamp=timestamp,
     )
+    if table_filter is not None:
+        df = df.query(table_filter).reset_index(drop=True)
+
+    for k, v in aggregate_map.items():
+        df[k] = df.groupby(v["group_by"])[v["column"]].transform(v["agg"])
+        keep_columns.append(k)
+    if len(aggregate_map) != 0:
+        df.loc[df.index[df.duplicated(root_id_column, False)], include_columns] = np.nan
+        df.drop_duplicates(root_id_column, keep="first", inplace=True)
+    else:
+        df.drop_duplicates(root_id_column, keep=False, inplace=True)
     return df[keep_columns]
 
 
@@ -355,10 +368,36 @@ def property_table_data(
                     _get_single_table,
                     table_name,
                     root_ids,
-                    attrs["root_id"],
-                    attrs["include"],
+                    attrs.get("root_id"),
+                    attrs.get("include", []),
+                    attrs.get("aggregate", {}),
                     client,
                     timestamp,
+                    attrs.get("table_filter", None),
                 )
             )
     return {tname: job.result() for tname, job in zip(property_mapping, jobs)}
+
+
+def get_soma_count(
+    root_ids,
+    soma_table,
+    client,
+    cell_id_column,
+    cell_filter=None,
+    timestamp=None,
+):
+    df = client.materialize.query_table(
+        soma_table,
+        filter_in_dict={cell_id_column: root_ids},
+        timestamp=timestamp,
+    )
+    if cell_filter is not None:
+        df = df.query(cell_filter)
+
+    return (
+        df.groupby(cell_id_column)["id"]
+        .count()
+        .reset_index()
+        .rename(columns={"id": "num_soma"})
+    )
