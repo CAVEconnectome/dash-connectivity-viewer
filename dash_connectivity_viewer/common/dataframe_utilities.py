@@ -333,7 +333,7 @@ def _get_single_table(
     timestamp,
     table_filter=None,
 ):
-    keep_columns = [root_id_column] + include_columns
+    keep_columns = include_columns
     df = client.materialize.query_table(
         table_name,
         filter_in_dict={root_id_column: root_ids},
@@ -350,6 +350,7 @@ def _get_single_table(
         df.drop_duplicates(root_id_column, keep="first", inplace=True)
     else:
         df.drop_duplicates(root_id_column, keep=False, inplace=True)
+    df.set_index(root_id_column, inplace=True)
     return df[keep_columns]
 
 

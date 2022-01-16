@@ -3,6 +3,9 @@ import os
 ###########################################
 ### Default data and request parameters ###
 ###########################################
+def parse_environ_vector(input, num_type):
+    return [num_type(x) for x in input.split(",")]
+
 
 DEFAULT_DATASTACK = os.environ.get("DEFAULT_DATASTACK")
 print("config says: ", DEFAULT_DATASTACK)
@@ -14,7 +17,7 @@ MAX_CHUNKS = os.environ.get("MAX_CHUNKS", 20)
 
 VOXEL_RESOLUTION = os.environ.get("VOXEL_RESOLUTION")
 if VOXEL_RESOLUTION is not None:
-    voxel_resolution = [float(x) for x in VOXEL_RESOLUTION.split(",")]
+    voxel_resolution = parse_environ_vector(VOXEL_RESOLUTION, float)
 else:
     voxel_resolution = None
 ##############################
@@ -48,14 +51,14 @@ SYNAPSE_TABLE = os.environ.get("SYNAPSE_TABLE")
 syn_pt_position_col = os.environ.get("SYN_POSITION_COLUMN", "ctr_pt")
 cell_pt_position_col = os.environ.get("SOMA_POSITION_COLUMN", "pt")
 
-ct_col = os.environ.get("CELL_TYPE_COLUMN", "cell_type")
-soma_table_cell_category = os.environ.get("SOMA_TABLE_CELL_TYPE", "neuron")
+ct_col = os.environ.get("SOMA_CELL_TYPE_COLUMN", "cell_type")
+soma_table_cell_category = os.environ.get("SOMA_TABLE_CELL_TYPE")
 if ct_col and soma_table_cell_category:
     soma_table_query = f"{ct_col} == '{soma_table_cell_category}'"
 else:
     soma_table_query = None
 
-num_soma_col = "num_soma"
+num_soma_col = "num"
 num_syn_col = "num_syn"
 net_size_col = "net_syn_size"
 mean_size_col = "mean_syn_size"

@@ -1,73 +1,130 @@
+import attrs
 import numpy as np
 import seaborn as sns
 import pandas as pd
 import os
-import pathlib 
+import pathlib
+from ..common.config import *
 
-DEFAULT_DATASTACK = "minnie65_phase3_v1"
-DEFAULT_SERVER_ADDRESS = "https://global.daf-apis.com"
-NUCLEUS_TABLE = 'nucleus_neuron_svm'
+####################
+### Column names ###
+####################
 
-TARGET_ROOT_ID_PER_CALL = 200
-MAX_CHUNKS = 20
+cell_type_column = os.environ.get(
+    "CT_CONN_CELL_TYPE_COLUMN",
+    "cell_type",
+)
 
-synapse_table = "synapses_pni_2"
+soma_depth_column = os.environ.get("CT_CONN_SOMA_DEPTH_COLUMN", "soma_depth")
+synapse_depth_column = os.environ.get("CT_CONN_SYN_DEPTH_COLUMN", "syn_depth")
 
-dendrite_color = (0.894, 0.102, 0.110)
-axon_color = (0.227, 0.459, 0.718)
-clrs = np.array([axon_color, dendrite_color])
+is_inhibitory_column = os.environ.get("CT_CONN_IS_INHIBITORY_COLUMN", "is_inhibitory")
+
+table_columns = [
+    root_id_col,
+    num_syn_col,
+    net_size_col,
+    mean_size_col,
+    cell_type_column,
+    soma_depth_column,
+    is_inhibitory_column,
+    num_soma_col,
+]
+
+##########################################
+### Layer data and spatial information ###
+##########################################
 
 base_dir = pathlib.Path(os.path.dirname(__file__))
-data_path = base_dir.parent.joinpath('common/data')
-
-cell_type_table = "allen_soma_coarse_cell_class_model_v1"
-ct_col = "cell_type"
-
-own_soma_col = "own_soma_pt_position"
-
-soma_depth_col = "soma_y_um"
-valence_col = "is_inhib"
-num_soma_col = "num_soma"
-soma_position_col = "soma_pt_position"
-soma_dist_col = "soma_distance_um"
-
-syn_depth_col = "syn_y_um"
-num_syn_col = "num_syn"
-net_size_col = "net_syn_size"
-mean_size_col = "mean_syn_size"
-
-soma_table = "nucleus_neuron_svm"
-soma_table_query = "cell_type == 'neuron'"
-
-inhib_types = ["BC", "MC", "BPC", "NGC", "UnsI"]
-exc_types = ["23P", "4P", "5P_IT", "5P_NP", "5P_PT", "6CT", "6IT", "UnsE"]
-
-cat_dtype = pd.CategoricalDtype(categories=exc_types + inhib_types, ordered=True)
-
+data_path = base_dir.parent.joinpath("common/data")
 layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
 height_bnds = np.load(f"{data_path}/height_bounds_v1.npy")
 ticklocs = np.concatenate([height_bnds[0:1], layer_bnds, height_bnds[1:]])
 
-e_colors = sns.color_palette("RdPu", n_colors=9)
-i_colors = sns.color_palette("Greens", n_colors=9)
+###########################
+### Category parameters ###
+###########################
 
-base_ind = 6
-e_color = e_colors[base_ind]
-i_color = i_colors[base_ind]
+valence_map = ["classification_system", "aibs_coarse_excitatory", "aibs_coarse_inhibitory"]
 
-val_colors = np.array([e_color, i_color])
+########################
+# Visualization Config #
+########################
+class VisConfig:
+    def __init__(
+        self,
+        dendrite_color,
+        axon_color,
+        e_palette,
+        i_palette,
+        u_palette,
+        base_ind=6,
+        n_e_colors=9,
+        n_i_colors=9,
+        n_u_colors=9,
+    ):
+        self.dendrite_color = dendrite_color
+        self.axon_color = axon_color
 
-split_threshold = 0.7
-voxel_resolution = np.array([4, 4, 40])
+        self.e_colors = sns.color_palette(e_palette, n_colors=n_e_colors)
+        self.i_colors = sns.color_palette(i_palette, n_colors=n_i_colors)
+        self.u_colors = sns.color_palette(u_palette, n_colors=n_u_colors)
+        self.base_ind = base_ind
 
-table_columns = [
-    "root_id",
-    num_syn_col,
-    net_size_col,
-    mean_size_col,
-    soma_dist_col,
-    ct_col,
-    soma_depth_col,
-    valence_col,
-    num_soma_col,
-]
+    @property
+    def clrs(self):
+        return np.array([self.axon_color, self.dendrite_color])
+
+    @property
+    def e_color(self):
+        return self.e_colors[self.base_ind]
+
+    @property
+    def i_color(self):
+        return self.i_colors[self.base_ind]
+
+    @property
+    def u_color(self):
+        return self.u_colors[max(self.base_ind - 2, 0)]
+
+    @property
+    def valence_colors(self):
+        return np.vstack([self.e_color, self.i_color, self.u_color])
+
+    def valence_color_map(self, is_inhib):
+        cmap = []
+        for x in is_inhib:
+            if pd.isna(x):
+                cmap.append(2)
+            elif x:
+                cmap.append(0)
+            else:
+                cmap.append(1)
+        return np.array(cmap)
+
+
+dendrite_color = os.environ.get("CT_CONN_DENDRITE_COLOR")
+if dendrite_color is None:
+    dendrite_color = (0.894, 0.102, 0.110)
+else:
+    dendrite_color = parse_environ_vector(dendrite_color, float)
+
+axon_color = os.environ.get("CT_CONN_AXON_COLOR")
+if axon_color is None:
+    axon_color = (0.227, 0.459, 0.718)
+else:
+    axon_color = parse_environ_vector(axon_color, float)
+
+e_color_palette = os.environ.get("CT_CONN_E_PALETTE", "RdPu")
+i_color_palette = os.environ.get("CT_CONN_I_PALETTE", "Greens")
+u_color_palette = os.environ.get("CT_CONN_U_PALETTE", "Greys")
+base_ind = int(os.environ.get("CT_CONN_PALETTE_BASE", 6))
+
+vis_config = VisConfig(
+    dendrite_color,
+    axon_color,
+    e_color_palette,
+    i_color_palette,
+    u_color_palette,
+    base_ind,
+)
