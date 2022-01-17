@@ -13,7 +13,11 @@ def _schema_property_table():
 def _cell_type_property_entry(cell_type_table):
     return {cell_type_table: _schema_property_table()}
 
+
 def _is_inhibitory_df(df, is_inhibitory_column, valence_map):
+    if len(df) == 0:
+        df[is_inhibitory_column] = None
+
     def _is_inhibitory_row(row, valence_map):
         if pd.isna(row[valence_map[0]]):
             return np.nan
@@ -26,6 +30,10 @@ def _is_inhibitory_df(df, is_inhibitory_column, valence_map):
 
 
 def _extract_depth(df, depth_column, position_column, data_resolution):
+    if len(df) == 0:
+        df[depth_column] = None
+        return df
+
     def _extract_depth_row(row, data_resolution):
         if np.any(pd.isna(row)):
             return np.nan
@@ -57,6 +65,7 @@ class NeuronDataCortex(NeuronData):
         soma_depth_column=soma_depth_column,
         is_inhibitory_column=is_inhibitory_column,
         synapse_depth_column=synapse_depth_column,
+        cell_type_column=cell_type_column,
     ):
 
         self.cell_type_table = cell_type_table
@@ -65,6 +74,7 @@ class NeuronDataCortex(NeuronData):
         self.soma_depth_column = soma_depth_column
         self.synapse_depth_column = synapse_depth_column
         self.is_inhibitory_column = is_inhibitory_column
+        self.cell_type_column = cell_type_column
 
         self._synapse_data_resolution = [4, 4, 40]
         self._soma_data_resolution = [4, 4, 40]
@@ -88,11 +98,14 @@ class NeuronDataCortex(NeuronData):
         df = self._merge_property_tables(df, "post_pt_root_id")
 
         if self.is_inhibitory_column is not None:
-            df = _is_inhibitory_df(
-                df,
-                self.is_inhibitory_column,
-                self.valence_map,
-            )
+            if self.valence_map:
+                df = _is_inhibitory_df(
+                    df,
+                    self.is_inhibitory_column,
+                    self.valence_map,
+                )
+            else:
+                df[self.is_inhibitory_column] = np.nan
         if self.soma_depth_column is not None:
             df = _extract_depth(
                 df,
@@ -117,11 +130,14 @@ class NeuronDataCortex(NeuronData):
                 self._soma_data_resolution,
             )
         if self.is_inhibitory_column is not None:
-            df = _is_inhibitory_df(
-                df,
-                self.is_inhibitory_column,
-                self.valence_map,
-            )
+            if self.valence_map:
+                df = _is_inhibitory_df(
+                    df,
+                    self.is_inhibitory_column,
+                    self.valence_map,
+                )
+            else:
+                df[self.is_inhibitory_column] = np.nan
         return df
 
     def partners_in_plus(self):

@@ -2,7 +2,7 @@ from dash import Dash
 
 from .callbacks import register_callbacks
 from .layout import title, page_layout, app_layout
-from .external_stylesheets import external_stylesheets
+from ..common.external_stylesheets import external_stylesheets
 from ..common.dash_url_helper import setup
 import flask
 

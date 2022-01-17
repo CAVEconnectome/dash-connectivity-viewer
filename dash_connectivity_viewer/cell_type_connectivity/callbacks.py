@@ -1,13 +1,14 @@
+import datetime
 from caveclient import CAVEclient
 from dash_bootstrap_components._components.CardBody import CardBody
 from dash_bootstrap_components._components.CardHeader import CardHeader
-import dash_core_components as dcc
+from dash import dcc
 import dash_bootstrap_components as dbc
-import dash_html_components as html
+from dash import html
 from dash.dependencies import Input, Output, State
 from dash import callback_context
-from dash_html_components.A import A
 
+A = html.A
 from functools import partial
 
 from ..common.link_utilities import (
@@ -21,15 +22,17 @@ from ..common.link_utilities import (
     make_url_robust,
 )
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
-from ..common.lookup_utilities import make_client, get_root_id_from_nuc_id
+from ..common.lookup_utilities import (
+    get_type_tables,
+    make_client,
+    get_root_id_from_nuc_id,
+)
 from ..common.dataframe_utilities import stringify_root_ids
-from ..common.neuron_data_base import NeuronData
-from ..common.config import syn_pt_position_col
 
 from .config import *
-from .plots import bar_fig, violin_fig, scatter_fig
+from .neuron_data_cortex import NeuronDataCortex as NeuronData
+from .cortex_panels import *
 
-import datetime
 
 try:
     from loguru import logger
@@ -69,7 +72,7 @@ def generic_syn_link_generation(
     sb_function, rows, info_cache, datastack, config, link_text, item_name="synapses"
 ):
     if rows is None or len(rows) == 0:
-        return html.Div("No {item_name} to show")
+        return html.Div(f"No {item_name} to show")
     else:
         syn_df = pd.DataFrame(rows)
         sb = sb_function(info_cache)
@@ -86,26 +89,37 @@ def generic_syn_link_generation(
     return html.A(link_text, href=url, target="_blank", style={"font-size": "20px"})
 
 
-def make_plots(nrn_data):
-    if nrn_data is None:
+def make_plots(ndat):
+    if ndat is None:
         return html.Div("")
-    violin = violin_fig(nrn_data, axon_color, dendrite_color, height=350)
-    scatter = scatter_fig(nrn_data, val_colors, height=350)
-    bars = bar_fig(nrn_data, val_colors, height=350)
+    violin = violin_fig(ndat, vis_config, height=350)
+    scatter = scatter_fig(ndat, vis_config, width=450, height=350)
+    if ndat.valence_map is not None:
+        bars = split_bar_fig(ndat, vis_config, height=350)
+    else:
+        bars = single_bar_fig(ndat, vis_config, height=350)
+
     plot_content = dbc.Row(
         [
             dbc.Col(
-                [
-                    html.H5("Input/Output Depth", style={"text-align": "center"}),
-                    dcc.Graph(figure=violin, style={"width": "100%", "height": "100%"}),
-                ]
+                html.Div(
+                    [
+                        html.H5("Input/Output Depth", style={"text-align": "center"}),
+                        dcc.Graph(
+                            figure=violin, style={"width": "100%", "height": "100%"}
+                        ),
+                    ],
+                    style={"align-content": "right"},
+                )
             ),
             dbc.Col(
                 [
                     html.H5(
                         "Synapse/Target Synapse Depth", style={"text-align": "center"}
                     ),
-                    dcc.Graph(figure=scatter, style={"text-align": "center"}),
+                    dcc.Graph(
+                        figure=scatter, style={"text-align": "center", "width": "100%"}
+                    ),
                 ]
             ),
             dbc.Col(
@@ -133,18 +147,10 @@ def register_callbacks(app, config):
 
     @app.callback(
         OutputCellTypeOptions,
-        InputCellTypeOptions,
+        InputDatastack,
     )
-    def dropdown_options(_):
-        options = config.get("cell_type_dropdown_options")
-        if not options:
-            options = [
-                {
-                    "label": "No cell type tables configured",
-                    "value": "",
-                }
-            ]
-        return options
+    def cell_type_dropdown(datastack):
+        return get_type_tables(allowed_cell_type_schema, datastack, config)
 
     @app.callback(
         Output("message-text", "children"),
@@ -186,7 +192,7 @@ def register_callbacks(app, config):
                 make_plots(None),
             )
 
-        if len(query_toggle) == 1:
+        if len(query_toggle) == 1 and not config.get("DISALLOW_LIVE_QUERY", False):
             live_query = True
         else:
             live_query = False
@@ -212,31 +218,42 @@ def register_callbacks(app, config):
             )
         else:
             if id_type == "root_id":
-                root_id = int(anno_id)
+                object_id = int(anno_id)
+                object_id_type = "root"
             elif id_type == "nucleus_id":
-                root_id = get_root_id_from_nuc_id(
-                    nuc_id=int(anno_id),
-                    client=client,
-                    nucleus_table=NUCLEUS_TABLE,
-                    timestamp=timestamp,
-                    live=live_query,
-                )
-            info_cache["root_id"] = str(root_id)
+                object_id = int(anno_id)
+                object_id_type = "nucleus"
+            else:
+                raise ValueError('id_type must be either "root_id" or "nucleus_id"')
 
         nrn_data = NeuronData(
-            root_id,
+            object_id,
             client=client,
             cell_type_table=ct_table_value,
-            soma_table=NUCLEUS_TABLE,
-            live_query=live_query,
             timestamp=timestamp,
+            synapse_table=SYNAPSE_TABLE,
+            soma_table=NUCLEUS_TABLE,
+            n_threads=2,
+            synapse_position_point=syn_pt_position_col,
+            cell_position_point=cell_pt_position_col,
+            soma_id_column=NUCLEUS_ID_COLUMN,
+            id_type=object_id_type,
+            soma_table_query=soma_table_query,
+            valence_map=valence_map_table.get(ct_table_value),
+            soma_depth_column=soma_depth_column,
+            is_inhibitory_column=is_inhibitory_column,
+            synapse_depth_column=synapse_depth_column,
+            cell_type_column=cell_type_column_lookup(ct_table_value, client),
         )
 
-        pre_targ_df = nrn_data.pre_tab_dat()
-        pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=["root_id"])
+        root_id = nrn_data.root_id
+        info_cache["root_id"] = str(root_id)
 
-        post_targ_df = nrn_data.post_tab_dat()
-        post_targ_df = stringify_root_ids(post_targ_df, stringify_cols=["root_id"])
+        pre_targ_df = nrn_data.partners_out_plus()
+        pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=[root_id_col])
+
+        post_targ_df = nrn_data.partners_in_plus()
+        post_targ_df = stringify_root_ids(post_targ_df, stringify_cols=[root_id_col])
 
         n_syn_pre = pre_targ_df[num_syn_col].sum()
         n_syn_post = post_targ_df[num_syn_col].sum()
@@ -251,6 +268,16 @@ def register_callbacks(app, config):
         else:
             message_text = f"Connectivity for root id {root_id} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
 
+        try:
+            plts = make_plots(nrn_data)
+        except Exception as e:
+            import pdb
+
+            pdb.set_trace()
+
+        del nrn_data
+        del client
+
         return (
             html.Div(message_text),
             "success",
@@ -261,7 +288,7 @@ def register_callbacks(app, config):
             f"Input (n = {n_syn_post})",
             1,
             info_cache,
-            make_plots(nrn_data),
+            plts,
         )
 
     @app.callback(

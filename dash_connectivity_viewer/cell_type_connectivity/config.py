@@ -28,7 +28,7 @@ table_columns = [
     cell_type_column,
     soma_depth_column,
     is_inhibitory_column,
-    num_soma_col,
+    f"{num_soma_col}_soma",
 ]
 
 ##########################################
@@ -45,7 +45,30 @@ ticklocs = np.concatenate([height_bnds[0:1], layer_bnds, height_bnds[1:]])
 ### Category parameters ###
 ###########################
 
-valence_map = ["classification_system", "aibs_coarse_excitatory", "aibs_coarse_inhibitory"]
+allowed_cell_type_schema = os.environ.get(
+    "CT_CONN_CELL_TYPE_SCHEMA", "cell_type_local"
+).split(",")
+
+valence_map = [
+    "classification_system",
+    "aibs_coarse_excitatory",
+    "aibs_coarse_inhibitory",
+]
+
+valence_map_table = {
+    "allen_v1_column_types_slanted": valence_map,
+    "allen_soma_coarse_cell_class_model_v1": valence_map,
+}
+
+cell_type_column_schema_lookup = {
+    "cell_type_local": "cell_type",
+}
+
+
+def cell_type_column_lookup(ct, client):
+    schema = client.materialize.get_table_metadata(ct)["schema"]
+    return cell_type_column_schema_lookup.get(schema)
+
 
 ########################
 # Visualization Config #
@@ -62,6 +85,12 @@ class VisConfig:
         n_e_colors=9,
         n_i_colors=9,
         n_u_colors=9,
+        e_string="Exc",
+        i_string="Inh",
+        u_string="Unknown",
+        e_opacity=0.5,
+        i_opacity=0.75,
+        u_opacity=0.3,
     ):
         self.dendrite_color = dendrite_color
         self.axon_color = axon_color
@@ -70,6 +99,14 @@ class VisConfig:
         self.i_colors = sns.color_palette(i_palette, n_colors=n_i_colors)
         self.u_colors = sns.color_palette(u_palette, n_colors=n_u_colors)
         self.base_ind = base_ind
+
+        self.e_string = "Exc"
+        self.i_string = "Inh"
+        self.u_string = "Unknown"
+
+        self.e_opacity = e_opacity
+        self.i_opacity = i_opacity
+        self.u_opacity = u_opacity
 
     @property
     def clrs(self):
@@ -101,6 +138,17 @@ class VisConfig:
             else:
                 cmap.append(1)
         return np.array(cmap)
+
+    def valence_string_map(self, is_inhib):
+        smap = []
+        for x in is_inhib:
+            if pd.isna(x):
+                smap.append(self.u_string)
+            elif x:
+                smap.append(self.i_string)
+            else:
+                smap.append(self.e_string)
+        return smap
 
 
 dendrite_color = os.environ.get("CT_CONN_DENDRITE_COLOR")

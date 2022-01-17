@@ -1,20 +1,48 @@
 import flask
 from caveclient import CAVEclient
-from .config import soma_table_query
+from .config import soma_table_query, DEFAULT_SERVER_ADDRESS
 
 
-def get_all_schema_tables(schema, datastack, config, server_address=None):
-    client = make_client(datastack, config, server_address=server_address)
+def get_all_schema_tables(
+    schemata,
+    datastack,
+    config,
+):
+    if isinstance(schemata, str):
+        schemata = [schemata]
+    client = make_client(datastack, config)
     tables = client.materialize.get_tables()
     schema_tables = []
     for t in tables:
+        if t in config.get("omit_cell_type_tables", []):
+            continue
         meta = client.materialize.get_table_metadata(t)
-        if meta["schema"] == schema:
+        if meta["schema"] in schemata:
             schema_tables.append(t)
-    return [{"label": t, "value": t} for t in schema_tables]
+    return [{"label": t, "value": t} for t in sorted(schema_tables)]
 
 
-def make_client(datastack, config, server_address=None):
+def get_type_tables(schemata, datastack, config):
+    tables = get_all_schema_tables(schemata, datastack, config)
+
+    named_options = config.get("cell_type_dropdown_options")
+    if named_options is None:
+        return tables
+    else:
+        named_option_dict = {r["value"]: r["label"] for r in named_options[::-1]}
+
+    new_tables = []
+    for t in tables:
+        if t["value"] in named_option_dict:
+            new_tables = [
+                {"label": named_option_dict.get(t["value"]), "value": t["value"]}
+            ] + new_tables
+        else:
+            new_tables.append(t)
+    return new_tables
+
+
+def make_client(datastack, config):
     """Build a framework client with appropriate auth token
 
     Parameters
@@ -32,10 +60,7 @@ def make_client(datastack, config, server_address=None):
         [description]
     """
     auth_token = flask.g.get("auth_token", None)
-    if server_address is None:
-        server_address = config.get("SERVER_ADDRESS")
-
-    print(datastack, server_address, auth_token)
+    server_address = config.get("SERVER_ADDRESS")
     client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token)
     return client
 

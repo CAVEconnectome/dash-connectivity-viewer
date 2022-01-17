@@ -8,7 +8,6 @@ def parse_environ_vector(input, num_type):
 
 
 DEFAULT_DATASTACK = os.environ.get("DEFAULT_DATASTACK")
-print("config says: ", DEFAULT_DATASTACK)
 DEFAULT_SERVER_ADDRESS = os.environ.get("DEFAULT_SERVER_ADDRESS")
 
 # Sets how cell type and soma location information is chunked for multithreaded queries

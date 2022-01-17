@@ -96,6 +96,7 @@ class NeuronData(object):
         self._cell_position_point = cell_position_point
 
         self._partner_soma_table = None
+        self._partner_root_ids = None
 
         if self._soma_table is not None:
             self._property_tables.update(
@@ -207,6 +208,9 @@ class NeuronData(object):
         self._populate_property_tables()
 
     def _populate_root_ids(self):
+        if self._pre_syn_df is None:
+            self._get_syn_df()
+
         self._partner_root_ids = np.unique(
             np.concatenate(
                 (

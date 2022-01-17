@@ -156,7 +156,7 @@ def generate_statebuilder_post(info_cache):
         timestamp=timestamp(info_cache),
     )
     points = statebuilder.PointMapper(
-        pt_position(syn_pt_position_col),
+        bound_pt_position(syn_pt_position_col),
         linked_segmentation_column=root_id_col,
         set_position=True,
         multipoint=True,

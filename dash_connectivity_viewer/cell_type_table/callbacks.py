@@ -1,9 +1,11 @@
+from time import time
 import flask
 import datetime
 from dash import callback_context
-import dash_core_components as dcc
+from dash import dcc
+from dash import html
 import dash_bootstrap_components as dbc
-import dash_html_components as html
+
 from dash.dependencies import Input, Output, State
 from ..common.dataframe_utilities import *
 from ..common.link_utilities import (
@@ -12,7 +14,11 @@ from ..common.link_utilities import (
     EMPTY_INFO_CACHE,
     MAX_URL_LENGTH,
 )
-from ..common.lookup_utilities import make_client, get_root_id_from_nuc_id
+from ..common.lookup_utilities import (
+    get_type_tables,
+    make_client,
+)
+from .table_lookup import TableViewer
 from .config import *
 from .ct_utils import process_dataframe
 
@@ -57,22 +63,7 @@ def register_callbacks(app, config):
         InputDatastack,
     )
     def cell_type_dropdown(datastack):
-        options = config.get('cell_type_dropdown_options')
-        if options is not None:
-            return options
-        else:
-            try:
-                client = make_client(datastack, config)
-            except:
-                return []
-
-            tables = client.materialize.get_tables()
-            ct_tables = []
-            for t in tables:
-                meta = client.materialize.get_table_metadata(t)
-                if meta["schema"] == "cell_type_local":
-                    ct_tables.append(t)
-            return [{"label": t, "value": t} for t in ct_tables]
+        return get_type_tables(allowed_cell_type_schema, datastack, config)
 
     @app.callback(
         Output("data-table", "data"),
@@ -109,7 +100,8 @@ def register_callbacks(app, config):
 
         if len(anno_id) == 0:
             anno_id = None
-            id_type = "anno_id"
+        else:
+            anno_id = [int(x) for x in anno_id.split(",")]
 
         live_query = len(live_query_toggle) == 1
 
@@ -119,70 +111,39 @@ def register_callbacks(app, config):
             timestamp = client.materialize.get_timestamp()
             info_cache["ngl_timestamp"] = timestamp.timestamp()
 
-        if anno_id is None:
-            root_id = None
+        anno_type_lookup = {
+            "root_id": "root",
+            "nucleus_id": "nucleus",
+            "anno_id": "annotation",
+        }
+
+        if cell_type is None or len(cell_type) == 0:
+            annotation_filter = {}
         else:
-            if id_type == "root_id":
-                root_id = int(anno_id)
-                anno_id = None
-            elif id_type == "nucleus_id":
-                root_id = get_root_id_from_nuc_id(
-                    nuc_id=int(anno_id),
-                    client=client,
-                    nucleus_table=NUCLEUS_TABLE,
-                    timestamp=timestamp,
-                    live=live_query == "live",
-                )
-                anno_id = None
-            elif id_type == "anno_id":
-                anno_id = int(anno_id)
-                root_id = None
+            annotation_filter = {"cell_type": cell_type}
+
+        try:
+            tv = TableViewer(
+                cell_type_table,
+                client,
+                id_query=anno_id,
+                id_query_type=anno_type_lookup[id_type],
+                column_query=annotation_filter,
+                timestamp=timestamp,
+            )
+            df = tv.table_data()
+
+            if live_query:
+                output_report = f"Current state of cell type table {cell_type_table}"
             else:
-                raise ValueError('id_type must be either "root_id" or "nucleus_id"')
-
-        if cell_type is None:
-            cell_type == ""
-
-        filter_equal_dict = {}
-        if anno_id is not None and root_id is not None:
+                output_report = f"Table {cell_type_table} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
+            output_color = "success"
+        except Exception as e:
             df = pd.DataFrame(columns=ct_table_columns)
-            output_report = "Please set either anno id or root id but not both"
-            output_color = "warning"
-        else:
-            if anno_id is not None:
-                filter_equal_dict.update({"id": anno_id})
-            if root_id is not None:
-                filter_equal_dict.update({"pt_root_id": root_id})
-            if len(cell_type) > 0:
-                filter_equal_dict.update({"cell_type": cell_type})
-            if len(filter_equal_dict) == 0:
-                filter_equal_dict = None
+            output_report = str(e)
+            output_color = "danger"
 
-            try:
-                if live_query == "live":
-                    df = client.materialize.live_query(
-                        cell_type_table,
-                        filter_equal_dict=filter_equal_dict,
-                        timestamp=timestamp,
-                        split_positions=True,
-                    )
-                    output_report = (
-                        f"Current state of cell type table {cell_type_table}"
-                    )
-                else:
-                    df = client.materialize.query_table(
-                        cell_type_table,
-                        filter_equal_dict=filter_equal_dict,
-                        split_positions=True,
-                    )
-                    output_report = f"Cell type table {cell_type_table} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
-                output_color = "success"
-            except Exception as e:
-                df = pd.DataFrame(columns=ct_table_columns)
-                output_report = str(e)
-                output_color = "danger"
-
-        ct_df = stringify_root_ids(process_dataframe(df))
+        ct_df = stringify_root_ids(process_dataframe(df, "pt_root_id", "pt"))
         return (
             ct_df.to_dict("records"),
             output_report,

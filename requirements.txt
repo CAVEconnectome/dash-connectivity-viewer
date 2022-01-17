@@ -3,7 +3,7 @@ pandas
 numpy
 seaborn
 flask
-dash
+dash==2
 dash_bootstrap_components
 requests
 caveclient>=4.1.1

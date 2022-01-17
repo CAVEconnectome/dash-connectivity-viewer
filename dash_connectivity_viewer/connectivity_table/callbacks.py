@@ -109,44 +109,49 @@ def register_callbacks(app, config):
             timestamp = client.materialize.get_timestamp()
         else:
             timestamp = datetime.datetime.now()
+
         if anno_id is None:
             root_id = None
         else:
             if id_type == "root_id":
-                root_id = int(anno_id)
-                anno_id = None
+                object_id = int(anno_id)
+                object_id_type = "root"
             elif id_type == "nucleus_id":
-                root_id = get_root_id_from_nuc_id(
-                    nuc_id=int(anno_id),
-                    client=client,
-                    nucleus_table=NUCLEUS_TABLE,
-                    timestamp=timestamp,
-                    live=live_query == "live",
-                )
-                anno_id = None
+                object_id = int(anno_id)
+                object_id_type = "nucleus"
             else:
                 raise ValueError('id_type must be either "root_id" or "nucleus_id"')
 
-        info_cache["root_id"] = str(root_id)
         if live_query == "static":
             info_cache["ngl_timestamp"] = timestamp.timestamp()
 
         try:
             nrn_data = NeuronData(
-                root_id,
+                object_id,
                 client,
                 timestamp=timestamp,
-                live_query=live_query == "live",
+                synapse_table=SYNAPSE_TABLE,
                 soma_table=NUCLEUS_TABLE,
+                n_threads=1,
+                synapse_position_point=syn_pt_position_col,
+                cell_position_point=cell_pt_position_col,
+                soma_id_column=NUCLEUS_ID_COLUMN,
+                id_type=object_id_type,
+                soma_table_query=soma_table_query,
             )
-            pre_targ_df = nrn_data.pre_targ_simple_df()
+            root_id = nrn_data.root_id
+
+            pre_targ_df = nrn_data.partners_out()
             pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=["root_id"])
 
-            post_targ_df = nrn_data.post_targ_simple_df()
+            post_targ_df = nrn_data.partners_in()
             post_targ_df = stringify_root_ids(post_targ_df, stringify_cols=["root_id"])
 
             n_syn_pre = pre_targ_df[num_syn_col].sum()
             n_syn_post = post_targ_df[num_syn_col].sum()
+
+            info_cache["root_id"] = str(root_id)
+
         except Exception as e:
             return (
                 [],
