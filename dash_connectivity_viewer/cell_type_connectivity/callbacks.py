@@ -61,6 +61,11 @@ StateLiveQuery = State(
 )
 
 
+def cell_type_column_lookup(ct, schema_lookup, client):
+    schema = client.materialize.get_table_metadata(ct)["schema"]
+    return schema_lookup.get(schema)
+
+
 def allowed_action_trigger(ctx, allowed_buttons):
     if not ctx.triggered:
         return False
@@ -137,6 +142,8 @@ def make_plots(ndat):
 
 
 def register_callbacks(app, config):
+    valence_map_table = config.get("valence_map_table", {})
+
     @app.callback(
         Output("data-table", "selected_rows"),
         Input("reset-selection", "n_clicks"),
@@ -243,7 +250,9 @@ def register_callbacks(app, config):
             soma_depth_column=soma_depth_column,
             is_inhibitory_column=is_inhibitory_column,
             synapse_depth_column=synapse_depth_column,
-            cell_type_column=cell_type_column_lookup(ct_table_value, client),
+            cell_type_column=cell_type_column_lookup(
+                ct_table_value, config.get("cell_type_column_schema_lookup", {}), client
+            ),
         )
 
         root_id = nrn_data.root_id

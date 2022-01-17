@@ -49,27 +49,6 @@ allowed_cell_type_schema = os.environ.get(
     "CT_CONN_CELL_TYPE_SCHEMA", "cell_type_local"
 ).split(",")
 
-valence_map = [
-    "classification_system",
-    "aibs_coarse_excitatory",
-    "aibs_coarse_inhibitory",
-]
-
-valence_map_table = {
-    "allen_v1_column_types_slanted": valence_map,
-    "allen_soma_coarse_cell_class_model_v1": valence_map,
-}
-
-cell_type_column_schema_lookup = {
-    "cell_type_local": "cell_type",
-}
-
-
-def cell_type_column_lookup(ct, client):
-    schema = client.materialize.get_table_metadata(ct)["schema"]
-    return cell_type_column_schema_lookup.get(schema)
-
-
 ########################
 # Visualization Config #
 ########################
@@ -100,9 +79,9 @@ class VisConfig:
         self.u_colors = sns.color_palette(u_palette, n_colors=n_u_colors)
         self.base_ind = base_ind
 
-        self.e_string = "Exc"
-        self.i_string = "Inh"
-        self.u_string = "Unknown"
+        self.e_string = e_string
+        self.i_string = i_string
+        self.u_string = i_string
 
         self.e_opacity = e_opacity
         self.i_opacity = i_opacity

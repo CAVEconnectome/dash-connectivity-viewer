@@ -61,7 +61,7 @@ class NeuronDataCortex(NeuronData):
         soma_id_column=NUCLEUS_ID_COLUMN,
         id_type="root",
         soma_table_query=soma_table_query,
-        valence_map=valence_map,
+        valence_map={},
         soma_depth_column=soma_depth_column,
         is_inhibitory_column=is_inhibitory_column,
         synapse_depth_column=synapse_depth_column,
