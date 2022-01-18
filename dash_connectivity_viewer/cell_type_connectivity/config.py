@@ -31,6 +31,9 @@ table_columns = [
     f"{num_soma_col}_soma",
 ]
 
+show_depth_plots = os.environ.get("CT_CONN_SHOW_DEPTH_PLOTS", "true")
+show_depth_plots = show_depth_plots == "true"
+
 ##########################################
 ### Layer data and spatial information ###
 ##########################################

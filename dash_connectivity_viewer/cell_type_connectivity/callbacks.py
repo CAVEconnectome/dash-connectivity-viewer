@@ -101,18 +101,22 @@ def generic_syn_link_generation(
     return html.A(link_text, href=url, target="_blank", style={"font-size": "20px"})
 
 
-def make_plots(ndat):
+def make_plots(ndat, show_depth_plots=show_depth_plots):
     if ndat is None:
         return html.Div("")
-    violin = violin_fig(ndat, vis_config, height=350)
-    scatter = scatter_fig(ndat, vis_config, width=450, height=350)
+
+    if show_depth_plots:
+        scatter = scatter_fig(ndat, vis_config, width=450, height=350)
+        violin = violin_fig(ndat, vis_config, height=350)
+
     if ndat.valence_map is not None:
         bars = split_bar_fig(ndat, vis_config, height=350)
     else:
         bars = single_bar_fig(ndat, vis_config, height=350)
 
-    plot_content = dbc.Row(
-        [
+    row_contents = []
+    if show_depth_plots:
+        row_contents.append(
             dbc.Col(
                 html.Div(
                     [
@@ -123,7 +127,9 @@ def make_plots(ndat):
                     ],
                     style={"align-content": "right"},
                 )
-            ),
+            )
+        )
+        row_contents.append(
             dbc.Col(
                 [
                     html.H5(
@@ -133,17 +139,17 @@ def make_plots(ndat):
                         figure=scatter, style={"text-align": "center", "width": "100%"}
                     ),
                 ]
-            ),
-            dbc.Col(
-                [
-                    html.H5(
-                        "Target Synapse by Cell Type", style={"text-align": "center"}
-                    ),
-                    dcc.Graph(figure=bars, style={"text-align": "center"}),
-                ]
-            ),
-        ],
+            )
+        )
+    row_contents.append(
+        dbc.Col(
+            [
+                html.H5("Target Synapse by Cell Type", style={"text-align": "center"}),
+                dcc.Graph(figure=bars, style={"text-align": "center"}),
+            ]
+        )
     )
+    plot_content = dbc.Row(row_contents)
 
     return html.Div(plot_content)
 

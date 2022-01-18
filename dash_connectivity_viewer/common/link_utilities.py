@@ -274,8 +274,8 @@ def generate_url_cell_types(
                 linked_segmentation_column="pt_root_id",
                 set_position=True,
                 multipoint=multipoint,
-                data_resolution=data_resolution,
             ),
+            data_resolution=data_resolution,
         )
         sbs.append(
             statebuilder.StateBuilder(
