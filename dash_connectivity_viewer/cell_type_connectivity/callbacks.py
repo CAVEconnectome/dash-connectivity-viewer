@@ -49,6 +49,10 @@ OutputCellTypeOptions = Output(
     {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
     "options",
 )
+OutputCellTypeValue = Output(
+    {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
+    "value",
+)
 InputCellTypeOptions = Input(
     {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
     "options",
@@ -167,10 +171,14 @@ def register_callbacks(app, config):
 
     @app.callback(
         OutputCellTypeOptions,
+        OutputCellTypeValue,
         InputDatastack,
     )
     def cell_type_dropdown(datastack):
-        return get_type_tables(allowed_cell_type_schema, datastack, config)
+        return (
+            get_type_tables(allowed_cell_type_schema, datastack, config),
+            config.get("default_cell_type_dropdown", ""),
+        )
 
     @app.callback(
         Output("message-text", "children"),

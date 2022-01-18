@@ -43,6 +43,7 @@ config = {
     "cell_type_column_schema_lookup": {
         "cell_type_local": "cell_type",
     },
+    "default_cell_type_dropdown": "allen_soma_coarse_cell_class_model_v1",
 }
 
 if __name__ == "__main__":
