@@ -31,6 +31,7 @@ def _soma_property_entry(soma_table, soma_id_column, soma_position_col, soma_fil
             "suffix": "_soma",
             "table_filter": soma_filter,
             "data": None,
+            "data_resolution": None,
         }
     }
 
@@ -85,6 +86,7 @@ class NeuronData(object):
 
         self._pre_syn_df = None
         self._post_syn_df = None
+        self._synapse_data_resolution = None
 
         self._viewer_resolution = voxel_resolution_from_info(client.info.info_cache)
 
@@ -171,6 +173,12 @@ class NeuronData(object):
         return self._soma_table
 
     @property
+    def synapse_data_resolution(self):
+        if self._pre_syn_df is None:
+            self._get_syn_df()
+        return self._synapse_data_resolution
+
+    @property
     def num_soma_column_full(self):
         return f"{self._num_soma_column}{self.property_column_suffix(self.soma_table)}"
 
@@ -203,6 +211,9 @@ class NeuronData(object):
             live_query=self.live_query,
             n_threads=self.n_threads,
             synapse_position_column=self.synapse_position_column,
+        )
+        self._synapse_data_resolution = self._pre_syn_df.attrs.get(
+            "table_voxel_resolution"
         )
         self._populate_root_ids()
         self._populate_property_tables()
@@ -268,11 +279,19 @@ class NeuronData(object):
         )
         for k, df in dfs.items():
             self._property_tables[k]["data"] = df
+            self._property_tables[k]["data_resolution"] = df.attrs.get(
+                "table_voxel_resolution"
+            )
 
     def property_data(self, table_name):
         if self._property_tables.get(table_name).get("data") is None:
             self._populate_property_tables()
         return self._property_tables.get(table_name).get("data")
+
+    def property_data_resolution(self, table_name):
+        if self._property_tables.get(table_name).get("data") is None:
+            self._populate_property_tables()
+        return self._property_tables.get(table_name).get("data_resolution")
 
     def property_root_id_column(self, table_name):
         return self._property_tables.get(table_name).get("root_id")

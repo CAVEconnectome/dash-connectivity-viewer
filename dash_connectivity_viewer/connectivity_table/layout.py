@@ -1,7 +1,7 @@
-import dash_table
-import dash_core_components as dcc
+from dash import dash_table
+from dash import dcc
+from dash import html
 import dash_bootstrap_components as dbc
-import dash_html_components as html
 import flask
 from .config import DEFAULT_DATASTACK, table_columns
 from ..common.dash_url_helper import create_component_kwargs, State
@@ -149,9 +149,6 @@ def page_layout(state: State = None):
                                 ],
                                 style_cell={
                                     "height": "auto",
-                                    "width": "12%",
-                                    "minWidth": "10%",
-                                    "maxWidth": "15%",
                                     "whiteSpace": "normal",
                                     "font-size": "11px",
                                 },
@@ -258,6 +255,7 @@ def page_layout(state: State = None):
             dcc.Store("target-table-json"),
             dcc.Store("source-table-json"),
             dcc.Store("client-info-json"),
+            dcc.Store("synapse-table-resolution-json"),
             html.Div(
                 dcc.Input(
                     **create_component_kwargs(

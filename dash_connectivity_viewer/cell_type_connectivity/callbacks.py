@@ -33,7 +33,6 @@ from .config import *
 from .neuron_data_cortex import NeuronDataCortex as NeuronData
 from .cortex_panels import *
 
-
 try:
     from loguru import logger
     import time
@@ -62,6 +61,8 @@ StateLiveQuery = State(
 
 
 def cell_type_column_lookup(ct, schema_lookup, client):
+    if ct is None:
+        return {}
     schema = client.materialize.get_table_metadata(ct)["schema"]
     return schema_lookup.get(schema)
 
@@ -74,7 +75,13 @@ def allowed_action_trigger(ctx, allowed_buttons):
 
 
 def generic_syn_link_generation(
-    sb_function, rows, info_cache, datastack, config, link_text, item_name="synapses"
+    sb_function,
+    rows,
+    info_cache,
+    datastack,
+    config,
+    link_text,
+    item_name="synapses",
 ):
     if rows is None or len(rows) == 0:
         return html.Div(f"No {item_name} to show")
@@ -170,6 +177,7 @@ def register_callbacks(app, config):
         Output("reset-selection", "n_clicks"),
         Output("client-info-json", "data"),
         Output("plot-content", "children"),
+        Output("synapse-table-resolution-json", "data"),
         Input("submit-button", "n_clicks"),
         InputDatastack,
         StateRootID,
@@ -197,6 +205,7 @@ def register_callbacks(app, config):
                 1,
                 EMPTY_INFO_CACHE,
                 make_plots(None),
+                None,
             )
 
         if len(query_toggle) == 1 and not config.get("DISALLOW_LIVE_QUERY", False):
@@ -210,9 +219,11 @@ def register_callbacks(app, config):
             timestamp = client.materialize.get_timestamp()
             info_cache["ngl_timestamp"] = timestamp.timestamp()
 
-        if anno_id is None or len(anno_id) == 0:
+        if anno_id is None or len(anno_id) == 0 or len(ct_table_value) == 0:
             return (
-                html.Div("Please select a root id and press Submit"),
+                html.Div(
+                    "Please select a cell id and cell type table and press Submit"
+                ),
                 "info",
                 "",
                 [],
@@ -222,6 +233,7 @@ def register_callbacks(app, config):
                 1,
                 EMPTY_INFO_CACHE,
                 make_plots(None),
+                None,
             )
         else:
             if id_type == "root_id":
@@ -266,6 +278,7 @@ def register_callbacks(app, config):
 
         n_syn_pre = pre_targ_df[num_syn_col].sum()
         n_syn_post = post_targ_df[num_syn_col].sum()
+        syn_resolution = nrn_data.synapse_data_resolution
 
         if logger is not None:
             logger.info(
@@ -277,12 +290,7 @@ def register_callbacks(app, config):
         else:
             message_text = f"Connectivity for root id {root_id} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
 
-        try:
-            plts = make_plots(nrn_data)
-        except Exception as e:
-            import pdb
-
-            pdb.set_trace()
+        plts = make_plots(nrn_data)
 
         del nrn_data
         del client
@@ -298,6 +306,7 @@ def register_callbacks(app, config):
             1,
             info_cache,
             plts,
+            syn_resolution,
         )
 
     @app.callback(
@@ -327,12 +336,14 @@ def register_callbacks(app, config):
         Input("data-table", "derived_virtual_data"),
         Input("data-table", "derived_virtual_selected_rows"),
         Input("client-info-json", "data"),
+        Input("synapse-table-resolution-json", "data"),
     )
     def update_link(
         tab_value,
         rows,
         selected_rows,
         info_cache,
+        synapse_data_resolution,
     ):
         large_state_text = (
             "Table Too Large - Please Filter or Use Whole Cell Neuroglancer Links"
@@ -347,9 +358,13 @@ def register_callbacks(app, config):
             syn_df = pd.DataFrame(rows)
             if len(selected_rows) == 0:
                 if tab_value == "tab-pre":
-                    sb = generate_statebuilder_pre(info_cache)
+                    sb = generate_statebuilder_pre(
+                        info_cache, data_resolution=synapse_data_resolution
+                    )
                 elif tab_value == "tab-post":
-                    sb = generate_statebuilder_post(info_cache)
+                    sb = generate_statebuilder_post(
+                        info_cache, data_resolution=synapse_data_resolution
+                    )
                 else:
                     raise ValueError('tab must be "tab-pre" or "tab-post"')
                 url = sb.render_state(
@@ -361,7 +376,10 @@ def register_callbacks(app, config):
                 elif tab_value == "tab-post":
                     anno_layer = "Input Synapses"
                 sb = generate_statebuider_syn_grouped(
-                    info_cache, anno_layer, preselect=len(selected_rows) == 1
+                    info_cache,
+                    anno_layer,
+                    preselect=len(selected_rows) == 1,
+                    data_resolution=synapse_data_resolution,
                 )
                 url = sb.render_state(syn_df.iloc[selected_rows], return_as="url")
 
@@ -380,14 +398,17 @@ def register_callbacks(app, config):
         Input("source-table-json", "data"),
         Input("client-info-json", "data"),
         InputDatastack,
+        Input("synapse-table-resolution-json", "data"),
         prevent_initial_call=True,
     )
-    def generate_all_input_link(_1, _2, curr, rows, info_cache, datastack):
+    def generate_all_input_link(
+        _1, _2, curr, rows, info_cache, datastack, data_resolution
+    ):
         if not allowed_action_trigger(callback_context, ["all-input-link-button"]):
             return "  ", "Generate Link", False
         return (
             generic_syn_link_generation(
-                generate_statebuilder_post,
+                partial(generate_statebuilder_post, data_resolution=data_resolution),
                 rows,
                 info_cache,
                 datastack,
@@ -408,9 +429,12 @@ def register_callbacks(app, config):
         Input("source-table-json", "data"),
         Input("client-info-json", "data"),
         InputDatastack,
+        Input("synapse-table-resolution-json", "data"),
         prevent_initial_call=True,
     )
-    def generate_cell_typed_input_link(_1, _2, rows, info_cache, datastack):
+    def generate_cell_typed_input_link(
+        _1, _2, rows, info_cache, datastack, data_resolution
+    ):
         if not allowed_action_trigger(
             callback_context, ["cell-typed-input-link-button"]
         ):
@@ -422,6 +446,7 @@ def register_callbacks(app, config):
             position_column=syn_pt_position_col,
             multipoint=True,
             fill_null="NoType",
+            data_resolution=data_resolution,
         )
         try:
             url = make_url_robust(dfs, sb, datastack, config)
@@ -447,14 +472,15 @@ def register_callbacks(app, config):
         Input("target-table-json", "data"),
         Input("client-info-json", "data"),
         InputDatastack,
+        Input("synapse-table-resolution-json", "data"),
         prevent_initial_call=True,
     )
-    def generate_all_output_link(_1, _2, rows, info_cache, datastack):
+    def generate_all_output_link(_1, _2, rows, info_cache, datastack, data_resolution):
         if not allowed_action_trigger(callback_context, ["all-output-link-button"]):
             return "", "Generate Link", False
         return (
             generic_syn_link_generation(
-                generate_statebuilder_pre,
+                partial(generate_statebuilder_pre, data_resolution=data_resolution),
                 rows,
                 info_cache,
                 datastack,
@@ -475,9 +501,12 @@ def register_callbacks(app, config):
         Input("target-table-json", "data"),
         Input("client-info-json", "data"),
         InputDatastack,
+        Input("synapse-table-resolution-json", "data"),
         prevent_initial_call=True,
     )
-    def generate_cell_typed_output_link(_1, _2, rows, info_cache, datastack):
+    def generate_cell_typed_output_link(
+        _1, _2, rows, info_cache, datastack, data_resolution
+    ):
         if not allowed_action_trigger(
             callback_context, ["cell-typed-output-link-button"]
         ):
@@ -489,6 +518,7 @@ def register_callbacks(app, config):
             position_column=syn_pt_position_col,
             multipoint=True,
             fill_null="NoType",
+            data_resolution=data_resolution,
         )
         try:
             url = make_url_robust(dfs, sb, datastack, config)

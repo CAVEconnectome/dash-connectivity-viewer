@@ -81,7 +81,7 @@ class VisConfig:
 
         self.e_string = e_string
         self.i_string = i_string
-        self.u_string = i_string
+        self.u_string = u_string
 
         self.e_opacity = e_opacity
         self.i_opacity = i_opacity

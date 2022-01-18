@@ -69,7 +69,10 @@ class NeuronDataCortex(NeuronData):
     ):
 
         self.cell_type_table = cell_type_table
-        property_tables = _cell_type_property_entry(cell_type_table)
+        if cell_type_table is not None:
+            property_tables = _cell_type_property_entry(cell_type_table)
+        else:
+            property_tables = {}
         self.valence_map = valence_map
         self.soma_depth_column = soma_depth_column
         self.synapse_depth_column = synapse_depth_column

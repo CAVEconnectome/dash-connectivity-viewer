@@ -443,6 +443,7 @@ def page_layout(state: State = None):
             dcc.Store("target-table-json"),
             dcc.Store("source-table-json"),
             dcc.Store("client-info-json"),
+            dcc.Store('synapse-table-resolution-json'),
             html.Div(
                 dcc.Input(
                     **create_component_kwargs(

@@ -1,4 +1,4 @@
-import dash_html_components as html
+from dash import html
 from ..common.neuron_data_base import NeuronData
 from dash.dependencies import Input, Output, State
 from dash import callback_context
@@ -56,6 +56,7 @@ def register_callbacks(app, config):
         Output("loading-spinner", "children"),
         Output("message-text", "children"),
         Output("message-text", "color"),
+        Output("synapse-table-resolution-json", "data"),
         Input("submit-button", "n_clicks"),
         InputDatastack,
         StateAnnoID,
@@ -81,6 +82,7 @@ def register_callbacks(app, config):
                 "",
                 str(e),
                 "danger",
+                None,
             )
 
         if len(anno_id) == 0:
@@ -94,6 +96,7 @@ def register_callbacks(app, config):
                 "",
                 "No annotation id selected",
                 "info",
+                None,
             )
 
         if len(anno_id) == 0:
@@ -151,7 +154,6 @@ def register_callbacks(app, config):
             n_syn_post = post_targ_df[num_syn_col].sum()
 
             info_cache["root_id"] = str(root_id)
-
         except Exception as e:
             return (
                 [],
@@ -163,6 +165,7 @@ def register_callbacks(app, config):
                 "",
                 str(e),
                 "danger",
+                None,
             )
 
         if logger is not None:
@@ -187,6 +190,7 @@ def register_callbacks(app, config):
             "",
             output_message,
             output_status,
+            nrn_data.synapse_data_resolution,
         )
 
     @app.callback(
@@ -216,16 +220,17 @@ def register_callbacks(app, config):
         Input("data-table", "derived_virtual_data"),
         Input("data-table", "derived_virtual_selected_rows"),
         Input("client-info-json", "data"),
+        Input("synapse-table-resolution-json", "data"),
     )
     def update_link(
         tab_value,
         rows,
         selected_rows,
         info_cache,
+        data_resolution,
     ):
         large_state_text = "State Too Large - Please Filter"
         small_state_text = "Neuroglancer Link"
-
         if rows is None or len(rows) == 0:
             rows = {}
             sb = generate_statebuilder(info_cache)
@@ -234,9 +239,13 @@ def register_callbacks(app, config):
             syn_df = pd.DataFrame(rows)
             if len(selected_rows) == 0:
                 if tab_value == "tab-pre":
-                    sb = generate_statebuilder_pre(info_cache)
+                    sb = generate_statebuilder_pre(
+                        info_cache, data_resolution=data_resolution
+                    )
                 elif tab_value == "tab-post":
-                    sb = generate_statebuilder_post(info_cache)
+                    sb = generate_statebuilder_post(
+                        info_cache, data_resolution=data_resolution
+                    )
                 else:
                     raise ValueError('tab must be "tab-pre" or "tab-post"')
                 url = sb.render_state(
@@ -248,7 +257,10 @@ def register_callbacks(app, config):
                 elif tab_value == "tab-post":
                     anno_layer = "Input Synapses"
                 sb = generate_statebuider_syn_grouped(
-                    info_cache, anno_layer, preselect=len(selected_rows) == 1
+                    info_cache,
+                    anno_layer,
+                    preselect=len(selected_rows) == 1,
+                    data_resolution=data_resolution,
                 )
                 url = sb.render_state(syn_df.iloc[selected_rows], return_as="url")
 
@@ -264,9 +276,10 @@ def register_callbacks(app, config):
         Input("source-table-json", "data"),
         Input("client-info-json", "data"),
         InputDatastack,
+        Input("synapse-table-resolution-json", "data"),
         prevent_initial_call=True,
     )
-    def generate_all_input_link(_1, _2, rows, info_cache, datastack):
+    def generate_all_input_link(_1, _2, rows, info_cache, datastack, data_resolution):
         ctx = callback_context
         if not ctx.triggered:
             return ""
@@ -282,7 +295,7 @@ def register_callbacks(app, config):
             return html.Div("No inputs to show")
         else:
             syn_df = pd.DataFrame(rows)
-            sb = generate_statebuilder_post(info_cache)
+            sb = generate_statebuilder_post(info_cache, data_resolution=data_resolution)
             url = sb.render_state(
                 syn_df.sort_values(by=num_syn_col, ascending=False), return_as="url"
             )
@@ -308,9 +321,10 @@ def register_callbacks(app, config):
         Input("target-table-json", "data"),
         Input("client-info-json", "data"),
         InputDatastack,
+        Input("synapse-table-resolution-json", "data"),
         prevent_initial_call=True,
     )
-    def generate_all_output_link(_1, _2, rows, info_cache, datastack):
+    def generate_all_output_link(_1, _2, rows, info_cache, datastack, data_resolution):
         ctx = callback_context
         if not ctx.triggered:
             return ""
@@ -326,7 +340,7 @@ def register_callbacks(app, config):
             return html.Div("No outputs to show")
         else:
             syn_df = pd.DataFrame(rows)
-            sb = generate_statebuilder_pre(info_cache)
+            sb = generate_statebuilder_pre(info_cache, data_resolution=data_resolution)
             url = sb.render_state(
                 syn_df.sort_values(by=num_syn_col, ascending=False), return_as="url"
             )

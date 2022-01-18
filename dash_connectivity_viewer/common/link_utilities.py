@@ -67,6 +67,7 @@ def generate_statebuilder(
     preselect_all=True,
     anno_column="post_pt_root_id",
     anno_layer="syns",
+    data_resolution=None,
 ):
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
@@ -103,6 +104,7 @@ def generate_statebuilder(
         mapping_rules=points,
         linked_segmentation_layer=seg.name,
         filter_by_segmentation=True,
+        data_resolution=data_resolution,
     )
 
     sb = statebuilder.StateBuilder(
@@ -112,7 +114,7 @@ def generate_statebuilder(
     return sb
 
 
-def generate_statebuilder_pre(info_cache, preselect=False):
+def generate_statebuilder_pre(info_cache, preselect=False, data_resolution=None):
 
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
@@ -134,7 +136,10 @@ def generate_statebuilder_pre(info_cache, preselect=False):
         multipoint=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
-        "output_syns", mapping_rules=points, linked_segmentation_layer=seg.name
+        "output_syns",
+        mapping_rules=points,
+        linked_segmentation_layer=seg.name,
+        data_resolution=data_resolution,
     )
     sb = statebuilder.StateBuilder(
         [img, seg, anno],
@@ -143,7 +148,7 @@ def generate_statebuilder_pre(info_cache, preselect=False):
     return sb
 
 
-def generate_statebuilder_post(info_cache):
+def generate_statebuilder_post(info_cache, data_resolution=None):
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
     )
@@ -162,7 +167,10 @@ def generate_statebuilder_post(info_cache):
         multipoint=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
-        "input_syns", mapping_rules=points, linked_segmentation_layer=seg.name
+        "input_syns",
+        mapping_rules=points,
+        linked_segmentation_layer=seg.name,
+        data_resolution=data_resolution,
     )
     sb = statebuilder.StateBuilder(
         [img, seg, anno],
@@ -172,7 +180,11 @@ def generate_statebuilder_post(info_cache):
 
 
 def generate_statebuider_syn_grouped(
-    info_cache, anno_name, fixed_id_color="#FFFFFF", preselect=False
+    info_cache,
+    anno_name,
+    fixed_id_color="#FFFFFF",
+    preselect=False,
+    data_resolution=None,
 ):
     points = statebuilder.PointMapper(
         point_column=bound_pt_position(syn_pt_position_col),
@@ -208,6 +220,7 @@ def generate_statebuider_syn_grouped(
         mapping_rules=points,
         linked_segmentation_layer=seg.name,
         filter_by_segmentation=True,
+        data_resolution=data_resolution,
     )
 
     sb = statebuilder.StateBuilder(
@@ -218,33 +231,6 @@ def generate_statebuider_syn_grouped(
     return sb
 
 
-# def generate_url_synapses(selected_rows, edge_df, syn_df, direction, info_cache):
-#     if direction == "pre":
-#         other_col = "post_pt_root_id"
-#         self_col = "pre_pt_root_id"
-#         anno_layer = "output_syns"
-#     else:
-#         other_col = "pre_pt_root_id"
-#         self_col = "post_pt_root_id"
-#         anno_layer = "input_syn"
-
-#     syn_df[other_col] = syn_df[other_col].astype(int)
-#     syn_df[self_col] = syn_df[self_col].astype(int)
-
-#     edge_df["pt_root_id"] = edge_df["pt_root_id"].astype(int)
-#     other_oids = edge_df.iloc[selected_rows]["pt_root_id"].values
-
-#     preselect = len(other_oids) == 1  # Only show all targets if just one is selected
-#     sb = generate_statebuilder(
-#         info_cache,
-#         syn_df[self_col].iloc[0],
-#         preselect_all=preselect,
-#         anno_column=other_col,
-#         anno_layer=anno_layer,
-#     )
-#     return sb.render_state(syn_df.query(f"{other_col} in @other_oids"), return_as="url")
-
-
 def generate_url_cell_types(
     selected_rows,
     df,
@@ -253,6 +239,7 @@ def generate_url_cell_types(
     multipoint=False,
     fill_null=None,
     return_as="url",
+    data_resolution=None,
 ):
     if len(selected_rows) > 0 or selected_rows is None:
         df = df.iloc[selected_rows].reset_index(drop=True)
@@ -287,6 +274,7 @@ def generate_url_cell_types(
                 linked_segmentation_column="pt_root_id",
                 set_position=True,
                 multipoint=multipoint,
+                data_resolution=data_resolution,
             ),
         )
         sbs.append(
@@ -307,6 +295,7 @@ def generate_statebuilder_syn_cell_types(
     position_column=syn_pt_position_col,
     multipoint=False,
     fill_null=None,
+    data_resolution=None,
 ):
     df = pd.DataFrame(rows)
     if fill_null:
@@ -341,6 +330,7 @@ def generate_statebuilder_syn_cell_types(
                 set_position=True,
                 multipoint=multipoint,
             ),
+            data_resolution=data_resolution,
         )
         sbs.append(
             statebuilder.StateBuilder(
