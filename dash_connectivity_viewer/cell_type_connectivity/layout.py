@@ -1,7 +1,7 @@
-import dash_table
-import dash_core_components as dcc
+from dash import dash_table
+from dash import dcc
 import dash_bootstrap_components as dbc
-import dash_html_components as html
+from dash import html
 import flask
 from .config import DEFAULT_DATASTACK, table_columns
 from ..common.dash_url_helper import create_component_kwargs, State
@@ -126,12 +126,12 @@ def page_layout(state: State = None):
                                     state,
                                     id_inner="cell-type-table-dropdown",
                                     options=[],
-                                    value="allen_soma_coarse_cell_class_model_v1",
+                                    value="",
                                     clearable=False,
                                 )
                             ),
                         ],
-                        width={"size": 2, "offset": 1},
+                        width={"size": 3, "offset": 1},
                         align="end",
                     ),
                 ],
@@ -241,7 +241,7 @@ def page_layout(state: State = None):
                                 row_selectable="multi",
                                 page_current=0,
                                 page_action="native",
-                                page_size=50,
+                                page_size=30,
                             ),
                             width=10,
                         ),
@@ -266,8 +266,7 @@ def page_layout(state: State = None):
                                             "Generate Link",
                                             id="all-input-link-button",
                                             color="secondary",
-                                            # className="mb-3",
-                                            block=True,
+                                            className="d-grid gap-2 col-6 mx-auto",
                                         ),
                                     ]
                                 ),
@@ -294,7 +293,7 @@ def page_layout(state: State = None):
                                             "Generate Link",
                                             id="cell-typed-input-link-button",
                                             color="secondary",
-                                            block=True,
+                                            className="d-grid gap-2 col-6 mx-auto",
                                         ),
                                     ]
                                 ),
@@ -328,8 +327,7 @@ def page_layout(state: State = None):
                                             "Generate Link",
                                             id="all-output-link-button",
                                             color="secondary",
-                                            # className="mb-3",
-                                            block=True,
+                                            className="d-grid gap-2 col-6 mx-auto",
                                         ),
                                     ]
                                 ),
@@ -356,7 +354,7 @@ def page_layout(state: State = None):
                                             "Generate Link",
                                             id="cell-typed-output-link-button",
                                             color="secondary",
-                                            block=True,
+                                            className="d-grid gap-2 col-6 mx-auto",
                                         ),
                                     ]
                                 ),
@@ -383,7 +381,7 @@ def page_layout(state: State = None):
                         html.H5("Whole Cell Links (click to toggle visibility)"),
                         id="collapse-button",
                         color="secondary",
-                        block=True,
+                        className="d-grid gap-2 col-6 mx-auto",
                     ),
                     dbc.Collapse(
                         dbc.Card(
@@ -414,7 +412,7 @@ def page_layout(state: State = None):
                         html.H5("Output Plots (click to toggle visibility)"),
                         id="plot-collapse-button",
                         color="secondary",
-                        block=True,
+                        className="d-grid gap-2 col-6 mx-auto",
                     ),
                     dbc.Collapse(
                         [
@@ -445,6 +443,7 @@ def page_layout(state: State = None):
             dcc.Store("target-table-json"),
             dcc.Store("source-table-json"),
             dcc.Store("client-info-json"),
+            dcc.Store('synapse-table-resolution-json'),
             html.Div(
                 dcc.Input(
                     **create_component_kwargs(

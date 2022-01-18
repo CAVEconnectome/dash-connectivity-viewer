@@ -1,9 +1,8 @@
 from .config import *
 
 
-def process_dataframe(df):
-    df["soma_depth_um"] = df["pt_position_y"].apply(
-        lambda x: voxel_resolution[1] * x / 1000
-    )
-    df["num_anno"] = df.groupby("pt_root_id").transform("count")["pt_position_x"]
+def process_dataframe(df, root_id_column, pt_column):
+    df["num_anno"] = df.groupby(root_id_column).transform("count")[
+        f"{bound_pt_position(pt_column)}_x"
+    ]
     return df

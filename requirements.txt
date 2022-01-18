@@ -1,12 +1,12 @@
-nglui>=2.7.2
+nglui>=2.8
 pandas
 numpy
 seaborn
 flask
-dash
+dash==2
 dash_bootstrap_components
 requests
-caveclient>=4.1.1
+caveclient>=4.11
 plotly
 loguru
 orjson

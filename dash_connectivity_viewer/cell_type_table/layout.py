@@ -1,7 +1,7 @@
-from dash_html_components.A import A
-import dash_table
-import dash_core_components as dcc
-import dash_html_components as html
+from typing import DefaultDict
+from dash import html
+from dash import dash_table
+from dash import dcc
 import dash_bootstrap_components as dbc
 import flask
 
@@ -217,6 +217,8 @@ def page_layout(state: State = {}):
                         page_current=0,
                         page_action="native",
                         page_size=50,
+                        export_format="csv",
+                        export_headers="names",
                     ),
                     width=10,
                 )
@@ -285,7 +287,7 @@ def page_layout(state: State = {}):
                                             "Generate Link",
                                             id="whole-table-link-button",
                                             color="secondary",
-                                            block=True,
+                                            className="d-grid gap-2 col-6 mx-auto",
                                         ),
                                     ]
                                 ),
@@ -334,6 +336,7 @@ def page_layout(state: State = {}):
             html.Div(data_table),
             html.Div(datastack_comp, style={"display": "none"}),
             dcc.Store(id="client-info-json"),
+            dcc.Store(id="table-resolution-json"),
         ]
     )
     return layout
