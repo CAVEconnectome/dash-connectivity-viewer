@@ -1,69 +1,8 @@
-import os
-
 ###########################################
 ### Default data and request parameters ###
 ###########################################
 def parse_environ_vector(input, num_type):
     return [num_type(x) for x in input.split(",")]
-
-
-DEFAULT_DATASTACK = os.environ.get("DEFAULT_DATASTACK")
-DEFAULT_SERVER_ADDRESS = os.environ.get("DEFAULT_SERVER_ADDRESS")
-
-# Sets how cell type and soma location information is chunked for multithreaded queries
-TARGET_ROOT_ID_PER_CALL = os.environ.get("TARGET_ROOT_ID_PER_CALL", 200)
-MAX_CHUNKS = os.environ.get("MAX_CHUNKS", 20)
-
-VOXEL_RESOLUTION = os.environ.get("VOXEL_RESOLUTION")
-if VOXEL_RESOLUTION is not None:
-    voxel_resolution = parse_environ_vector(VOXEL_RESOLUTION, float)
-else:
-    voxel_resolution = None
-##############################
-### Link generation limits ###
-##############################
-
-# Length of dataframe allowed for automatic table link generation
-MAX_DATAFRAME_LENGTH = os.environ.get("MAX_DATAFRAME_LENGTH", 8_000)
-
-# Length of dataframe before switching over to manual link shortener
-MAX_SERVER_DATAFRAME_LENGTH = os.environ.get("MAX_SERVER_DATAFRAME_LENGTH", 20_000)
-
-##################
-### Key tables ###
-##################
-
-# Used to look up 'Nucleus Id'
-NUCLEUS_TABLE = os.environ.get("NUCLEUS_TABLE")
-NUCLEUS_ID_COLUMN = os.environ.get("NUCLEUS_ID_COLUMN", "id")
-
-# Used to look up number of neurons per root id
-soma_table = os.environ.get("SOMA_TABLE", NUCLEUS_TABLE)
-
-# Used to look up connectivity
-SYNAPSE_TABLE = os.environ.get("SYNAPSE_TABLE")
-
-####################
-### Column names ###
-####################
-
-syn_pt_position_col = os.environ.get("SYN_POSITION_COLUMN", "ctr_pt")
-cell_pt_position_col = os.environ.get("SOMA_POSITION_COLUMN", "pt")
-
-ct_col = os.environ.get("SOMA_CELL_TYPE_COLUMN", "cell_type")
-soma_table_cell_category = os.environ.get("SOMA_TABLE_CELL_TYPE")
-if ct_col and soma_table_cell_category:
-    soma_table_query = f"{ct_col} == '{soma_table_cell_category}'"
-else:
-    soma_table_query = None
-
-num_soma_col = "num"
-num_syn_col = "num_syn"
-net_size_col = "net_syn_size"
-mean_size_col = "mean_syn_size"
-root_id_col = "root_id"
-own_soma_col = "own_soma_pt_position"
-soma_position_col = "soma_pt_position"
 
 
 def bound_pt_position(pt):
@@ -72,3 +11,99 @@ def bound_pt_position(pt):
 
 def bound_pt_root_id(pt):
     return f"{pt}_root_id"
+
+
+class CommonConfig(object):
+    def __init__(self, config):
+        self.default_datastack = config.get("datastack")
+        if self.default_datastack is None:
+            raise ValueError("Must datastack parameter!")
+
+        self.server_address = config.get("server_address")
+        if self.server_address is None:
+            raise ValueError("Must set server address parameter!")
+
+        self.target_root_id_per_call = config.get("target_root_id_per_call", 200)
+        self.max_chunks = config.get("max_chunks", 20)
+        self.pool_maxsize = 2 * self.max_chunks
+
+        voxel_resolution = config.get("voxel_resolution")
+        if voxel_resolution is not None:
+            self.voxel_resolution = parse_environ_vector(voxel_resolution, float)
+        else:
+            self.voxel_resolution = None
+
+        ##############################
+        ### Link generation limits ###
+        ##############################
+
+        self.max_dataframe_length = config.get("max_dataframe_length", 8_000)
+        self.max_server_dataframe_length = config.get(
+            "max_server_dataframe_length", 20_000
+        )
+
+        # If None, the info service is used
+        self.nucleus_table = config.get("nucleus_table", None)
+        self.nucleus_id_column = config.get("nucleus_id_column", "id")
+
+        # Used to look up number of neurons per root id
+        self.soma_table = self.nucleus_table
+        self.soma_id_column = self.nucleus_id_column
+
+        # Used to look up connectivity
+        # If None, the info service is used
+        self.synapse_table = config.get("synapse_table", None)
+        self.syn_id_col = "id"
+        self.pre_pt_root_id = "pre_pt_root_id"
+        self.post_pt_root_id = "post_pt_root_id"
+        self.synapse_aggregation_rules = config.get("synapse_aggregation_rules", {})
+
+        self.syn_pt_prefix = config.get("syn_position_column", "ctr_pt")
+        self.syn_pt_position = bound_pt_position(self.syn_pt_prefix)
+
+        self.soma_pt_prefix = config.get("soma_postion_column", "pt")
+        self.soma_pt_position = bound_pt_position(self.soma_pt_prefix)
+        self.soma_pt_root_id = bound_pt_root_id(self.soma_pt_prefix)
+
+        self.soma_ct_col = config.get("soma_cell_type_column", "cell_type")
+        self.soma_table_cell_category = config.get("soma_table_cell_type")
+        if self.soma_ct_col and self.soma_table_cell_category:
+            self.soma_table_query = (
+                f"{self.soma_ct_col} == '{self.soma_table_cell_category}'"
+            )
+        else:
+            self.soma_table_query = None
+
+        self.num_soma_prefix = "num"
+        self.num_syn_col = "num_syn"
+        self.root_id_col = "root_id"
+        self.soma_position_col = "soma_pt_position"
+
+        self.num_soma_suffix = "_soma"
+        self.num_soma_col = f"{self.num_soma_prefix}{self.num_soma_suffix}"
+
+        self.synapse_table_columns_base = [
+            "id",
+            self.pre_pt_root_id,
+            self.post_pt_root_id,
+            self.syn_pt_position,
+        ]
+
+        additional_syn_merges = []
+        for _, v in self.synapse_aggregation_rules.items():
+            if v["column"] not in additional_syn_merges:
+                additional_syn_merges.append(v["column"])
+
+        self.synapse_table_columns_dataframe = (
+            self.synapse_table_columns_base + additional_syn_merges
+        )
+
+        self.synapse_table_columns_display = self.synapse_table_columns_base + list(
+            self.synapse_aggregation_rules.keys()
+        )
+
+        self.soma_table_columns = [
+            self.soma_pt_root_id,
+            self.soma_pt_position,
+            self.num_soma_col,
+        ]

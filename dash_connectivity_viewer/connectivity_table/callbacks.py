@@ -15,8 +15,8 @@ from ..common.dataframe_utilities import (
     stringify_root_ids,
 )
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
-from ..common.lookup_utilities import make_client, get_root_id_from_nuc_id
-from .config import *
+from ..common.lookup_utilities import make_client
+from .config import ConnectivityConfig
 
 import datetime
 import flask
@@ -30,6 +30,7 @@ except:
 
 
 InputDatastack = Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
+OutputDatastack = Output({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
 StateAnnoID = State({"id_inner": "anno-id", "type": _COMPONENT_ID_TYPE}, "value")
 StateAnnoType = State({"id_inner": "cell-id-type", "type": _COMPONENT_ID_TYPE}, "value")
 StateLiveQuery = State(
@@ -38,6 +39,8 @@ StateLiveQuery = State(
 
 
 def register_callbacks(app, config):
+    c = ConnectivityConfig(config)
+
     @app.callback(
         Output("data-table", "selected_rows"),
         Input("reset-selection", "n_clicks"),
@@ -45,6 +48,20 @@ def register_callbacks(app, config):
     )
     def reset_selection(n_clicks, tab_value):
         return []
+
+    @app.callback(
+        Output("data-table", "columns"),
+        InputDatastack,
+    )
+    def define_table_columns(_):
+        return [{"name": i, "id": i} for i in c.table_columns]
+
+    @app.callback(
+        OutputDatastack,
+        InputDatastack,
+    )
+    def define_table_columns(_):
+        return c.default_datastack
 
     @app.callback(
         Output("target-table-json", "data"),
@@ -68,7 +85,7 @@ def register_callbacks(app, config):
             t0 = time.time()
 
         try:
-            client = make_client(datastack_name, config)
+            client = make_client(c.default_datastack, c.server_address)
             info_cache = client.info.info_cache[datastack_name]
             info_cache["global_server"] = client.server_address
         except Exception as e:
@@ -132,28 +149,29 @@ def register_callbacks(app, config):
             nrn_data = NeuronData(
                 object_id,
                 client,
+                config=c,
                 timestamp=timestamp,
-                synapse_table=SYNAPSE_TABLE,
-                soma_table=NUCLEUS_TABLE,
-                n_threads=1,
-                synapse_position_point=syn_pt_position_col,
-                cell_position_point=cell_pt_position_col,
-                soma_id_column=NUCLEUS_ID_COLUMN,
                 id_type=object_id_type,
-                soma_table_query=soma_table_query,
+                n_threads=1,
             )
+
             root_id = nrn_data.root_id
 
             pre_targ_df = nrn_data.partners_out()
-            pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=["root_id"])
+            pre_targ_df = stringify_root_ids(
+                pre_targ_df, stringify_cols=[c.root_id_col]
+            )
 
             post_targ_df = nrn_data.partners_in()
-            post_targ_df = stringify_root_ids(post_targ_df, stringify_cols=["root_id"])
+            post_targ_df = stringify_root_ids(
+                post_targ_df, stringify_cols=[c.root_id_col]
+            )
 
-            n_syn_pre = pre_targ_df[num_syn_col].sum()
-            n_syn_post = post_targ_df[num_syn_col].sum()
+            n_syn_pre = pre_targ_df[c.num_syn_col].sum()
+            n_syn_post = post_targ_df[c.num_syn_col].sum()
 
             info_cache["root_id"] = str(root_id)
+
         except Exception as e:
             return (
                 [],
@@ -233,23 +251,24 @@ def register_callbacks(app, config):
         small_state_text = "Neuroglancer Link"
         if rows is None or len(rows) == 0:
             rows = {}
-            sb = generate_statebuilder(info_cache)
+            sb = generate_statebuilder(info_cache, c)
             return sb.render_state(None, return_as="url"), small_state_text, False, ""
         else:
             syn_df = pd.DataFrame(rows)
             if len(selected_rows) == 0:
                 if tab_value == "tab-pre":
                     sb = generate_statebuilder_pre(
-                        info_cache, data_resolution=data_resolution
+                        info_cache, c, data_resolution=data_resolution
                     )
                 elif tab_value == "tab-post":
                     sb = generate_statebuilder_post(
-                        info_cache, data_resolution=data_resolution
+                        info_cache, c, data_resolution=data_resolution
                     )
                 else:
                     raise ValueError('tab must be "tab-pre" or "tab-post"')
                 url = sb.render_state(
-                    syn_df.sort_values(by=num_syn_col, ascending=False), return_as="url"
+                    syn_df.sort_values(by=c.num_syn_col, ascending=False),
+                    return_as="url",
                 )
             else:
                 if tab_value == "tab-pre":
@@ -259,6 +278,7 @@ def register_callbacks(app, config):
                 sb = generate_statebuider_syn_grouped(
                     info_cache,
                     anno_layer,
+                    c,
                     preselect=len(selected_rows) == 1,
                     data_resolution=data_resolution,
                 )
@@ -295,15 +315,17 @@ def register_callbacks(app, config):
             return html.Div("No inputs to show")
         else:
             syn_df = pd.DataFrame(rows)
-            sb = generate_statebuilder_post(info_cache, data_resolution=data_resolution)
+            sb = generate_statebuilder_post(
+                info_cache, c, data_resolution=data_resolution
+            )
             url = sb.render_state(
-                syn_df.sort_values(by=num_syn_col, ascending=False), return_as="url"
+                syn_df.sort_values(by=c.num_syn_col, ascending=False), return_as="url"
             )
         if len(url) > MAX_URL_LENGTH:
             try:
-                client = make_client(datastack, config)
+                client = make_client(c.default_datastack, c.server_address)
                 state = sb.render_state(
-                    syn_df.sort_values(by=num_syn_col, ascending=False),
+                    syn_df.sort_values(by=c.num_syn_col, ascending=False),
                     return_as="dict",
                 )
                 state_id = client.state.upload_state_json(state)
@@ -340,15 +362,17 @@ def register_callbacks(app, config):
             return html.Div("No outputs to show")
         else:
             syn_df = pd.DataFrame(rows)
-            sb = generate_statebuilder_pre(info_cache, data_resolution=data_resolution)
+            sb = generate_statebuilder_pre(
+                info_cache, c, data_resolution=data_resolution
+            )
             url = sb.render_state(
-                syn_df.sort_values(by=num_syn_col, ascending=False), return_as="url"
+                syn_df.sort_values(by=c.num_syn_col, ascending=False), return_as="url"
             )
         if len(url) > MAX_URL_LENGTH:
             try:
-                client = make_client(datastack, config)
+                client = make_client(c.default_datastack, c.config)
                 state = sb.render_state(
-                    syn_df.sort_values(by=num_syn_col, ascending=False),
+                    syn_df.sort_values(by=c.num_syn_col, ascending=False),
                     return_as="dict",
                 )
                 state_id = client.state.upload_state_json(state)

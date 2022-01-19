@@ -1,8 +1,5 @@
-from logging import root
-from caveclient.chunkedgraph import root_id_int_list_check
 import pandas as pd
 import numpy as np
-from functools import lru_cache
 from caveclient import CAVEclient
 
 from dash_connectivity_viewer.common.lookup_utilities import (
@@ -11,29 +8,46 @@ from dash_connectivity_viewer.common.lookup_utilities import (
 )
 
 from .dataframe_utilities import *
-from .config import *
 from .link_utilities import voxel_resolution_from_info
 from multiprocessing import cpu_count
 
 
-def _soma_property_entry(soma_table, soma_id_column, soma_position_col, soma_filter):
+def _soma_property_entry(soma_table, c):
     return {
         soma_table: {
-            "root_id": soma_id_column,
-            "include": [soma_position_col],
+            "root_id": c.soma_pt_root_id,
+            "include": [c.soma_pt_position],
             "aggregate": {
-                num_soma_col: {
-                    "group_by": soma_id_column,
-                    "column": NUCLEUS_ID_COLUMN,
+                c.num_soma_prefix: {
+                    "group_by": c.soma_pt_root_id,
+                    "column": c.nucleus_id_column,
                     "agg": "count",
                 }
             },
-            "suffix": "_soma",
-            "table_filter": soma_filter,
+            "suffix": c.num_soma_suffix,
+            "table_filter": c.soma_table_query,
             "data": None,
             "data_resolution": None,
         }
     }
+
+
+def _synapse_properties(synapse_table, c):
+    syn_props = {
+        synapse_table: {
+            "pre_root_id": c.pre_pt_root_id,
+            "post_root_id": c.post_pt_root_id,
+            "position_column": c.syn_pt_position,
+            "aggregate": {
+                c.num_syn_col: {
+                    "column": c.syn_id_col,
+                    "agg": "count",
+                },
+            },
+        }
+    }
+    syn_props[synapse_table]["aggregate"].update(c.synapse_aggregation_rules)
+    return syn_props
 
 
 class NeuronData(object):
@@ -41,17 +55,11 @@ class NeuronData(object):
         self,
         object_id,
         client,
+        config,
         property_tables={},
         timestamp=None,
-        synapse_table=None,
-        soma_table=None,
         n_threads=None,
-        synapse_position_point=syn_pt_position_col,
-        cell_position_point=cell_pt_position_col,
-        soma_id_column=NUCLEUS_ID_COLUMN,
         id_type="root",
-        soma_table_query=soma_table_query,
-        num_soma_column=num_soma_col,
     ):
 
         if id_type == "root":
@@ -66,21 +74,21 @@ class NeuronData(object):
             server_address=client.server_address,
             auth_token=client.auth.token,
             pool_block=True,
-            pool_maxsize=2 * MAX_CHUNKS,
+            pool_maxsize=config.pool_maxsize,
         )
 
         self._property_tables = property_tables
 
-        if synapse_table is None:
+        if config.synapse_table is None:
             synapse_table = client.info.get_datastack_info().get("synapse_table")
         self._synapse_table = synapse_table
+        self._synapse_table_properties = _synapse_properties(synapse_table, config)
 
-        if soma_table is None:
+        if config.soma_table is None:
             soma_table = client.info.get_datastack_info().get("soma_table")
 
         self._soma_table = soma_table
-        self._soma_id_column = soma_id_column
-        self._num_soma_column = num_soma_column
+        self.config = config
 
         self._timestamp = timestamp
 
@@ -94,33 +102,16 @@ class NeuronData(object):
             n_threads = cpu_count()
         self.n_threads = n_threads
 
-        self._synapse_position_point = synapse_position_point
-        self._cell_position_point = cell_position_point
-
         self._partner_soma_table = None
         self._partner_root_ids = None
 
-        if self._soma_table is not None:
+        if soma_table is not None:
             self._property_tables.update(
                 _soma_property_entry(
                     soma_table,
-                    self.cell_root_id_column,
-                    self.cell_position_column,
-                    soma_table_query,
+                    config,
                 )
             )
-
-    @property
-    def synapse_position_column(self):
-        return bound_pt_position(self._synapse_position_point)
-
-    @property
-    def cell_position_column(self):
-        return bound_pt_position(self._cell_position_point)
-
-    @property
-    def cell_root_id_column(self):
-        return bound_pt_root_id(self._cell_position_point)
 
     @property
     def root_id(self):
@@ -129,8 +120,7 @@ class NeuronData(object):
                 self._nucleus_id,
                 self.client,
                 self.soma_table,
-                self.cell_root_id_column,
-                self._soma_id_column,
+                self.config,
                 self.timestamp,
             )
             if new_root_id is None:
@@ -146,8 +136,7 @@ class NeuronData(object):
                 self._root_id,
                 self.client,
                 self.soma_table,
-                self.cell_root_id_column,
-                self._soma_id_column,
+                self.config,
                 self.timestamp,
             )
         return self._nucleus_id
@@ -179,16 +168,6 @@ class NeuronData(object):
         return self._synapse_data_resolution
 
     @property
-    def num_soma_column_full(self):
-        return f"{self._num_soma_column}{self.property_column_suffix(self.soma_table)}"
-
-    @property
-    def soma_position_column(self):
-        return (
-            f"{self.cell_position_column}{self.property_column_suffix(self.soma_table)}"
-        )
-
-    @property
     def property_tables(self):
         return [k for k in self._property_tables]
 
@@ -208,9 +187,8 @@ class NeuronData(object):
             root_id=self.root_id,
             client=self.client,
             timestamp=self.timestamp,
-            live_query=self.live_query,
+            config=self.config,
             n_threads=self.n_threads,
-            synapse_position_column=self.synapse_position_column,
         )
         self._synapse_data_resolution = self._pre_syn_df.attrs.get(
             "table_voxel_resolution"
@@ -225,8 +203,8 @@ class NeuronData(object):
         self._partner_root_ids = np.unique(
             np.concatenate(
                 (
-                    self._pre_syn_df["post_pt_root_id"].values,
-                    self._post_syn_df["pre_pt_root_id"].values,
+                    self._pre_syn_df[self.config.post_pt_root_id].values,
+                    self._post_syn_df[self.config.pre_pt_root_id].values,
                 )
             )
         )
@@ -248,26 +226,23 @@ class NeuronData(object):
             columns={f"{prefix}_pt_root_id": "root_id"}
         )
         if properties:
-            targ_df = self._merge_property_tables(targ_df, root_id_col)
+            targ_df = self._merge_property_tables(targ_df, self.config.root_id_col)
         return targ_df
 
     def _make_simple_targ_df(self, df_grp):
-        pts = df_grp[self.synapse_position_column].agg(list)
-        net_size = df_grp["size"].agg(sum)
-        mean_size = df_grp["size"].agg(np.mean)
-        num_syn = df_grp[self.synapse_position_column].agg(len)
-        return (
-            pd.DataFrame(
-                {
-                    self.synapse_position_column: pts,
-                    num_syn_col: num_syn,
-                    net_size_col: net_size,
-                    mean_size_col: mean_size.astype(int),
-                }
-            )
-            .sort_values(by=num_syn_col, ascending=False)
-            .reset_index()
+        pts = df_grp[self.config.syn_pt_position].agg(list)
+        num_syn = df_grp[self.config.syn_pt_position].agg(len)
+        syn_df = pd.DataFrame(
+            {
+                self.config.syn_pt_position: pts,
+                self.config.num_syn_col: num_syn,
+            }
         )
+        for k, v in self.config.synapse_aggregation_rules.items():
+            syn_df[k] = df_grp[v["column"]].agg(v["agg"])
+        return syn_df.sort_values(
+            by=self.config.num_syn_col, ascending=False
+        ).reset_index()
 
     def _populate_property_tables(self):
         dfs = property_table_data(
@@ -323,8 +298,8 @@ class NeuronData(object):
             )
 
         if self.soma_table is not None:
-            df[self.num_soma_column_full] = (
-                df[self.num_soma_column_full].fillna(0).astype(int)
+            df[self.config.num_soma_col] = (
+                df[self.config.num_soma_col].fillna(0).astype(int)
             )
 
         return df
@@ -335,7 +310,6 @@ class NeuronData(object):
             self.root_id,
             self.client,
             self.timestamp,
-            live_query=self.live_query,
         )
         if len(own_soma_df) != 1:
             own_soma_loc = np.nan
@@ -352,7 +326,6 @@ class NeuronData(object):
         syn_df["x"] = 0
         return syn_df
 
-    @lru_cache(maxsize=1)
     def soma_location(self):
         if self.soma_table is None:
             return None
