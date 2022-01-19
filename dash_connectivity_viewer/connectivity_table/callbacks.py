@@ -10,6 +10,7 @@ from ..common.link_utilities import (
     generate_statebuilder_post,
     EMPTY_INFO_CACHE,
     MAX_URL_LENGTH,
+    make_url_robust,
 )
 from ..common.dataframe_utilities import (
     stringify_root_ids,
@@ -318,18 +319,13 @@ def register_callbacks(app, config):
             sb = generate_statebuilder_post(
                 info_cache, c, data_resolution=data_resolution
             )
-            url = sb.render_state(
-                syn_df.sort_values(by=c.num_syn_col, ascending=False), return_as="url"
-            )
-        if len(url) > MAX_URL_LENGTH:
             try:
-                client = make_client(c.default_datastack, c.server_address)
-                state = sb.render_state(
+                url = make_url_robust(
                     syn_df.sort_values(by=c.num_syn_col, ascending=False),
-                    return_as="dict",
+                    sb,
+                    datastack,
+                    c,
                 )
-                state_id = client.state.upload_state_json(state)
-                url = client.state.build_neuroglancer_url(state_id)
             except Exception as e:
                 return html.Div(str(e))
         return html.A(
@@ -365,18 +361,14 @@ def register_callbacks(app, config):
             sb = generate_statebuilder_pre(
                 info_cache, c, data_resolution=data_resolution
             )
-            url = sb.render_state(
-                syn_df.sort_values(by=c.num_syn_col, ascending=False), return_as="url"
-            )
-        if len(url) > MAX_URL_LENGTH:
+
             try:
-                client = make_client(c.default_datastack, c.config)
-                state = sb.render_state(
+                url = make_url_robust(
                     syn_df.sort_values(by=c.num_syn_col, ascending=False),
-                    return_as="dict",
+                    sb,
+                    datastack,
+                    c,
                 )
-                state_id = client.state.upload_state_json(state)
-                url = client.state.build_neuroglancer_url(state_id)
             except Exception as e:
                 return html.Div(str(e))
         return html.A(

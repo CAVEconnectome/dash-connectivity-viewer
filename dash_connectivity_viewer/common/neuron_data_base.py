@@ -227,6 +227,9 @@ class NeuronData(object):
         )
         if properties:
             targ_df = self._merge_property_tables(targ_df, self.config.root_id_col)
+        for cn in self.config.synapse_table_columns_display:
+            if cn not in targ_df.columns:
+                targ_df[cn] = np.nan
         return targ_df
 
     def _make_simple_targ_df(self, df_grp):

@@ -8,6 +8,7 @@ from .lookup_utilities import make_client
 
 EMPTY_INFO_CACHE = {"aligned_volume": {}}
 MAX_URL_LENGTH = 1_750_000
+DEFAULT_NGL = "https://neuromancer-seung-import.appspot.com/"
 
 
 def image_source(info_cache):
@@ -345,8 +346,11 @@ def make_url_robust(df, sb, datastack, config):
     """Generate a url from a neuroglancer state. If too long, return through state server"""
     url = sb.render_state(df, return_as="url")
     if len(url) > MAX_URL_LENGTH:
-        client = make_client(datastack, config)
+        client = make_client(datastack, config.server_address)
         state = sb.render_state(df, return_as="dict")
         state_id = client.state.upload_state_json(state)
-        url = client.state.build_neuroglancer_url(state_id)
+        ngl_url = client.info.viewer_site()
+        if ngl_url is None:
+            ngl_url = DEFAULT_NGL
+        url = client.state.build_neuroglancer_url(state_id, ngl_url=ngl_url)
     return url
