@@ -223,11 +223,11 @@ class NeuronData(object):
             prefix = "pre"
             syn_df_grp = self.post_syn_df().groupby(f"{prefix}_pt_root_id")
         targ_df = self._make_simple_targ_df(syn_df_grp).rename(
-            columns={f"{prefix}_pt_root_id": "root_id"}
+            columns={f"{prefix}_pt_root_id": self.config.root_id_col}
         )
         if properties:
             targ_df = self._merge_property_tables(targ_df, self.config.root_id_col)
-        for cn in self.config.synapse_table_columns_display:
+        for cn in self.config.target_table_display:
             if cn not in targ_df.columns:
                 targ_df[cn] = np.nan
         return targ_df
@@ -264,7 +264,7 @@ class NeuronData(object):
     def property_data(self, table_name):
         if self._property_tables.get(table_name).get("data") is None:
             self._populate_property_tables()
-        return self._property_tables.get(table_name).get("data")
+        return self._property_tables.get(table_name, {}).get("data")
 
     def property_data_resolution(self, table_name):
         if self._property_tables.get(table_name).get("data") is None:
@@ -274,10 +274,17 @@ class NeuronData(object):
     def property_root_id_column(self, table_name):
         return self._property_tables.get(table_name).get("root_id")
 
+    def _agg_columns(self, table_name):
+        return list(
+            self._property_tables.get(table_name, {}).get("aggregate", {}).keys()
+        )
+
     def property_columns(self, table_name):
-        return [self.property_root_id_column(table_name)] + self._property_tables.get(
-            table_name
-        ).get("include")
+        return (
+            [self.property_root_id_column(table_name)]
+            + self._property_tables.get(table_name).get("include")
+            + self._agg_columns(table_name)
+        )
 
     def property_column_suffix(self, table_name):
         return self._property_tables.get(table_name).get("suffix", "")

@@ -61,7 +61,7 @@ def register_callbacks(app, config):
         OutputDatastack,
         InputDatastack,
     )
-    def define_table_columns(_):
+    def define_datastack(_):
         return c.default_datastack
 
     @app.callback(
@@ -121,12 +121,8 @@ def register_callbacks(app, config):
             anno_id = None
             id_type = "anno_id"
 
-        if len(live_query_toggle) == 1:
-            live_query = "live"
-        else:
-            live_query = "static"
-
-        if live_query == "static":
+        live_query = len(live_query_toggle) == 1
+        if live_query:
             timestamp = client.materialize.get_timestamp()
         else:
             timestamp = datetime.datetime.now()
@@ -143,7 +139,7 @@ def register_callbacks(app, config):
             else:
                 raise ValueError('id_type must be either "root_id" or "nucleus_id"')
 
-        if live_query == "static":
+        if not live_query:
             info_cache["ngl_timestamp"] = timestamp.timestamp()
 
         try:
@@ -192,7 +188,7 @@ def register_callbacks(app, config):
                 f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {n_syn_post} , syn_out: {n_syn_pre}"
             )
 
-        if live_query == "live":
+        if live_query:
             output_message = f"Current connectivity for root id {root_id}"
             output_status = "success"
         else:

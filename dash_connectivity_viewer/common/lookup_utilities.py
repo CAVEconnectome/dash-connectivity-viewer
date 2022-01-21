@@ -9,11 +9,11 @@ def get_all_schema_tables(
 ):
     if isinstance(schemata, str):
         schemata = [schemata]
-    client = make_client(datastack, config.get("server_address"))
+    client = make_client(datastack, config.server_address)
     tables = client.materialize.get_tables()
     schema_tables = []
     for t in tables:
-        if t in config.get("omit_cell_type_tables", []):
+        if t in config.omit_cell_type_tables:
             continue
         meta = client.materialize.get_table_metadata(t)
         if meta["schema"] in schemata:
@@ -24,7 +24,7 @@ def get_all_schema_tables(
 def get_type_tables(schemata, datastack, config):
     tables = get_all_schema_tables(schemata, datastack, config)
 
-    named_options = config.get("cell_type_dropdown_options")
+    named_options = config.cell_type_dropdown_options
     if named_options is None:
         return tables
     else:

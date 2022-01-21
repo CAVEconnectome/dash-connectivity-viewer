@@ -7,26 +7,34 @@ config = {
             "value": "allen_soma_coarse_cell_class_model_v1",
         },
         {
-            "label": "Column Census (slanted)",
+            "label": "Column Census",
             "value": "allen_v1_column_types_slanted",
         },
         {
-            "label": "Column Census (straight)",
-            "value": "allen_v1_column_types_v2",
-        },
-        {
-            "label": "Thalamic Axons",
+            "label": "Column Thalamic Axons",
             "value": "allen_v1_column_thalamic",
         },
         {
-            "label": "Layer 5 IT PyC Subtypes",
-            "value": "allen_column_l5it_types",
-        },
-        {
-            "label": "Basket Subtypes",
+            "label": "Column Basket Subtypes",
             "value": "allen_column_basket_molecular",
         },
     ],
+    "datastack": "minnie65_phase3_v1",
+    "server_address": "https://global.daf-apis.com",
+    "syn_position_column": "pre_pt",
+    "synapse_aggregation_rules": {
+        "mean_size": {
+            "column": "size",
+            "agg": "mean",
+        },
+        "net_size": {
+            "column": "size",
+            "agg": "sum",
+        },
+    },
+    "cell_type_column_schema_lookup": {
+        "cell_type_local": "cell_type",
+    },
     "omit_cell_type_tables": ["nucleus_neuron_svm"],
     "valence_map_table": {
         "allen_v1_column_types_slanted": [
@@ -40,12 +48,9 @@ config = {
             "aibs_coarse_inhibitory",
         ],
     },
-    "cell_type_column_schema_lookup": {
-        "cell_type_local": "cell_type",
-    },
     "default_cell_type_dropdown": "allen_soma_coarse_cell_class_model_v1",
 }
 
 if __name__ == "__main__":
     app = create_app(config=config)
-    app.run_server(port=8050)
+    app.run_server(port=8050, debug=True)

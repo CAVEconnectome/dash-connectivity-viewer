@@ -1,14 +1,14 @@
-from time import time
 import flask
 import datetime
 from dash import callback_context
 from dash import dcc
 from dash import html
-import dash_bootstrap_components as dbc
+from .config import CellTypeConfig
 
 from dash.dependencies import Input, Output, State
 from ..common.dataframe_utilities import *
 from ..common.link_utilities import (
+    DEFAULT_NGL,
     generate_statebuilder,
     generate_url_cell_types,
     EMPTY_INFO_CACHE,
@@ -19,13 +19,13 @@ from ..common.lookup_utilities import (
     make_client,
 )
 from .table_lookup import TableViewer
-from .config import *
 from .ct_utils import process_dataframe
 
 # Callbacks using data from URL-encoded parameters requires this import
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 
 InputDatastack = Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
+OutputDatastack = Output({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
 OutputCellTypeMenuOptions = Output(
     {"id_inner": "cell-type-table-menu", "type": _COMPONENT_ID_TYPE}, "options"
 )
@@ -57,13 +57,28 @@ def register_callbacks(app, config):
     config : dict
         Dict for standard parameter values
     """
+    c = CellTypeConfig(config)
+
+    @app.callback(
+        OutputDatastack,
+        InputDatastack,
+    )
+    def define_datastack(_):
+        return c.default_datastack
 
     @app.callback(
         OutputCellTypeMenuOptions,
         InputDatastack,
     )
     def cell_type_dropdown(datastack):
-        return get_type_tables(allowed_cell_type_schema, datastack, config)
+        return get_type_tables(c.allowed_cell_type_schema, datastack, c)
+
+    @app.callback(
+        Output("data-table", "columns"),
+        InputDatastack,
+    )
+    def define_table_columns(_):
+        return [{"name": i, "id": i} for i in c.ct_table_columns]
 
     @app.callback(
         Output("data-table", "data"),
@@ -89,7 +104,7 @@ def register_callbacks(app, config):
         live_query_toggle,
     ):
         try:
-            client = make_client(datastack, config)
+            client = make_client(datastack, c.server_address)
             info_cache = client.info.get_datastack_info()
             info_cache["global_server"] = client.server_address
         except Exception as e:
@@ -126,6 +141,7 @@ def register_callbacks(app, config):
             tv = TableViewer(
                 cell_type_table,
                 client,
+                c,
                 id_query=anno_id,
                 id_query_type=anno_type_lookup[id_type],
                 column_query=annotation_filter,
@@ -139,7 +155,7 @@ def register_callbacks(app, config):
                 output_report = f"Table {cell_type_table} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
             output_color = "success"
         except Exception as e:
-            df = pd.DataFrame(columns=ct_table_columns)
+            df = pd.DataFrame(columns=c.ct_table_columns)
             output_report = str(e)
             output_color = "danger"
 
@@ -170,19 +186,19 @@ def register_callbacks(app, config):
     )
     def update_link(rows, selected_rows, info_cache):
         if rows is None or len(rows) == 0:
-            sb = generate_statebuilder(info_cache, anno_layer="anno")
+            sb = generate_statebuilder(info_cache, c, anno_layer="anno")
             url = sb.render_state(None, return_as="url")
             link_name = "Table View Neuroglancer Link"
             link_color = (True,)
         else:
             df = pd.DataFrame(rows)
-            if len(df) > MAX_DATAFRAME_LENGTH:
+            if len(df) > c.max_dataframe_length:
                 url = ""
                 link_name = "State Too Large"
                 link_color = True
             else:
                 df["pt_position"] = df.apply(assemble_pt_position, axis=1)
-                url = generate_url_cell_types(selected_rows, df, info_cache)
+                url = generate_url_cell_types(selected_rows, df, info_cache, c)
                 if len(url) > MAX_URL_LENGTH:
                     url = ""
                     link_name = "State Too Large"
@@ -219,27 +235,30 @@ def register_callbacks(app, config):
             return html.Div("No items to show"), "Error", True
 
         df = pd.DataFrame(rows)
-        if len(df) > MAX_SERVER_DATAFRAME_LENGTH:
-            df = df.sample(MAX_SERVER_DATAFRAME_LENGTH)
+        if len(df) > c.max_server_dataframe_length:
+            df = df.sample(c.max_server_dataframe_length)
             sampled = True
         else:
             sampled = False
 
         df["pt_position"] = df.apply(assemble_pt_position, axis=1)
 
-        if len(df) > MAX_DATAFRAME_LENGTH:
+        if len(df) > c.max_dataframe_length:
             try:
-                client = make_client(datastack, config)
-                state = generate_url_cell_types([], df, info_cache, return_as="dict")
+                client = make_client(datastack, c.server_address)
+                state = generate_url_cell_types([], df, info_cache, c, return_as="dict")
                 state_id = client.state.upload_state_json(state)
-                url = client.state.build_neuroglancer_url(state_id)
+                ngl_url = client.info.viewer_site()
+                if ngl_url is None:
+                    ngl_url = DEFAULT_NGL
+                url = client.state.build_neuroglancer_url(state_id, ngl_url=ngl_url)
             except Exception as e:
                 return html.Div(str(e)), "Error", True
         else:
-            url = generate_url_cell_types([], df, info_cache)
+            url = generate_url_cell_types([], df, info_cache, c)
 
         if sampled:
-            link_text = f"Neuroglancer Link (State very large — Random {MAX_SERVER_DATAFRAME_LENGTH} shown)"
+            link_text = f"Neuroglancer Link (State very large — Random {c.max_server_dataframe_length} shown)"
         else:
             link_text = f"Neuroglancer Link"
 

@@ -1,22 +1,18 @@
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from .config import ticklocs, height_bnds
 from .cortex_plots import *
 
 
-def split_bar_fig(
-    ndat, vis_config, cell_types_split=[None, None], height=350, width=450
-):
+def split_bar_fig(ndat, cell_types_split=[None, None], height=350, width=450):
 
     bar_e = excitatory_bar_plot(
         ndat,
-        ndat.cell_type_column,
-        vis_config.e_color,
+        ndat.config.ct_conn_cell_type_column,
         cell_types=cell_types_split[0],
     )
 
     bar_i = inhibitory_bar_plot(
-        ndat, ndat.cell_type_column, vis_config.i_color, cell_types=cell_types_split[1]
+        ndat, ndat.config.ct_conn_cell_type_column, cell_types=cell_types_split[1]
     )
 
     fig = make_subplots(rows=1, cols=2)
@@ -43,12 +39,11 @@ def split_bar_fig(
     return fig
 
 
-def single_bar_fig(ndat, vis_config, cell_types=None, height=350, width=350):
+def single_bar_fig(ndat, cell_types=None, height=350, width=350):
 
     bar = uniform_bar_plot(
         ndat,
-        ndat.cell_type_column,
-        vis_config.u_color,
+        ndat.config.ct_conn_cell_type_column,
         cell_types=cell_types,
     )
 
@@ -71,12 +66,12 @@ def single_bar_fig(ndat, vis_config, cell_types=None, height=350, width=350):
     return fig
 
 
-def violin_fig(ndat, vis_config, ticklocs=ticklocs, height=350, width=200):
+def violin_fig(ndat, height=350, width=200):
 
     fig = go.Figure()
 
-    violin_post = post_violin_plot(ndat, vis_config)
-    violin_pre = pre_violin_plot(ndat, vis_config)
+    violin_post = post_violin_plot(ndat)
+    violin_pre = pre_violin_plot(ndat)
     fig.add_trace(violin_post)
     fig.add_trace(violin_pre)
 
@@ -91,24 +86,23 @@ def violin_fig(ndat, vis_config, ticklocs=ticklocs, height=350, width=200):
     )
 
     fig.update_yaxes(
-        tickvals=ticklocs,
-        ticktext=["L1", "L2/3", "L4", "L5", "L6", "WM", ""],
+        tickvals=ndat.config.vis.ticklocs,
+        ticktext=ndat.config.vis.tick_labels,
         ticklabelposition="outside bottom",
-        range=height_bnds.astype(int)[::-1].tolist(),
+        range=ndat.config.height_bnds.astype(int)[::-1].tolist(),
         gridcolor="#CCC",
         gridwidth=2,
     )
     return fig
 
 
-def scatter_fig(ndat, vis_config, ticklocs=ticklocs, width=350, height=350):
+def scatter_fig(ndat, width=350, height=350):
 
     fig = go.Figure()
     scatter = synapse_soma_scatterplot(
         ndat,
-        ndat.synapse_depth_column,
-        ndat.soma_depth_column,
-        vis_config,
+        ndat.config.synapse_depth_column,
+        ndat.config.soma_depth_column,
     )
     fig.add_traces(scatter)
 
@@ -124,8 +118,8 @@ def scatter_fig(ndat, vis_config, ticklocs=ticklocs, width=350, height=350):
     )
 
     fig.update_xaxes(
-        tickvals=ticklocs,
-        ticktext=["L1", "L2/3", "L4", "L5", "L6", "WM", ""],
+        tickvals=ndat.config.vis.ticklocs,
+        ticktext=ndat.config.vis.tick_labels,
         ticklabelposition="outside right",
         gridcolor="#CCC",
         gridwidth=2,
@@ -133,10 +127,10 @@ def scatter_fig(ndat, vis_config, ticklocs=ticklocs, width=350, height=350):
     )
 
     fig.update_yaxes(
-        tickvals=ticklocs,
-        ticktext=["L1", "L2/3", "L4", "L5", "L6", "WM", ""],
+        tickvals=ndat.config.vis.ticklocs,
+        ticktext=ndat.config.vis.tick_labels,
         ticklabelposition="outside bottom",
-        range=height_bnds.astype(int)[::-1].tolist(),
+        range=ndat.config.height_bnds.astype(int)[::-1].tolist(),
         gridcolor="#CCC",
         gridwidth=2,
         scaleanchor="x",

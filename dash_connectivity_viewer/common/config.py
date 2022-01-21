@@ -26,12 +26,7 @@ class CommonConfig(object):
         self.target_root_id_per_call = config.get("target_root_id_per_call", 200)
         self.max_chunks = config.get("max_chunks", 20)
         self.pool_maxsize = 2 * self.max_chunks
-
-        voxel_resolution = config.get("voxel_resolution")
-        if voxel_resolution is not None:
-            self.voxel_resolution = parse_environ_vector(voxel_resolution, float)
-        else:
-            self.voxel_resolution = None
+        self.voxel_resolution = config.get("voxel_resolution")
 
         ##############################
         ### Link generation limits ###
@@ -77,10 +72,11 @@ class CommonConfig(object):
         self.num_soma_prefix = "num"
         self.num_syn_col = "num_syn"
         self.root_id_col = "root_id"
-        self.soma_position_col = "soma_pt_position"
 
         self.num_soma_suffix = "_soma"
         self.num_soma_col = f"{self.num_soma_prefix}{self.num_soma_suffix}"
+
+        self.soma_position_agg = self.soma_pt_position + self.num_soma_suffix
 
         self.synapse_table_columns_base = [
             "id",
@@ -98,9 +94,12 @@ class CommonConfig(object):
             self.synapse_table_columns_base + additional_syn_merges
         )
 
-        self.synapse_table_columns_display = self.synapse_table_columns_base + list(
-            self.synapse_aggregation_rules.keys()
-        )
+        self.target_table_display = [
+            self.root_id_col,
+            self.syn_pt_position,
+            self.num_syn_col,
+            self.num_soma_col,
+        ] + list(self.synapse_aggregation_rules.keys())
 
         self.soma_table_columns = [
             self.soma_pt_root_id,

@@ -1,15 +1,12 @@
 import datetime
-from caveclient import CAVEclient
-from dash_bootstrap_components._components.CardBody import CardBody
-from dash_bootstrap_components._components.CardHeader import CardHeader
-from dash import dcc
-import dash_bootstrap_components as dbc
-from dash import html
-from dash.dependencies import Input, Output, State
-from dash import callback_context
-
-A = html.A
+import pandas as pd
 from functools import partial
+
+from dash import dcc, html, callback_context
+from dash.dependencies import Input, Output, State
+import dash_bootstrap_components as dbc
+
+from .config import TypedConnectivityConfig
 
 from ..common.link_utilities import (
     generate_statebuilder,
@@ -25,11 +22,8 @@ from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 from ..common.lookup_utilities import (
     get_type_tables,
     make_client,
-    get_root_id_from_nuc_id,
 )
 from ..common.dataframe_utilities import stringify_root_ids
-
-from .config import *
 from .neuron_data_cortex import NeuronDataCortex as NeuronData
 from .cortex_panels import *
 
@@ -40,12 +34,14 @@ except:
     logger = None
 
 InputDatastack = Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
+OutputDatastack = Output({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
+
 StateRootID = State({"id_inner": "anno-id", "type": _COMPONENT_ID_TYPE}, "value")
 StateCellTypeTable = State(
     {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
     "value",
 )
-OutputCellTypeOptions = Output(
+OutputCellTypeMenuOptions = Output(
     {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
     "options",
 )
@@ -94,7 +90,7 @@ def generic_syn_link_generation(
         sb = sb_function(info_cache)
     try:
         url = make_url_robust(
-            syn_df.sort_values(by=num_syn_col, ascending=False),
+            syn_df.sort_values(by=config.num_syn_col, ascending=False),
             sb,
             datastack,
             config,
@@ -105,21 +101,22 @@ def generic_syn_link_generation(
     return html.A(link_text, href=url, target="_blank", style={"font-size": "20px"})
 
 
-def make_plots(ndat, show_depth_plots=show_depth_plots):
+def make_plots(ndat, config):
     if ndat is None:
         return html.Div("")
 
-    if show_depth_plots:
-        scatter = scatter_fig(ndat, vis_config, width=450, height=350)
-        violin = violin_fig(ndat, vis_config, height=350)
+    if config.show_depth_plots:
+        scatter = scatter_fig(ndat, width=450, height=350)
+        violin = violin_fig(ndat, height=350)
 
-    if ndat.valence_map is not None:
-        bars = split_bar_fig(ndat, vis_config, height=350)
-    else:
-        bars = single_bar_fig(ndat, vis_config, height=350)
+    if ndat.cell_type_table is not None:
+        if ndat.valence_map is not None:
+            bars = split_bar_fig(ndat, height=350)
+        else:
+            bars = single_bar_fig(ndat, height=350)
 
     row_contents = []
-    if show_depth_plots:
+    if config.show_depth_plots:
         row_contents.append(
             dbc.Col(
                 html.Div(
@@ -145,21 +142,25 @@ def make_plots(ndat, show_depth_plots=show_depth_plots):
                 ]
             )
         )
-    row_contents.append(
-        dbc.Col(
-            [
-                html.H5("Target Synapse by Cell Type", style={"text-align": "center"}),
-                dcc.Graph(figure=bars, style={"text-align": "center"}),
-            ]
+    if ndat.cell_type_table is not None:
+        row_contents.append(
+            dbc.Col(
+                [
+                    html.H5(
+                        "Target Synapse by Cell Type", style={"text-align": "center"}
+                    ),
+                    dcc.Graph(figure=bars, style={"text-align": "center"}),
+                ]
+            )
         )
-    )
     plot_content = dbc.Row(row_contents)
 
     return html.Div(plot_content)
 
 
 def register_callbacks(app, config):
-    valence_map_table = config.get("valence_map_table", {})
+
+    c = TypedConnectivityConfig(config)
 
     @app.callback(
         Output("data-table", "selected_rows"),
@@ -170,15 +171,25 @@ def register_callbacks(app, config):
         return []
 
     @app.callback(
-        OutputCellTypeOptions,
-        OutputCellTypeValue,
+        Output("data-table", "columns"),
         InputDatastack,
     )
-    def cell_type_dropdown(datastack):
-        return (
-            get_type_tables(allowed_cell_type_schema, datastack, config),
-            config.get("default_cell_type_dropdown", ""),
-        )
+    def define_table_columns(_):
+        return [{"name": i, "id": i} for i in c.table_columns]
+
+    @app.callback(
+        OutputDatastack,
+        InputDatastack,
+    )
+    def define_datastack(_):
+        return c.default_datastack
+
+    @app.callback(
+        OutputCellTypeMenuOptions,
+        InputDatastack,
+    )
+    def set_cell_type_dropdown(datastack):
+        return get_type_tables(c.allowed_cell_type_schema, datastack, c)
 
     @app.callback(
         Output("message-text", "children"),
@@ -204,7 +215,7 @@ def register_callbacks(app, config):
             t0 = time.time()
 
         try:
-            client = make_client(datastack_name, config)
+            client = make_client(datastack_name, c.server_address)
             info_cache = client.info.info_cache[datastack_name]
             info_cache["global_server"] = client.server_address
         except Exception as e:
@@ -222,7 +233,7 @@ def register_callbacks(app, config):
                 None,
             )
 
-        if len(query_toggle) == 1 and not config.get("DISALLOW_LIVE_QUERY", False):
+        if len(query_toggle) == 1 and not config.get("disallow_live_query", False):
             live_query = True
         else:
             live_query = False
@@ -233,11 +244,9 @@ def register_callbacks(app, config):
             timestamp = client.materialize.get_timestamp()
             info_cache["ngl_timestamp"] = timestamp.timestamp()
 
-        if anno_id is None or len(anno_id) == 0 or len(ct_table_value) == 0:
+        if anno_id is None or len(anno_id) == 0:
             return (
-                html.Div(
-                    "Please select a cell id and cell type table and press Submit"
-                ),
+                html.Div("Please select a cell id and press Submit"),
                 "info",
                 "",
                 [],
@@ -246,7 +255,7 @@ def register_callbacks(app, config):
                 "Input",
                 1,
                 EMPTY_INFO_CACHE,
-                make_plots(None),
+                make_plots(None, c),
                 None,
             )
         else:
@@ -263,35 +272,23 @@ def register_callbacks(app, config):
             object_id,
             client=client,
             cell_type_table=ct_table_value,
+            config=c,
             timestamp=timestamp,
-            synapse_table=SYNAPSE_TABLE,
-            soma_table=NUCLEUS_TABLE,
-            n_threads=2,
-            synapse_position_point=syn_pt_position_col,
-            cell_position_point=cell_pt_position_col,
-            soma_id_column=NUCLEUS_ID_COLUMN,
             id_type=object_id_type,
-            soma_table_query=soma_table_query,
-            valence_map=valence_map_table.get(ct_table_value),
-            soma_depth_column=soma_depth_column,
-            is_inhibitory_column=is_inhibitory_column,
-            synapse_depth_column=synapse_depth_column,
-            cell_type_column=cell_type_column_lookup(
-                ct_table_value, config.get("cell_type_column_schema_lookup", {}), client
-            ),
+            n_threads=2,
         )
 
         root_id = nrn_data.root_id
         info_cache["root_id"] = str(root_id)
 
         pre_targ_df = nrn_data.partners_out_plus()
-        pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=[root_id_col])
+        pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=[c.root_id_col])
 
         post_targ_df = nrn_data.partners_in_plus()
-        post_targ_df = stringify_root_ids(post_targ_df, stringify_cols=[root_id_col])
+        post_targ_df = stringify_root_ids(post_targ_df, stringify_cols=[c.root_id_col])
 
-        n_syn_pre = pre_targ_df[num_syn_col].sum()
-        n_syn_post = post_targ_df[num_syn_col].sum()
+        n_syn_pre = pre_targ_df[c.num_syn_col].sum()
+        n_syn_post = post_targ_df[c.num_syn_col].sum()
         syn_resolution = nrn_data.synapse_data_resolution
 
         if logger is not None:
@@ -304,7 +301,7 @@ def register_callbacks(app, config):
         else:
             message_text = f"Connectivity for root id {root_id} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
 
-        plts = make_plots(nrn_data)
+        plts = make_plots(nrn_data, c)
 
         del nrn_data
         del client
@@ -366,23 +363,24 @@ def register_callbacks(app, config):
 
         if rows is None or len(rows) == 0:
             rows = {}
-            sb = generate_statebuilder(info_cache)
+            sb = generate_statebuilder(info_cache, c)
             return sb.render_state(None, return_as="url"), small_state_text, False, ""
         else:
             syn_df = pd.DataFrame(rows)
             if len(selected_rows) == 0:
                 if tab_value == "tab-pre":
                     sb = generate_statebuilder_pre(
-                        info_cache, data_resolution=synapse_data_resolution
+                        info_cache, c, data_resolution=synapse_data_resolution
                     )
                 elif tab_value == "tab-post":
                     sb = generate_statebuilder_post(
-                        info_cache, data_resolution=synapse_data_resolution
+                        info_cache, c, data_resolution=synapse_data_resolution
                     )
                 else:
                     raise ValueError('tab must be "tab-pre" or "tab-post"')
                 url = sb.render_state(
-                    syn_df.sort_values(by=num_syn_col, ascending=False), return_as="url"
+                    syn_df.sort_values(by=c.num_syn_col, ascending=False),
+                    return_as="url",
                 )
             else:
                 if tab_value == "tab-pre":
@@ -392,6 +390,7 @@ def register_callbacks(app, config):
                 sb = generate_statebuider_syn_grouped(
                     info_cache,
                     anno_layer,
+                    c,
                     preselect=len(selected_rows) == 1,
                     data_resolution=synapse_data_resolution,
                 )
@@ -422,11 +421,15 @@ def register_callbacks(app, config):
             return "  ", "Generate Link", False
         return (
             generic_syn_link_generation(
-                partial(generate_statebuilder_post, data_resolution=data_resolution),
+                partial(
+                    generate_statebuilder_post,
+                    config=c,
+                    data_resolution=data_resolution,
+                ),
                 rows,
                 info_cache,
                 datastack,
-                config,
+                c,
                 "Neuroglancer Link",
                 "Inputs",
             ),
@@ -456,14 +459,15 @@ def register_callbacks(app, config):
         sb, dfs = generate_statebuilder_syn_cell_types(
             info_cache,
             rows,
+            c,
             cell_type_column="cell_type",
-            position_column=syn_pt_position_col,
+            position_column=c.syn_pt_position_col,
             multipoint=True,
             fill_null="NoType",
             data_resolution=data_resolution,
         )
         try:
-            url = make_url_robust(dfs, sb, datastack, config)
+            url = make_url_robust(dfs, sb, datastack, c)
         except Exception as e:
             return html.Div(str(e))
         return (
@@ -498,7 +502,7 @@ def register_callbacks(app, config):
                 rows,
                 info_cache,
                 datastack,
-                config,
+                c,
                 "All Output Link",
                 "Outputs",
             ),
@@ -528,14 +532,15 @@ def register_callbacks(app, config):
         sb, dfs = generate_statebuilder_syn_cell_types(
             info_cache,
             rows,
+            c,
             cell_type_column="cell_type",
-            position_column=syn_pt_position_col,
+            position_column=c.syn_pt_position_col,
             multipoint=True,
             fill_null="NoType",
             data_resolution=data_resolution,
         )
         try:
-            url = make_url_robust(dfs, sb, datastack, config)
+            url = make_url_robust(dfs, sb, datastack, c)
         except Exception as e:
             return html.Div(str(e))
         return (

@@ -134,7 +134,7 @@ def _get_single_table(
     timestamp,
     table_filter=None,
 ):
-    keep_columns = include_columns
+    keep_columns = include_columns.copy()
     df = client.materialize.query_table(
         table_name,
         filter_in_dict={root_id_column: root_ids},

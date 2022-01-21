@@ -3,7 +3,6 @@ from dash import dcc
 import dash_bootstrap_components as dbc
 from dash import html
 import flask
-from .config import DEFAULT_DATASTACK, table_columns
 from ..common.dash_url_helper import create_component_kwargs, State
 
 title = "Connectivity Viewer"
@@ -127,7 +126,7 @@ def page_layout(state: State = None):
                                     id_inner="cell-type-table-dropdown",
                                     options=[],
                                     value="",
-                                    clearable=False,
+                                    clearable=True,
                                 )
                             ),
                         ],
@@ -215,7 +214,7 @@ def page_layout(state: State = None):
                         dbc.Col(
                             dash_table.DataTable(
                                 id="data-table",
-                                columns=[{"name": i, "id": i} for i in table_columns],
+                                columns=[{"name": i, "id": i} for i in [""]],
                                 data=[],
                                 css=[
                                     {
@@ -443,13 +442,13 @@ def page_layout(state: State = None):
             dcc.Store("target-table-json"),
             dcc.Store("source-table-json"),
             dcc.Store("client-info-json"),
-            dcc.Store('synapse-table-resolution-json'),
+            dcc.Store("synapse-table-resolution-json"),
             html.Div(
                 dcc.Input(
                     **create_component_kwargs(
                         state,
                         id_inner="datastack",
-                        value=DEFAULT_DATASTACK,
+                        value="",
                     ),
                 ),
                 style={"display": "none"},
