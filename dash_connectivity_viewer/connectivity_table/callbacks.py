@@ -245,11 +245,19 @@ def register_callbacks(app, config):
         data_resolution,
     ):
         large_state_text = "State Too Large - Please Filter"
-        small_state_text = "Neuroglancer Link"
+
+        def small_state_text(n):
+            return f"Neuroglancer: ({n} partners)"
+
         if rows is None or len(rows) == 0:
             rows = {}
             sb = generate_statebuilder(info_cache, c)
-            return sb.render_state(None, return_as="url"), small_state_text, False, ""
+            return (
+                sb.render_state(None, return_as="url"),
+                small_state_text(0),
+                False,
+                "",
+            )
         else:
             syn_df = pd.DataFrame(rows)
             if len(selected_rows) == 0:
@@ -267,6 +275,7 @@ def register_callbacks(app, config):
                     syn_df.sort_values(by=c.num_syn_col, ascending=False),
                     return_as="url",
                 )
+                small_out_text = small_state_text(len(syn_df))
             else:
                 if tab_value == "tab-pre":
                     anno_layer = "Output Synapses"
@@ -280,11 +289,12 @@ def register_callbacks(app, config):
                     data_resolution=data_resolution,
                 )
                 url = sb.render_state(syn_df.iloc[selected_rows], return_as="url")
+                small_out_text = small_state_text(len(selected_rows))
 
         if len(url) > MAX_URL_LENGTH:
             return "", large_state_text, True, ""
         else:
-            return url, small_state_text, False, ""
+            return url, small_out_text, False, ""
 
     @app.callback(
         Output("all-input-link", "children"),

@@ -108,6 +108,8 @@ class TypedConnectivityConfig(CommonConfig):
         )
 
         self.cell_type_dropdown_options = config.get("cell_type_dropdown_options", [])
+        self.default_cell_type_option = config.get("default_cell_type_option", "")
+
         self.omit_cell_type_tables = config.get("omit_cell_type_tables", [])
         self.synapse_aggregation_rules = config.get("synapse_aggregation_rules", {})
         self.aggregation_columns = list(self.synapse_aggregation_rules.keys())

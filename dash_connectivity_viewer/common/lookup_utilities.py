@@ -107,7 +107,7 @@ def get_nucleus_id_from_root_id(
 
     df = client.materialize.query_table(
         nucleus_table,
-        filter_equal_dict={config.syn_pt_root_id: root_id},
+        filter_equal_dict={config.soma_pt_root_id: root_id},
         timestamp=timestamp,
     )
 

@@ -150,16 +150,16 @@ def _prepare_bar_plot(
         name = "Targets"
     else:
         if valence == "i":
-            map_ind = 2
+            map_ind = "i"
             name = "I Targets"
         elif valence == "e":
-            map_ind = 1
+            map_ind = "e"
             name = "E Targets"
 
         if cell_types is None:
             cell_types = (
                 ndat.property_data(ndat.cell_type_table)
-                .groupby(ndat.valence_map[0])
+                .groupby(ndat.valence_map["column"])
                 .agg({cell_type_column: np.unique})
                 .loc[ndat.valence_map[map_ind]][cell_type_column]
             )

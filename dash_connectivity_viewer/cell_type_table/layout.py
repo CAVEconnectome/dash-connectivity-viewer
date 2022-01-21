@@ -334,6 +334,7 @@ def page_layout(state: State = {}):
             html.Div(datastack_comp, style={"display": "none"}),
             dcc.Store(id="client-info-json"),
             dcc.Store(id="table-resolution-json"),
+            dcc.Store(id='data-resolution-json'),
         ]
     )
     return layout

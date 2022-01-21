@@ -86,6 +86,7 @@ def register_callbacks(app, config):
         Output("main-loading-placeholder", "value"),
         Output("client-info-json", "data"),
         Output("message-text", "color"),
+        Output("data-resolution-json", "data"),
         Input("submit-button", "n_clicks"),
         InputDatastack,
         StateCellTypeMenu,
@@ -166,6 +167,7 @@ def register_callbacks(app, config):
             "",
             info_cache,
             output_color,
+            df.attrs["table_voxel_resolution"],
         )
 
     @app.callback(
@@ -183,12 +185,16 @@ def register_callbacks(app, config):
         Input("data-table", "derived_virtual_data"),
         Input("data-table", "derived_virtual_selected_rows"),
         Input("client-info-json", "data"),
+        Input("data-resolution-json", "data"),
     )
-    def update_link(rows, selected_rows, info_cache):
+    def update_link(rows, selected_rows, info_cache, data_resolution):
+        def state_text(n):
+            return f"Neuroglancer: ({n} partners)"
+
         if rows is None or len(rows) == 0:
             sb = generate_statebuilder(info_cache, c, anno_layer="anno")
             url = sb.render_state(None, return_as="url")
-            link_name = "Table View Neuroglancer Link"
+            link_name = state_text(0)
             link_color = (True,)
         else:
             df = pd.DataFrame(rows)
@@ -198,13 +204,18 @@ def register_callbacks(app, config):
                 link_color = True
             else:
                 df["pt_position"] = df.apply(assemble_pt_position, axis=1)
-                url = generate_url_cell_types(selected_rows, df, info_cache, c)
+                url = generate_url_cell_types(
+                    selected_rows, df, info_cache, c, data_resolution=data_resolution
+                )
                 if len(url) > MAX_URL_LENGTH:
                     url = ""
                     link_name = "State Too Large"
                     link_color = True
                 else:
-                    link_name = "Table View Neuroglancer Link"
+                    if len(selected_rows) == 0:
+                        link_name = state_text(len(df))
+                    else:
+                        link_name = state_text(len(selected_rows))
                     link_color = False
         return url, link_name, link_color, ""
 

@@ -49,10 +49,6 @@ OutputCellTypeValue = Output(
     {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
     "value",
 )
-InputCellTypeOptions = Input(
-    {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
-    "options",
-)
 
 StateAnnoType = State({"id_inner": "id-type", "type": _COMPONENT_ID_TYPE}, "value")
 StateLiveQuery = State(
@@ -105,7 +101,7 @@ def make_plots(ndat, config):
     if ndat is None:
         return html.Div("")
 
-    if config.show_depth_plots:
+    if config.show_depth_plots and ndat.soma_table:
         scatter = scatter_fig(ndat, width=450, height=350)
         violin = violin_fig(ndat, height=350)
 
@@ -116,7 +112,7 @@ def make_plots(ndat, config):
             bars = single_bar_fig(ndat, height=350)
 
     row_contents = []
-    if config.show_depth_plots:
+    if config.show_depth_plots and ndat.soma_table:
         row_contents.append(
             dbc.Col(
                 html.Div(
@@ -190,6 +186,13 @@ def register_callbacks(app, config):
     )
     def set_cell_type_dropdown(datastack):
         return get_type_tables(c.allowed_cell_type_schema, datastack, c)
+
+    @app.callback(
+        OutputCellTypeValue,
+        InputDatastack,
+    )
+    def default_cell_type_option(_):
+        return c.default_cell_type_option
 
     @app.callback(
         Output("message-text", "children"),
@@ -268,57 +271,84 @@ def register_callbacks(app, config):
             else:
                 raise ValueError('id_type must be either "root_id" or "nucleus_id"')
 
-        nrn_data = NeuronData(
-            object_id,
-            client=client,
-            cell_type_table=ct_table_value,
-            config=c,
-            timestamp=timestamp,
-            id_type=object_id_type,
-            n_threads=2,
-        )
+        if not ct_table_value:
+            ct_table_value = None
 
-        root_id = nrn_data.root_id
-        info_cache["root_id"] = str(root_id)
-
-        pre_targ_df = nrn_data.partners_out_plus()
-        pre_targ_df = stringify_root_ids(pre_targ_df, stringify_cols=[c.root_id_col])
-
-        post_targ_df = nrn_data.partners_in_plus()
-        post_targ_df = stringify_root_ids(post_targ_df, stringify_cols=[c.root_id_col])
-
-        n_syn_pre = pre_targ_df[c.num_syn_col].sum()
-        n_syn_post = post_targ_df[c.num_syn_col].sum()
-        syn_resolution = nrn_data.synapse_data_resolution
-
-        if logger is not None:
-            logger.info(
-                f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {len(pre_targ_df)} , syn_out: {len(post_targ_df)}"
+        try:
+            nrn_data = NeuronData(
+                object_id,
+                client=client,
+                cell_type_table=ct_table_value,
+                config=c,
+                timestamp=timestamp,
+                id_type=object_id_type,
+                n_threads=2,
             )
 
-        if live_query:
-            message_text = f"Current connectivity for root id {root_id}"
-        else:
-            message_text = f"Connectivity for root id {root_id} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
+            root_id = nrn_data.root_id
+            info_cache["root_id"] = str(root_id)
 
-        plts = make_plots(nrn_data, c)
+            pre_targ_df = nrn_data.partners_out_plus()
+            pre_targ_df = stringify_root_ids(
+                pre_targ_df, stringify_cols=[c.root_id_col]
+            )
 
-        del nrn_data
-        del client
+            post_targ_df = nrn_data.partners_in_plus()
+            post_targ_df = stringify_root_ids(
+                post_targ_df, stringify_cols=[c.root_id_col]
+            )
 
-        return (
-            html.Div(message_text),
-            "success",
-            "",
-            pre_targ_df.to_dict("records"),
-            post_targ_df.to_dict("records"),
-            f"Output (n = {n_syn_pre})",
-            f"Input (n = {n_syn_post})",
-            1,
-            info_cache,
-            plts,
-            syn_resolution,
-        )
+            n_syn_pre = pre_targ_df[c.num_syn_col].sum()
+            n_syn_post = post_targ_df[c.num_syn_col].sum()
+            syn_resolution = nrn_data.synapse_data_resolution
+
+            if logger is not None:
+                logger.info(
+                    f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {len(pre_targ_df)} , syn_out: {len(post_targ_df)}"
+                )
+            if nrn_data.nucleus_id is not None and nrn_data.soma_table is not None:
+                nuc_id_text = f"  (nucleus id: {nrn_data.nucleus_id})"
+            else:
+                nuc_id_text = ""
+            if live_query:
+                message_text = (
+                    f"Current connectivity for root id {root_id}{nuc_id_text}"
+                )
+            else:
+                message_text = f"Connectivity for root id {root_id}{nuc_id_text} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
+
+            plts = make_plots(nrn_data, c)
+
+            del nrn_data
+            del client
+
+            return (
+                html.Div(message_text),
+                "success",
+                "",
+                pre_targ_df.to_dict("records"),
+                post_targ_df.to_dict("records"),
+                f"Output (n = {n_syn_pre})",
+                f"Input (n = {n_syn_post})",
+                1,
+                info_cache,
+                plts,
+                syn_resolution,
+            )
+        except Exception as e:
+            return (
+                html.Div(str(e)),
+                "danger",
+                "",
+                [],
+                [],
+                "Output",
+                "Input",
+                1,
+                EMPTY_INFO_CACHE,
+                make_plots(None, c),
+                None,
+            )
 
     @app.callback(
         Output("data-table", "data"),
@@ -359,12 +389,19 @@ def register_callbacks(app, config):
         large_state_text = (
             "Table Too Large - Please Filter or Use Whole Cell Neuroglancer Links"
         )
-        small_state_text = "Table View Neuroglancer Link"
+
+        def small_state_text(n):
+            return f"Neuroglancer: ({n} partners)"
 
         if rows is None or len(rows) == 0:
             rows = {}
             sb = generate_statebuilder(info_cache, c)
-            return sb.render_state(None, return_as="url"), small_state_text, False, ""
+            return (
+                sb.render_state(None, return_as="url"),
+                small_state_text(0),
+                False,
+                "",
+            )
         else:
             syn_df = pd.DataFrame(rows)
             if len(selected_rows) == 0:
@@ -382,6 +419,8 @@ def register_callbacks(app, config):
                     syn_df.sort_values(by=c.num_syn_col, ascending=False),
                     return_as="url",
                 )
+                small_out_text = small_state_text(len(syn_df))
+
             else:
                 if tab_value == "tab-pre":
                     anno_layer = "Output Synapses"
@@ -394,12 +433,18 @@ def register_callbacks(app, config):
                     preselect=len(selected_rows) == 1,
                     data_resolution=synapse_data_resolution,
                 )
-                url = sb.render_state(syn_df.iloc[selected_rows], return_as="url")
+                url = sb.render_state(
+                    syn_df.iloc[selected_rows].sort_values(
+                        by=c.num_syn_col, ascending=False
+                    ),
+                    return_as="url",
+                )
+                small_out_text = small_state_text(len(selected_rows))
 
         if len(url) > MAX_URL_LENGTH:
             return "", large_state_text, True, ""
         else:
-            return url, small_state_text, False, ""
+            return url, small_out_text, False, ""
 
     @app.callback(
         Output("all-input-link", "children"),
@@ -461,7 +506,6 @@ def register_callbacks(app, config):
             rows,
             c,
             cell_type_column="cell_type",
-            position_column=c.syn_pt_position_col,
             multipoint=True,
             fill_null="NoType",
             data_resolution=data_resolution,
@@ -498,7 +542,9 @@ def register_callbacks(app, config):
             return "", "Generate Link", False
         return (
             generic_syn_link_generation(
-                partial(generate_statebuilder_pre, data_resolution=data_resolution),
+                partial(
+                    generate_statebuilder_pre, config=c, data_resolution=data_resolution
+                ),
                 rows,
                 info_cache,
                 datastack,
@@ -534,7 +580,6 @@ def register_callbacks(app, config):
             rows,
             c,
             cell_type_column="cell_type",
-            position_column=c.syn_pt_position_col,
             multipoint=True,
             fill_null="NoType",
             data_resolution=data_resolution,

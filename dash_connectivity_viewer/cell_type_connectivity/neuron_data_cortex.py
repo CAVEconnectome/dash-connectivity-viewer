@@ -18,14 +18,22 @@ def _is_inhibitory_df(df, is_inhibitory_column, valence_map):
     if len(df) == 0:
         df[is_inhibitory_column] = None
 
-    def _is_inhibitory_row(row, valence_map):
-        if pd.isna(row[valence_map[0]]):
-            return np.nan
-        return row[valence_map[0]] == valence_map[2]
+    col = valence_map.get("column", None)
+    e_str = valence_map.get("e", None)
+    i_str = valence_map.get("i", None)
+    ei_str = []
+    if e_str:
+        ei_str.append(e_str)
+    if i_str:
+        ei_str.append(i_str)
 
-    df[is_inhibitory_column] = df.apply(
-        lambda x: _is_inhibitory_row(x, valence_map), axis=1
-    )
+    def _is_inhibitory_row(row):
+        if row[col] in ei_str:
+            return row[col] == i_str
+        else:
+            return np.nan
+
+    df[is_inhibitory_column] = df.apply(lambda x: _is_inhibitory_row(x), axis=1)
     return df
 
 
@@ -84,11 +92,11 @@ class NeuronDataCortex(NeuronData):
                 df = _is_inhibitory_df(
                     df,
                     self.config.is_inhibitory_column,
-                    self.config.table_valence_map,
+                    self.valence_map,
                 )
             else:
                 df[self.config.is_inhibitory_column] = np.nan
-        if self.config.soma_depth_column is not None:
+        if self.config.soma_depth_column is not None and self.soma_table is not None:
             df = _extract_depth(
                 df,
                 self.config.soma_depth_column,
@@ -108,7 +116,7 @@ class NeuronDataCortex(NeuronData):
         )
 
     def _decorate_partner_dataframe(self, df):
-        if self.config.soma_depth_column is not None:
+        if self.config.soma_depth_column is not None and self.soma_table is not None:
             df = _extract_depth(
                 df,
                 self.config.soma_depth_column,
@@ -144,4 +152,6 @@ class NeuronDataCortex(NeuronData):
                 )
 
     def soma_depth(self):
-        return _compute_depth_y(self.soma_location)
+        return _compute_depth_y(
+            self.soma_location(), self.property_data_resolution(self.soma_table)
+        )

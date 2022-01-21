@@ -131,6 +131,8 @@ class NeuronData(object):
 
     @property
     def nucleus_id(self):
+        if self.soma_table is None:
+            return None
         if self._nucleus_id is None:
             self._nucleus_id = get_nucleus_id_from_root_id(
                 self._root_id,
@@ -193,14 +195,19 @@ class NeuronData(object):
         self._synapse_data_resolution = self._pre_syn_df.attrs.get(
             "table_voxel_resolution"
         )
-        self._populate_root_ids()
         self._populate_property_tables()
+
+    @property
+    def partner_root_ids(self):
+        if self._partner_root_ids is None:
+            self._partner_root_ids = self._populate_root_ids()
+        return self._partner_root_ids
 
     def _populate_root_ids(self):
         if self._pre_syn_df is None:
             self._get_syn_df()
 
-        self._partner_root_ids = np.unique(
+        return np.unique(
             np.concatenate(
                 (
                     self._pre_syn_df[self.config.post_pt_root_id].values,
@@ -249,7 +256,7 @@ class NeuronData(object):
 
     def _populate_property_tables(self):
         dfs = property_table_data(
-            self._partner_root_ids,
+            self.partner_root_ids,
             self._property_tables,
             self.client,
             self.timestamp,
@@ -324,7 +331,7 @@ class NeuronData(object):
         if len(own_soma_df) != 1:
             own_soma_loc = np.nan
         else:
-            own_soma_loc = own_soma_df[self.cell_position_column].values[0]
+            own_soma_loc = own_soma_df[self.config.soma_pt_position].values[0]
         return own_soma_loc
 
     def syn_all_df(self):

@@ -43,10 +43,13 @@ def _synapse_df(
     grp = re.search("^(.*)pt_position", synapse_position_column)
     prefix = grp.groups()[0]
 
-    syn_df[synapse_position_column] = syn_df.apply(
-        lambda x: assemble_pt_position(x, prefix=prefix),
-        axis=1,
-    ).values
+    if len(syn_df) > 0:
+        syn_df[synapse_position_column] = syn_df.apply(
+            lambda x: assemble_pt_position(x, prefix=prefix),
+            axis=1,
+        ).values
+    else:
+        syn_df[synapse_position_column] = []
 
     if exclude_autapses:
         syn_df = syn_df.query("pre_pt_root_id != post_pt_root_id").reset_index(
@@ -162,6 +165,9 @@ def property_table_data(
     timestamp,
     n_threads=1,
 ):
+    if len(property_mapping) == 0:
+        return {}
+
     jobs = []
     with ThreadPoolExecutor(n_threads) as exe:
         for table_name, attrs in property_mapping.items():
