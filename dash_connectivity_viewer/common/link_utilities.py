@@ -66,7 +66,10 @@ def generate_statebuilder(
     data_resolution=None,
 ):
     img = statebuilder.ImageLayerConfig(
-        image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
+        image_source(info_cache),
+        contrast_controls=True,
+        black=config.image_black,
+        white=config.image_white,
     )
     if preselect_all:
         selected_ids_column = [anno_column]
@@ -117,8 +120,8 @@ def generate_statebuilder_pre(
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
         contrast_controls=True,
-        black=0.35,
-        white=0.65,
+        black=config.image_black,
+        white=config.image_white,
     )
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),
@@ -148,7 +151,10 @@ def generate_statebuilder_pre(
 
 def generate_statebuilder_post(info_cache, config, data_resolution=None):
     img = statebuilder.ImageLayerConfig(
-        image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
+        image_source(info_cache),
+        contrast_controls=True,
+        black=config.image_black,
+        white=config.image_white,
     )
 
     seg = statebuilder.SegmentationLayerConfig(
@@ -196,8 +202,8 @@ def generate_statebuider_syn_grouped(
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
         contrast_controls=True,
-        black=0.35,
-        white=0.65,
+        black=config.image_black,
+        white=config.image_white,
     )
 
     if preselect:
@@ -248,7 +254,10 @@ def generate_url_cell_types(
 
     cell_types = pd.unique(df["cell_type"].dropna())
     img = statebuilder.ImageLayerConfig(
-        image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
+        image_source(info_cache),
+        contrast_controls=True,
+        black=config.image_black,
+        white=config.image_white,
     )
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),
@@ -302,7 +311,10 @@ def generate_statebuilder_syn_cell_types(
 
     cell_types = pd.unique(df[cell_type_column].dropna())
     img = statebuilder.ImageLayerConfig(
-        image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
+        image_source(info_cache),
+        contrast_controls=True,
+        black=config.image_black,
+        white=config.image_white,
     )
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),

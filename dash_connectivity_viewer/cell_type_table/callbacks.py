@@ -189,7 +189,7 @@ def register_callbacks(app, config):
     )
     def update_link(rows, selected_rows, info_cache, data_resolution):
         def state_text(n):
-            return f"Neuroglancer: ({n} partners)"
+            return f"Neuroglancer: ({n} rows)"
 
         if rows is None or len(rows) == 0:
             sb = generate_statebuilder(info_cache, c, anno_layer="anno")
@@ -228,9 +228,10 @@ def register_callbacks(app, config):
         Input("data-table", "data"),
         Input("client-info-json", "data"),
         InputDatastack,
+        Input("data-resolution-json", "data"),
         prevent_initial_call=True,
     )
-    def update_whole_table_link(_1, _2, rows, info_cache, datastack):
+    def update_whole_table_link(_1, _2, rows, info_cache, datastack, data_resolution):
         ctx = callback_context
         if not ctx.triggered:
             return ""
@@ -257,7 +258,14 @@ def register_callbacks(app, config):
         if len(df) > c.max_dataframe_length:
             try:
                 client = make_client(datastack, c.server_address)
-                state = generate_url_cell_types([], df, info_cache, c, return_as="dict")
+                state = generate_url_cell_types(
+                    [],
+                    df,
+                    info_cache,
+                    c,
+                    return_as="dict",
+                    data_resolution=data_resolution,
+                )
                 state_id = client.state.upload_state_json(state)
                 ngl_url = client.info.viewer_site()
                 if ngl_url is None:
@@ -266,7 +274,9 @@ def register_callbacks(app, config):
             except Exception as e:
                 return html.Div(str(e)), "Error", True
         else:
-            url = generate_url_cell_types([], df, info_cache, c)
+            url = generate_url_cell_types(
+                [], df, info_cache, c, data_resolution=data_resolution
+            )
 
         if sampled:
             link_text = f"Neuroglancer Link (State very large — Random {c.max_server_dataframe_length} shown)"

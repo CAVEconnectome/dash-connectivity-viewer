@@ -23,6 +23,9 @@ class CommonConfig(object):
         if self.server_address is None:
             raise ValueError("Must set server address parameter!")
 
+        self.image_black = config.get("image_black", 0)
+        self.image_white = config.get("image_white", 1)
+
         self.target_root_id_per_call = config.get("target_root_id_per_call", 200)
         self.max_chunks = config.get("max_chunks", 20)
         self.pool_maxsize = 2 * self.max_chunks
