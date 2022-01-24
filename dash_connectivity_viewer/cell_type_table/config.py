@@ -5,8 +5,9 @@ class CellTypeConfig(CommonConfig):
     def __init__(self, config):
         super().__init__(config)
 
-        self.allowed_cell_type_schema = config.get(
-            "ct_cell_type_schema", ["cell_type_local"]
+        self.allowed_cell_type_schema_bridge = config.get("ct_cell_type_schema", {})
+        self.allowed_cell_type_schema = list(
+            self.allowed_cell_type_schema_bridge.keys()
         )
 
         self.ct_cell_type_point = config.get("ct_schema_soma_pt", "pt")

@@ -7,6 +7,7 @@ dash==2
 dash_bootstrap_components
 requests
 caveclient>=4.11
+dfbridge>=0.0.2
 plotly
 loguru
 orjson

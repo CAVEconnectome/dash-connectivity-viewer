@@ -3,6 +3,7 @@ import numpy as np
 from ..common.lookup_utilities import get_root_id_from_nuc_id
 from ..common.link_utilities import voxel_resolution_from_info
 from caveclient import CAVEclient
+from dfbridge import DataframeBridge
 from copy import copy
 
 
@@ -23,7 +24,13 @@ class TableViewer(object):
             server_address=client.server_address,
             auth_token=client.auth.token,
         )
+        self._table_schema = self._client.materialize.get_table_metadata(table_name)[
+            "schema_type"
+        ]
         self.config = config
+        self._cell_type_bridge_schema = config.allowed_cell_type_schema_bridge.get(
+            self._table_schema
+        )
 
         if config.soma_table is None:
             soma_table = client.info.get_datastack_info().get("soma_table")
@@ -73,6 +80,10 @@ class TableViewer(object):
             self._populate_data()
         return self._data_resolution
 
+    @property
+    def cell_type_bridge(self):
+        return DataframeBridge(self._cell_type_bridge_schema)
+
     def _populate_data(self):
         filter_in_dict = {}
         if self._id_query is not None:
@@ -80,6 +91,7 @@ class TableViewer(object):
         if self._annotation_query is not None:
             filter_in_dict.update({"id": self._annotation_query})
         filter_in_dict.update(self._column_query)
+
         df = self.client.materialize.query_table(
             self.table_name,
             filter_in_dict=filter_in_dict,
@@ -87,7 +99,8 @@ class TableViewer(object):
             split_positions=True,
         )
 
-        self._data = df
+        self._data = self.cell_type_bridge.reformat(df).fillna(np.nan)
+
         self._data_resolution = df.attrs.get("table_voxel_resolution")
 
     def _process_id_query(self):

@@ -13,8 +13,20 @@ flywire_config = {
 fanc_config = {
     "datastack": "fanc_production_mar2021",
     "server_address": "https://global.daf-apis.com",
+    "ct_cell_type_schema": {
+        "cell_type_local": None,
+        "bound_tag": {
+            "id": "id",
+            "classification_system": None,
+            "cell_type": "tag",
+            "pt_root_id": "pt_root_id",
+            "pt_position_x": "pt_position_x",
+            "pt_position_y": "pt_position_y",
+            "pt_position_z": "pt_position_z",
+        },
+    },
 }
 
 if __name__ == "__main__":
-    app = create_app(config=minnie_config)
+    app = create_app(config=fanc_config)
     app.run_server(port=8050)

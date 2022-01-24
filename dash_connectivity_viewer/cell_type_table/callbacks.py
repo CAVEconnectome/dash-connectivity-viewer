@@ -198,7 +198,7 @@ def register_callbacks(app, config):
             link_color = (True,)
         else:
             df = pd.DataFrame(rows)
-            if len(df) > c.max_dataframe_length:
+            if len(df) > c.max_dataframe_length and len(selected_rows) == 0:
                 url = ""
                 link_name = "State Too Large"
                 link_color = True
