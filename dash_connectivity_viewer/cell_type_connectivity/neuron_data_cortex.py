@@ -1,32 +1,52 @@
-from re import A, I
+import pandas as pd
+import numpy as np
 from ..common.neuron_data_base import NeuronData
-from .config import *
 
 
-def _schema_property_table():
-    return {
+def _schema_property_table(config, schema_name=None):
+    prop_table = {
         "root_id": "pt_root_id",
         "include": ["classification_system", "cell_type"],
     }
+    if schema_name:
+        prop_table["table_bridge_schema"] = config.allowed_cell_type_schema_bridge.get(
+            schema_name
+        )
+    return prop_table
 
 
-def _cell_type_property_entry(cell_type_table):
-    return {cell_type_table: _schema_property_table()}
+def _cell_type_property_entry(cell_type_table, config, schema_name=None):
+    return {cell_type_table: _schema_property_table(config, schema_name=schema_name)}
 
 
 def _is_inhibitory_df(df, is_inhibitory_column, valence_map):
     if len(df) == 0:
         df[is_inhibitory_column] = None
 
-    def _is_inhibitory_row(row, valence_map):
-        if pd.isna(row[valence_map[0]]):
-            return np.nan
-        return row[valence_map[0]] == valence_map[2]
+    col = valence_map.get("column", None)
+    e_str = valence_map.get("e", None)
+    i_str = valence_map.get("i", None)
+    ei_str = []
+    if e_str:
+        ei_str.append(e_str)
+    if i_str:
+        ei_str.append(i_str)
 
-    df[is_inhibitory_column] = df.apply(
-        lambda x: _is_inhibitory_row(x, valence_map), axis=1
-    )
+    def _is_inhibitory_row(row):
+        if row[col] in ei_str:
+            return row[col] == i_str
+        else:
+            return np.nan
+
+    df[is_inhibitory_column] = df.apply(lambda x: _is_inhibitory_row(x), axis=1)
     return df
+
+
+def _compute_depth_y(xyz, data_resolution):
+    if np.any(pd.isna(xyz)):
+        return np.nan
+    else:
+        return xyz[1] * data_resolution[1] / 1_000
 
 
 def _extract_depth(df, depth_column, position_column, data_resolution):
@@ -34,14 +54,8 @@ def _extract_depth(df, depth_column, position_column, data_resolution):
         df[depth_column] = None
         return df
 
-    def _extract_depth_row(row, data_resolution):
-        if np.any(pd.isna(row)):
-            return np.nan
-        else:
-            return row[1] * data_resolution[1] / 1000
-
     df[depth_column] = df[position_column].apply(
-        lambda x: _extract_depth_row(x, data_resolution)
+        lambda x: _compute_depth_y(x, data_resolution)
     )
     return df
 
@@ -51,96 +65,82 @@ class NeuronDataCortex(NeuronData):
         self,
         object_id,
         client,
+        config,
         cell_type_table=None,
+        schema_name=None,
         timestamp=None,
-        synapse_table=None,
-        soma_table=None,
         n_threads=None,
-        synapse_position_point=syn_pt_position_col,
-        cell_position_point=cell_pt_position_col,
-        soma_id_column=NUCLEUS_ID_COLUMN,
         id_type="root",
-        soma_table_query=soma_table_query,
-        valence_map={},
-        soma_depth_column=soma_depth_column,
-        is_inhibitory_column=is_inhibitory_column,
-        synapse_depth_column=synapse_depth_column,
-        cell_type_column=cell_type_column,
     ):
 
+        self.config = config
         self.cell_type_table = cell_type_table
+        self.schema_type = schema_name
         if cell_type_table is not None:
-            property_tables = _cell_type_property_entry(cell_type_table)
+            property_tables = _cell_type_property_entry(
+                cell_type_table, config, schema_name=self.schema_type
+            )
         else:
-            property_tables = {}
-        self.valence_map = valence_map
-        self.soma_depth_column = soma_depth_column
-        self.synapse_depth_column = synapse_depth_column
-        self.is_inhibitory_column = is_inhibitory_column
-        self.cell_type_column = cell_type_column
-
-        self._synapse_data_resolution = [4, 4, 40]
-        self._soma_data_resolution = [4, 4, 40]
-
+            property_tables = dict()
+        self.valence_map = config.table_valence_map.get(cell_type_table)
         super().__init__(
             object_id,
             client,
+            config,
             property_tables=property_tables,
             timestamp=timestamp,
-            synapse_table=synapse_table,
-            soma_table=soma_table,
             n_threads=n_threads,
-            synapse_position_point=synapse_position_point,
-            cell_position_point=cell_position_point,
-            soma_id_column=soma_id_column,
             id_type=id_type,
-            soma_table_query=soma_table_query,
         )
 
-    def _decorate_synapse_dataframe(self, df):
-        df = self._merge_property_tables(df, "post_pt_root_id")
+    def _decorate_synapse_dataframe(self, df, merge_column):
+        df = self._merge_property_tables(df, merge_column)
 
-        if self.is_inhibitory_column is not None:
+        if self.config.is_inhibitory_column is not None:
             if self.valence_map:
                 df = _is_inhibitory_df(
                     df,
-                    self.is_inhibitory_column,
+                    self.config.is_inhibitory_column,
                     self.valence_map,
                 )
             else:
-                df[self.is_inhibitory_column] = np.nan
-        if self.soma_depth_column is not None:
+                df[self.config.is_inhibitory_column] = np.nan
+        if self.config.soma_depth_column is not None and self.soma_table is not None:
             df = _extract_depth(
                 df,
-                self.soma_depth_column,
-                self.soma_position_column,
-                self._soma_data_resolution,
+                self.config.soma_depth_column,
+                self.config.soma_position_agg,
+                self.property_data_resolution(self.soma_table),
             )
         return df
 
     def pre_syn_df_plus(self):
-        return self._decorate_synapse_dataframe(self.pre_syn_df())
+        return self._decorate_synapse_dataframe(
+            self.pre_syn_df(), self.config.post_pt_root_id
+        )
 
     def post_syn_df_plus(self):
-        return self._decorate_synapse_dataframe(self.post_syn_df())
+        return self._decorate_synapse_dataframe(
+            self.post_syn_df(), self.config.pre_pt_root_id
+        )
 
     def _decorate_partner_dataframe(self, df):
-        if self.soma_depth_column is not None:
+        if self.config.soma_depth_column is not None and self.soma_table is not None:
             df = _extract_depth(
                 df,
-                self.soma_depth_column,
-                self.soma_position_column,
-                self._soma_data_resolution,
+                self.config.soma_depth_column,
+                self.config.soma_position_agg,
+                self.property_data_resolution(self.soma_table),
             )
-        if self.is_inhibitory_column is not None:
+        if self.config.is_inhibitory_column is not None:
             if self.valence_map:
                 df = _is_inhibitory_df(
                     df,
-                    self.is_inhibitory_column,
+                    self.config.is_inhibitory_column,
                     self.valence_map,
                 )
             else:
-                df[self.is_inhibitory_column] = np.nan
+                df[self.config.is_inhibitory_column] = np.nan
         return df
 
     def partners_in_plus(self):
@@ -151,11 +151,16 @@ class NeuronDataCortex(NeuronData):
 
     def _get_syn_df(self):
         super()._get_syn_df()
-        if self.synapse_depth_column is not None:
+        if self.config.synapse_depth_column is not None:
             for syn_df in [self._pre_syn_df, self._post_syn_df]:
                 _ = _extract_depth(
                     syn_df,
-                    self.synapse_depth_column,
-                    self.synapse_position_column,
+                    self.config.synapse_depth_column,
+                    self.config.syn_pt_position,
                     self._synapse_data_resolution,
                 )
+
+    def soma_depth(self):
+        return _compute_depth_y(
+            self.soma_location(), self.property_data_resolution(self.soma_table)
+        )

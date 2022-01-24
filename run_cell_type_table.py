@@ -1,34 +1,38 @@
 from dash_connectivity_viewer.cell_type_table import create_app
 
-config = {
-    "cell_type_dropdown_options": [
-        {
-            "label": "All Soma Prediction",
-            "value": "allen_soma_coarse_cell_class_model_v1",
+minnie_config = {
+    "datastack": "minnie65_phase3_v1",
+    "server_address": "https://global.daf-apis.com",
+    "ct_cell_type_schema": {
+        "cell_type_local": None,
+    },
+}
+
+flywire_config = {
+    "datastack": "flywire_fafb_production",
+    "server_address": "https://global.daf-apis.com",
+    "ct_cell_type_schema": {
+        "cell_type_local": None,
+    },
+}
+
+fanc_config = {
+    "datastack": "fanc_production_mar2021",
+    "server_address": "https://global.daf-apis.com",
+    "ct_cell_type_schema": {
+        "cell_type_local": None,
+        "bound_tag": {
+            "id": "id",
+            "classification_system": None,
+            "cell_type": "tag",
+            "pt_root_id": "pt_root_id",
+            "pt_position_x": "pt_position_x",
+            "pt_position_y": "pt_position_y",
+            "pt_position_z": "pt_position_z",
         },
-        {
-            "label": "Column Census (slanted)",
-            "value": "allen_v1_column_types_slanted",
-        },
-        {
-            "label": "Column Census (straight)",
-            "value": "allen_v1_column_types_v2",
-        },
-        {
-            "label": "Thalamic Axons",
-            "value": "allen_v1_column_thalamic",
-        },
-        {
-            "label": "Layer 5 IT PyC Subtypes",
-            "value": "allen_column_l5it_types",
-        },
-        {
-            "label": "Basket Subtypes",
-            "value": "allen_column_basket_molecular",
-        },
-    ],
+    },
 }
 
 if __name__ == "__main__":
-    app = create_app(config=config)
+    app = create_app(config=minnie_config)
     app.run_server(port=8050)

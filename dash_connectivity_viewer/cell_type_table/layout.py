@@ -7,9 +7,6 @@ import flask
 
 from ..common.dash_url_helper import create_component_kwargs, State
 
-from .config import *
-
-
 #####################
 # title must be set #
 #####################
@@ -193,7 +190,7 @@ def page_layout(state: State = {}):
                 dbc.Col(
                     dash_table.DataTable(
                         id="data-table",
-                        columns=[{"name": i, "id": i} for i in ct_table_columns],
+                        columns=[{"id": "", "name": ""}],
                         data=[],
                         css=[
                             {
@@ -310,7 +307,7 @@ def page_layout(state: State = {}):
             **create_component_kwargs(
                 state,
                 id_inner="datastack",
-                value=DEFAULT_DATASTACK,
+                value="",
                 type="text",
             ),
         ),
@@ -337,6 +334,7 @@ def page_layout(state: State = {}):
             html.Div(datastack_comp, style={"display": "none"}),
             dcc.Store(id="client-info-json"),
             dcc.Store(id="table-resolution-json"),
+            dcc.Store(id='data-resolution-json'),
         ]
     )
     return layout

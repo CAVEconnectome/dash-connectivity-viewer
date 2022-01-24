@@ -1,4 +1,4 @@
-nglui>=2.8
+nglui>=2.9
 pandas>=1.3.5
 numpy
 seaborn
@@ -7,6 +7,7 @@ dash>=2<3
 dash_bootstrap_components>=1
 requests
 caveclient>=4.11
+dfbridge>=0.0.2
 plotly
 loguru
 orjson

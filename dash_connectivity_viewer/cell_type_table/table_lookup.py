@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 from ..common.lookup_utilities import get_root_id_from_nuc_id
-from .config import *
 from ..common.link_utilities import voxel_resolution_from_info
 from caveclient import CAVEclient
+from dfbridge import DataframeBridge
 from copy import copy
 
 
@@ -12,14 +12,11 @@ class TableViewer(object):
         self,
         table_name,
         client,
-        bound_point="pt",
+        config,
+        timestamp=None,
         id_query=None,
         id_query_type=None,
-        soma_table=None,
         column_query={},
-        soma_id_column=NUCLEUS_ID_COLUMN,
-        soma_table_query=soma_table_query,
-        timestamp=None,
     ):
 
         self._client = CAVEclient(
@@ -27,26 +24,24 @@ class TableViewer(object):
             server_address=client.server_address,
             auth_token=client.auth.token,
         )
+        self._table_schema = self._client.materialize.get_table_metadata(table_name)[
+            "schema_type"
+        ]
+        self.config = config
+        self._cell_type_bridge_schema = config.allowed_cell_type_schema_bridge.get(
+            self._table_schema
+        )
 
-        if soma_table is None:
+        if config.soma_table is None:
             soma_table = client.info.get_datastack_info().get("soma_table")
+
         self._soma_table = soma_table
-        self._soma_id_column = soma_id_column
-        self._soma_table_query = soma_table_query
-        self._soma_root_id_column = bound_pt_root_id(cell_pt_position_col)
-
         self._table_name = table_name
-
-        for k, v in column_query.items():
-            if isinstance(v, str):
-                column_query[k] = [v]
-        self._column_query = column_query
 
         self._data = None
         self._data_resolution = None
-        self._data_root_id_column = bound_pt_root_id(bound_point)
-        self._data_position_column = bound_pt_position(bound_point)
 
+        self._column_query = column_query
         self._annotation_query = None
         self._id_query = id_query
         self._id_query_type = id_query_type
@@ -85,13 +80,18 @@ class TableViewer(object):
             self._populate_data()
         return self._data_resolution
 
+    @property
+    def cell_type_bridge(self):
+        return DataframeBridge(self._cell_type_bridge_schema)
+
     def _populate_data(self):
         filter_in_dict = {}
         if self._id_query is not None:
-            filter_in_dict.update({self._data_root_id_column: self._id_query})
+            filter_in_dict.update({self.config.ct_cell_type_root_id: self._id_query})
         if self._annotation_query is not None:
             filter_in_dict.update({"id": self._annotation_query})
         filter_in_dict.update(self._column_query)
+
         df = self.client.materialize.query_table(
             self.table_name,
             filter_in_dict=filter_in_dict,
@@ -99,7 +99,8 @@ class TableViewer(object):
             split_positions=True,
         )
 
-        self._data = df
+        self._data = self.cell_type_bridge.reformat(df).fillna(np.nan)
+
         self._data_resolution = df.attrs.get("table_voxel_resolution")
 
     def _process_id_query(self):
@@ -116,9 +117,9 @@ class TableViewer(object):
     def _lookup_roots_from_nucleus(self, soma_ids):
         df = self.client.materialize.query_table(
             self.soma_table,
-            filter_in_dict={self._soma_id_column: soma_ids},
+            filter_in_dict={self.config.nucleus_id_column: soma_ids},
             timestamp=self.timestamp,
         )
-        if self._soma_table_query is not None:
-            df = df.query(self._soma_table)
-        return df[self._soma_root_id_column].values
+        if self.config.soma_table_query is not None:
+            df = df.query(self.config.soma_table_query)
+        return df[self.config.soma_pt_root_id].values

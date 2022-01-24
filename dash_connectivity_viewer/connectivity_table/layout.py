@@ -3,7 +3,6 @@ from dash import dcc
 from dash import html
 import dash_bootstrap_components as dbc
 import flask
-from .config import DEFAULT_DATASTACK, table_columns
 from ..common.dash_url_helper import create_component_kwargs, State
 
 title = "Synapse Table Viewer"
@@ -139,7 +138,7 @@ def page_layout(state: State = None):
                         dbc.Col(
                             dash_table.DataTable(
                                 id="data-table",
-                                columns=[{"name": i, "id": i} for i in table_columns],
+                                columns=[{"id": "", "name": ""}],
                                 data=[],
                                 css=[
                                     {
@@ -261,7 +260,7 @@ def page_layout(state: State = None):
                     **create_component_kwargs(
                         state,
                         id_inner="datastack",
-                        value=DEFAULT_DATASTACK,
+                        value="",
                     ),
                 ),
                 style={"display": "none"},

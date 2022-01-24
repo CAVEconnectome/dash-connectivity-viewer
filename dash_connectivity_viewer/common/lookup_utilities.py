@@ -1,6 +1,5 @@
 import flask
 from caveclient import CAVEclient
-from .config import soma_table_query, DEFAULT_SERVER_ADDRESS
 
 
 def get_all_schema_tables(
@@ -10,11 +9,11 @@ def get_all_schema_tables(
 ):
     if isinstance(schemata, str):
         schemata = [schemata]
-    client = make_client(datastack, config)
+    client = make_client(datastack, config.server_address)
     tables = client.materialize.get_tables()
     schema_tables = []
     for t in tables:
-        if t in config.get("omit_cell_type_tables", []):
+        if t in config.omit_cell_type_tables:
             continue
         meta = client.materialize.get_table_metadata(t)
         if meta["schema"] in schemata:
@@ -25,7 +24,7 @@ def get_all_schema_tables(
 def get_type_tables(schemata, datastack, config):
     tables = get_all_schema_tables(schemata, datastack, config)
 
-    named_options = config.get("cell_type_dropdown_options")
+    named_options = config.cell_type_dropdown_options
     if named_options is None:
         return tables
     else:
@@ -42,7 +41,7 @@ def get_type_tables(schemata, datastack, config):
     return new_tables
 
 
-def make_client(datastack, config):
+def make_client(datastack, server_address):
     """Build a framework client with appropriate auth token
 
     Parameters
@@ -54,13 +53,8 @@ def make_client(datastack, config):
     server_address : str, optional
         Global server address for the client, by default None. If None, uses the config dict.
 
-    Returns
-    -------
-    [type]
-        [description]
     """
     auth_token = flask.g.get("auth_token", None)
-    server_address = config.get("SERVER_ADDRESS")
     client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token)
     return client
 
@@ -69,8 +63,7 @@ def get_root_id_from_nuc_id(
     nuc_id,
     client,
     nucleus_table,
-    cell_root_id_column,
-    soma_id_column,
+    config,
     timestamp=None,
 ):
     """Look up current root id from a nucleus id
@@ -95,31 +88,35 @@ def get_root_id_from_nuc_id(
     """
     df = client.materialize.query_table(
         nucleus_table,
-        filter_equal_dict={soma_id_column: nuc_id},
+        filter_equal_dict={config.nucleus_id_column: nuc_id},
         timestamp=timestamp,
     )
     if len(df) == 0:
         return None
     else:
-        return df.iloc[0][cell_root_id_column]
+        return df.iloc[0][config.soma_pt_root_id]
 
 
 def get_nucleus_id_from_root_id(
-    root_id, client, nucleus_table, cell_root_id_column, soma_id_column, timestamp=None
+    root_id,
+    client,
+    nucleus_table,
+    config,
+    timestamp=None,
 ):
 
     df = client.materialize.query_table(
         nucleus_table,
-        filter_equal_dict={cell_root_id_column: root_id},
+        filter_equal_dict={config.soma_pt_root_id: root_id},
         timestamp=timestamp,
     )
 
-    if soma_table_query is not None:
-        df = df.query(soma_table_query)
+    if config.soma_table_query is not None:
+        df = df.query(config.soma_table_query)
 
     if len(df) == 0:
         return None
     elif len(df) == 1:
-        return df[soma_id_column].values[0]
+        return df[config.nucleus_id_column].values[0]
     else:
-        return df[soma_id_column].values
+        return df[config.nucleus_id_column].values

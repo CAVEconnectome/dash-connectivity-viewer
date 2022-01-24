@@ -5,15 +5,10 @@ import numpy as np
 from seaborn import color_palette
 from itertools import cycle
 from .lookup_utilities import make_client
-from .config import (
-    root_id_col,
-    syn_pt_position_col,
-    bound_pt_root_id,
-    bound_pt_position,
-)
 
-EMPTY_INFO_CACHE = {"aligned_volume": {}}
+EMPTY_INFO_CACHE = {"aligned_volume": {}, "cell_type_column": None}
 MAX_URL_LENGTH = 1_750_000
+DEFAULT_NGL = "https://neuromancer-seung-import.appspot.com/"
 
 
 def image_source(info_cache):
@@ -62,6 +57,7 @@ def statebuilder_kwargs(info_cache):
 
 def generate_statebuilder(
     info_cache,
+    config,
     base_root_id=None,
     base_color="#ffffff",
     preselect_all=True,
@@ -70,7 +66,10 @@ def generate_statebuilder(
     data_resolution=None,
 ):
     img = statebuilder.ImageLayerConfig(
-        image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
+        image_source(info_cache),
+        contrast_controls=True,
+        black=config.image_black,
+        white=config.image_white,
     )
     if preselect_all:
         selected_ids_column = [anno_column]
@@ -93,11 +92,12 @@ def generate_statebuilder(
     )
 
     points = statebuilder.PointMapper(
-        bound_pt_position(syn_pt_position_col),
+        config.syn_pt_position,
         linked_segmentation_column=anno_column,
         group_column=anno_column,
         multipoint=True,
         set_position=True,
+        collapse_groups=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
         anno_layer,
@@ -114,13 +114,15 @@ def generate_statebuilder(
     return sb
 
 
-def generate_statebuilder_pre(info_cache, preselect=False, data_resolution=None):
+def generate_statebuilder_pre(
+    info_cache, config, preselect=False, data_resolution=None
+):
 
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
         contrast_controls=True,
-        black=0.35,
-        white=0.65,
+        black=config.image_black,
+        white=config.image_white,
     )
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),
@@ -130,8 +132,8 @@ def generate_statebuilder_pre(info_cache, preselect=False, data_resolution=None)
         timestamp=timestamp(info_cache),
     )
     points = statebuilder.PointMapper(
-        bound_pt_position(syn_pt_position_col),
-        linked_segmentation_column=root_id_col,
+        config.syn_pt_position,
+        linked_segmentation_column=config.root_id_col,
         set_position=True,
         multipoint=True,
     )
@@ -148,9 +150,12 @@ def generate_statebuilder_pre(info_cache, preselect=False, data_resolution=None)
     return sb
 
 
-def generate_statebuilder_post(info_cache, data_resolution=None):
+def generate_statebuilder_post(info_cache, config, data_resolution=None):
     img = statebuilder.ImageLayerConfig(
-        image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
+        image_source(info_cache),
+        contrast_controls=True,
+        black=config.image_black,
+        white=config.image_white,
     )
 
     seg = statebuilder.SegmentationLayerConfig(
@@ -161,8 +166,8 @@ def generate_statebuilder_post(info_cache, data_resolution=None):
         timestamp=timestamp(info_cache),
     )
     points = statebuilder.PointMapper(
-        bound_pt_position(syn_pt_position_col),
-        linked_segmentation_column=root_id_col,
+        config.syn_pt_position,
+        linked_segmentation_column=config.root_id_col,
         set_position=True,
         multipoint=True,
     )
@@ -182,27 +187,29 @@ def generate_statebuilder_post(info_cache, data_resolution=None):
 def generate_statebuider_syn_grouped(
     info_cache,
     anno_name,
+    config,
     fixed_id_color="#FFFFFF",
     preselect=False,
     data_resolution=None,
 ):
     points = statebuilder.PointMapper(
-        point_column=bound_pt_position(syn_pt_position_col),
-        linked_segmentation_column=root_id_col,
-        group_column=root_id_col,
+        point_column=config.syn_pt_position,
+        linked_segmentation_column=config.root_id_col,
+        group_column=config.root_id_col,
         multipoint=True,
         set_position=True,
+        collapse_groups=True,
     )
 
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
         contrast_controls=True,
-        black=0.35,
-        white=0.65,
+        black=config.image_black,
+        white=config.image_white,
     )
 
     if preselect:
-        selected_ids_column = root_id_col
+        selected_ids_column = config.root_id_col
     else:
         selected_ids_column = None
 
@@ -235,7 +242,7 @@ def generate_url_cell_types(
     selected_rows,
     df,
     info_cache,
-    position_column="pt_position",
+    config,
     multipoint=False,
     fill_null=None,
     return_as="url",
@@ -249,7 +256,10 @@ def generate_url_cell_types(
 
     cell_types = pd.unique(df["cell_type"].dropna())
     img = statebuilder.ImageLayerConfig(
-        image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
+        image_source(info_cache),
+        contrast_controls=True,
+        black=config.image_black,
+        white=config.image_white,
     )
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),
@@ -270,8 +280,8 @@ def generate_url_cell_types(
             color=clr,
             linked_segmentation_layer=seg.name,
             mapping_rules=statebuilder.PointMapper(
-                position_column,
-                linked_segmentation_column="pt_root_id",
+                config.soma_pt_position,
+                linked_segmentation_column=config.soma_pt_root_id,
                 set_position=True,
                 multipoint=multipoint,
             ),
@@ -291,8 +301,8 @@ def generate_url_cell_types(
 def generate_statebuilder_syn_cell_types(
     info_cache,
     rows,
+    config,
     cell_type_column="cell_type",
-    position_column=syn_pt_position_col,
     multipoint=False,
     fill_null=None,
     data_resolution=None,
@@ -303,7 +313,10 @@ def generate_statebuilder_syn_cell_types(
 
     cell_types = pd.unique(df[cell_type_column].dropna())
     img = statebuilder.ImageLayerConfig(
-        image_source(info_cache), contrast_controls=True, black=0.35, white=0.65
+        image_source(info_cache),
+        contrast_controls=True,
+        black=config.image_black,
+        white=config.image_white,
     )
     seg = statebuilder.SegmentationLayerConfig(
         seg_source(info_cache),
@@ -325,8 +338,8 @@ def generate_statebuilder_syn_cell_types(
             color=clr,
             linked_segmentation_layer=seg.name,
             mapping_rules=statebuilder.PointMapper(
-                bound_pt_position(position_column),
-                linked_segmentation_column=root_id_col,
+                config.syn_pt_position,
+                linked_segmentation_column=config.root_id_col,
                 set_position=True,
                 multipoint=multipoint,
             ),
@@ -347,8 +360,11 @@ def make_url_robust(df, sb, datastack, config):
     """Generate a url from a neuroglancer state. If too long, return through state server"""
     url = sb.render_state(df, return_as="url")
     if len(url) > MAX_URL_LENGTH:
-        client = make_client(datastack, config)
+        client = make_client(datastack, config.server_address)
         state = sb.render_state(df, return_as="dict")
         state_id = client.state.upload_state_json(state)
-        url = client.state.build_neuroglancer_url(state_id)
+        ngl_url = client.info.viewer_site()
+        if ngl_url is None:
+            ngl_url = DEFAULT_NGL
+        url = client.state.build_neuroglancer_url(state_id, ngl_url=ngl_url)
     return url
