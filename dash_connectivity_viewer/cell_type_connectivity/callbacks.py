@@ -236,13 +236,17 @@ def register_callbacks(app, config):
                 None,
             )
 
+        if not ct_table_value:
+            ct_table_value = None
+        info_cache["cell_type_column"] = ct_table_value
+
         if len(query_toggle) == 1 and not config.get("disallow_live_query", False):
             live_query = True
         else:
             live_query = False
 
         if live_query:
-            timestamp = datetime.datetime.now()
+            timestamp = datetime.datetime.utcnow()
         else:
             timestamp = client.materialize.get_timestamp()
             info_cache["ngl_timestamp"] = timestamp.timestamp()
@@ -271,14 +275,19 @@ def register_callbacks(app, config):
             else:
                 raise ValueError('id_type must be either "root_id" or "nucleus_id"')
 
-        if not ct_table_value:
-            ct_table_value = None
-
         try:
+            if ct_table_value:
+                schema_name = client.materialize.get_table_metadata(ct_table_value)[
+                    "schema_type"
+                ]
+            else:
+                schema_name = None
+
             nrn_data = NeuronData(
                 object_id,
                 client=client,
                 cell_type_table=ct_table_value,
+                schema_name=schema_name,
                 config=c,
                 timestamp=timestamp,
                 id_type=object_id_type,
@@ -310,12 +319,15 @@ def register_callbacks(app, config):
                 nuc_id_text = f"  (nucleus id: {nrn_data.nucleus_id})"
             else:
                 nuc_id_text = ""
-            if live_query:
-                message_text = (
-                    f"Current connectivity for root id {root_id}{nuc_id_text}"
-                )
+            if ct_table_value:
+                ct_text = f"table {ct_table_value}"
             else:
-                message_text = f"Connectivity for root id {root_id}{nuc_id_text} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
+                ct_text = "no cell type table"
+
+            if live_query:
+                message_text = f"Current connectivity for root id {root_id}{nuc_id_text} and {ct_text}"
+            else:
+                message_text = f"Connectivity for root id {root_id}{nuc_id_text} and {ct_text} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
 
             plts = make_plots(nrn_data, c)
 
@@ -392,6 +404,9 @@ def register_callbacks(app, config):
 
         def small_state_text(n):
             return f"Neuroglancer: ({n} partners)"
+
+        if info_cache is None:
+            return "", "No datastack set", True, ""
 
         if rows is None or len(rows) == 0:
             rows = {}
@@ -497,6 +512,13 @@ def register_callbacks(app, config):
     def generate_cell_typed_input_link(
         _1, _2, rows, info_cache, datastack, data_resolution
     ):
+        if info_cache["cell_type_column"] is None:
+            return (
+                html.Div(""),
+                "No Cell Type Table",
+                True,
+            )
+
         if not allowed_action_trigger(
             callback_context, ["cell-typed-input-link-button"]
         ):
@@ -571,6 +593,13 @@ def register_callbacks(app, config):
     def generate_cell_typed_output_link(
         _1, _2, rows, info_cache, datastack, data_resolution
     ):
+        if info_cache["cell_type_column"] is None:
+            return (
+                html.Div(""),
+                "No Cell Type Table",
+                True,
+            )
+
         if not allowed_action_trigger(
             callback_context, ["cell-typed-output-link-button"]
         ):

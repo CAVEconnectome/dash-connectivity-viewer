@@ -25,6 +25,9 @@ minnie_config = {
             "agg": "sum",
         },
     },
+    "ct_conn_cell_type_schema": {
+        "cell_type_local": None,
+    },
     "cell_type_column_schema_lookup": {
         "cell_type_local": "cell_type",
     },
@@ -42,6 +45,8 @@ minnie_config = {
         },
     },
     "default_cell_type_option": "allen_soma_coarse_cell_class_model_v1",
+    "image_black": 0.35,
+    "image_white": 0.7,
 }
 
 
@@ -49,13 +54,13 @@ flywire_config = {
     "datastack": "flywire_fafb_production",
     "server_address": "https://global.daf-apis.com",
     "syn_position_column": "pre_pt",
-    "cell_type_column_schema_lookup": {
-        "cell_type_local": "cell_type",
+    "ct_conn_cell_type_schema": {
+        "cell_type_local": None,
     },
     "ct_conn_show_depth_plots": False,
 }
 
 
 if __name__ == "__main__":
-    app = create_app(config=minnie_config)
-    app.run_server(port=8051, debug=True)
+    app = create_app(config=flywire_config)
+    app.run_server(port=8050)

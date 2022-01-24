@@ -17,9 +17,8 @@ fanc_config = {
     "datastack": "fanc_production_mar2021",
     "server_address": "https://global.daf-apis.com",
     "syn_position_column": "pre_pt",
-    "nucleus_table": "nuclei_aug2021ver2",
 }
 
 if __name__ == "__main__":
-    app = create_app(config=fanc_config)
+    app = create_app(config=flywire_config)
     app.run_server(port=8050)

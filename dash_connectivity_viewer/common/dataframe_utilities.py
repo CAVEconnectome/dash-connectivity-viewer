@@ -98,7 +98,6 @@ def synapse_data(
 ):
     if n_threads > 2:
         n_threads = 2
-
     with ThreadPoolExecutor(n_threads) as exe:
         pre = exe.submit(
             pre_synapse_df,

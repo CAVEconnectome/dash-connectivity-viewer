@@ -1,13 +1,19 @@
 from dash_connectivity_viewer.cell_type_table import create_app
 
 minnie_config = {
-    "datastack": "minnie65_phase3_v1`",
+    "datastack": "minnie65_phase3_v1",
     "server_address": "https://global.daf-apis.com",
+    "ct_cell_type_schema": {
+        "cell_type_local": None,
+    },
 }
 
 flywire_config = {
     "datastack": "flywire_fafb_production",
     "server_address": "https://global.daf-apis.com",
+    "ct_cell_type_schema": {
+        "cell_type_local": None,
+    },
 }
 
 fanc_config = {
@@ -28,5 +34,5 @@ fanc_config = {
 }
 
 if __name__ == "__main__":
-    app = create_app(config=fanc_config)
+    app = create_app(config=minnie_config)
     app.run_server(port=8050)

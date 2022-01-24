@@ -123,9 +123,10 @@ def register_callbacks(app, config):
 
         live_query = len(live_query_toggle) == 1
         if live_query:
-            timestamp = client.materialize.get_timestamp()
+            timestamp = datetime.datetime.utcnow()
         else:
-            timestamp = datetime.datetime.now()
+            timestamp = client.materialize.get_timestamp()
+
 
         if anno_id is None:
             root_id = None
@@ -248,6 +249,9 @@ def register_callbacks(app, config):
 
         def small_state_text(n):
             return f"Neuroglancer: ({n} partners)"
+
+        if info_cache is None:
+            return "", "No datastack set", True, ""
 
         if rows is None or len(rows) == 0:
             rows = {}

@@ -138,8 +138,9 @@ class TypedConnectivityConfig(CommonConfig):
             [self.height_bnds[0:1], self.layer_bnds, self.height_bnds[1:]]
         )
 
-        self.allowed_cell_type_schema = config.get(
-            "ct_conn_cell_type_schema", ["cell_type_local"]
+        self.allowed_cell_type_schema_bridge = config.get("ct_conn_cell_type_schema")
+        self.allowed_cell_type_schema = list(
+            self.allowed_cell_type_schema_bridge.keys()
         )
 
         dendrite_color = config.get("ct_conn_dendrite_color", (0.894, 0.102, 0.110))

@@ -6,7 +6,7 @@ from seaborn import color_palette
 from itertools import cycle
 from .lookup_utilities import make_client
 
-EMPTY_INFO_CACHE = {"aligned_volume": {}}
+EMPTY_INFO_CACHE = {"aligned_volume": {}, "cell_type_column": None}
 MAX_URL_LENGTH = 1_750_000
 DEFAULT_NGL = "https://neuromancer-seung-import.appspot.com/"
 
@@ -97,6 +97,7 @@ def generate_statebuilder(
         group_column=anno_column,
         multipoint=True,
         set_position=True,
+        collapse_groups=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
         anno_layer,
@@ -197,6 +198,7 @@ def generate_statebuider_syn_grouped(
         group_column=config.root_id_col,
         multipoint=True,
         set_position=True,
+        collapse_groups=True,
     )
 
     img = statebuilder.ImageLayerConfig(

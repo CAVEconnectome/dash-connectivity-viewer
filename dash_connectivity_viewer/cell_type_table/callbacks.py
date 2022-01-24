@@ -122,7 +122,7 @@ def register_callbacks(app, config):
         live_query = len(live_query_toggle) == 1
 
         if live_query:
-            timestamp = datetime.datetime.now()
+            timestamp = datetime.datetime.utcnow()
         else:
             timestamp = client.materialize.get_timestamp()
             info_cache["ngl_timestamp"] = timestamp.timestamp()
@@ -191,11 +191,14 @@ def register_callbacks(app, config):
         def state_text(n):
             return f"Neuroglancer: ({n} rows)"
 
+        if info_cache is None:
+            return "", "No datastack set", True, ""
+
         if rows is None or len(rows) == 0:
             sb = generate_statebuilder(info_cache, c, anno_layer="anno")
             url = sb.render_state(None, return_as="url")
             link_name = state_text(0)
-            link_color = (True,)
+            link_color = True
         else:
             df = pd.DataFrame(rows)
             if len(df) > c.max_dataframe_length and len(selected_rows) == 0:

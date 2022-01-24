@@ -3,15 +3,20 @@ import numpy as np
 from ..common.neuron_data_base import NeuronData
 
 
-def _schema_property_table(config):
-    return {
+def _schema_property_table(config, schema_name=None):
+    prop_table = {
         "root_id": "pt_root_id",
         "include": ["classification_system", "cell_type"],
     }
+    if schema_name:
+        prop_table["table_bridge_schema"] = config.allowed_cell_type_schema_bridge.get(
+            schema_name
+        )
+    return prop_table
 
 
-def _cell_type_property_entry(cell_type_table, config):
-    return {cell_type_table: _schema_property_table(config)}
+def _cell_type_property_entry(cell_type_table, config, schema_name=None):
+    return {cell_type_table: _schema_property_table(config, schema_name=schema_name)}
 
 
 def _is_inhibitory_df(df, is_inhibitory_column, valence_map):
@@ -62,6 +67,7 @@ class NeuronDataCortex(NeuronData):
         client,
         config,
         cell_type_table=None,
+        schema_name=None,
         timestamp=None,
         n_threads=None,
         id_type="root",
@@ -69,10 +75,13 @@ class NeuronDataCortex(NeuronData):
 
         self.config = config
         self.cell_type_table = cell_type_table
+        self.schema_type = schema_name
         if cell_type_table is not None:
-            property_tables = _cell_type_property_entry(cell_type_table, config)
+            property_tables = _cell_type_property_entry(
+                cell_type_table, config, schema_name=self.schema_type
+            )
         else:
-            property_tables = {}
+            property_tables = dict()
         self.valence_map = config.table_valence_map.get(cell_type_table)
         super().__init__(
             object_id,

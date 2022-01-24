@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from dfbridge import DataframeBridge
 from caveclient import CAVEclient
 
 from dash_connectivity_viewer.common.lookup_utilities import (
@@ -265,7 +266,10 @@ class NeuronData(object):
             self.n_threads,
         )
         for k, df in dfs.items():
-            self._property_tables[k]["data"] = df
+            dbf = DataframeBridge(
+                self._property_tables[k].get("table_bridge_schema", None)
+            )
+            self._property_tables[k]["data"] = dbf.reformat(df).fillna(np.nan)
             self._property_tables[k]["data_resolution"] = df.attrs.get(
                 "table_voxel_resolution"
             )
