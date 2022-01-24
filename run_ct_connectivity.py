@@ -28,9 +28,6 @@ minnie_config = {
     "ct_conn_cell_type_schema": {
         "cell_type_local": None,
     },
-    "cell_type_column_schema_lookup": {
-        "cell_type_local": "cell_type",
-    },
     "omit_cell_type_tables": ["nucleus_neuron_svm"],
     "valence_map": {
         "allen_v1_column_types_slanted": {

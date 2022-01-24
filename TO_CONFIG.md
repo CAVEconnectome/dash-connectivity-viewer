@@ -54,9 +54,8 @@ The net result of these two items is that the dataframe is filtered according to
 
 ## Cell Type Table
 
-### Optional variables
 
-* `ct_cell_type_schema` : List of items specifying the cell type schema to use. Currently, only schema that include the information in `cell_type_local` schema are supported, hence it is the default, but the plan is for this to generalize.
+* `ct_cell_type_schema` : *(Required)* A dict defining which schema can be used to act as a cell type table and how to remodel it to look like a cell type table. Keys are schema names, values are a schema dictionary to pass to [dbbridge](https://github.com/ceesem/dfbridge) to do the dataframe conversion. If no conversion is needed (e.g. for a `cell_type_local` table), the value can be `None`.
 
 * `ct_schema_soma_pt` : Name of the bound point indicating the soma locations in the cell type schema. Default is `pt`.
 
@@ -68,11 +67,13 @@ The net result of these two items is that the dataframe is filtered according to
 
   * `label` : Desired label for the table in the dropdown.
 
+
 ---
 ## Cell Type Connectivity
 
 Each item here is a key in a dictionary, with values described. All are lower case with underscores.
 
+* `ct_conn_cell_type_schema` : *(Required)* A dict defining which schema can be used to act as a cell type table and how to remodel it to look like a cell type table. Keys are schema names, values are a schema dictionary to pass to [dbbridge](https://github.com/ceesem/dfbridge) to do the dataframe conversion. If no conversion is needed (e.g. for a `cell_type_local` table), the value can be `None`.
 
 * `cell_type_dropdown_options` : If provided, renames specified columns. This should be a list of dictionaries with two keys:
   
@@ -90,14 +91,6 @@ Each item here is a key in a dictionary, with values described. All are lower ca
   * `e` : Value in column associated with excitatory neurons.
 
   * `i` : Value in column associated with inhibitory neurons.
-
-* `cell_type_column_schema_lookup` : This item is a dict mapping schema names as keys to the column name to use to indicate cell type in the table. This is how it will work to use additional schema for the cell typing, but this feature is not yet tested and probably won't work out of the box. At the moment, the value should be:
-
-        ```python
-        {
-            "cell_type_local": "cell_type",
-        },
-        ```
 
 * `default_cell_type_dropdown` : The value is the table name to select by default when loading the page fresh.
 
