@@ -6,6 +6,8 @@ minnie_config = {
     "ct_cell_type_schema": {
         "cell_type_local": None,
     },
+    "image_black": 0.35,
+    "image_white": 0.7,
 }
 
 flywire_config = {

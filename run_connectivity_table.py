@@ -5,6 +5,8 @@ minnie_config = {
     "datastack": "minnie65_phase3_v1",
     "server_address": "https://global.daf-apis.com",
     "syn_position_column": "ctr_pt",
+    "image_black": 0.35,
+    "image_white": 0.7,
 }
 
 flywire_config = {
