@@ -162,6 +162,8 @@ def page_layout(state: State = None):
                                 page_current=0,
                                 page_action="native",
                                 page_size=50,
+                                export_format="csv",
+                                export_headers="names",
                             ),
                             width=10,
                         ),
