@@ -63,8 +63,14 @@ def register_callbacks(app, config):
         OutputDatastack,
         InputDatastack,
     )
-    def define_datastack(_):
-        return c.default_datastack
+    def define_datastack(datastack):
+        if datastack is None:
+            datastack = ""
+
+        if len(datastack) == 0:
+            return c.default_datastack
+        else:
+            return datastack
 
     @app.callback(
         OutputCellTypeMenuOptions,
