@@ -14,6 +14,8 @@ These values are required for all tools.
 
 All remaining values are, in general, optional. However, variations in schema (particularly synapse schema) might demand some settings to make it work.
 
+* `disallow_live_query` : If set to True, live query toggle is disabled. Default is False.
+
 #### If left unset, inferred by info service
 
 * `voxel_resolution` : voxel resolution to use for the viewer, as three numbers separated by commas with no spaces. Can also be looked up from the info service, which is preferable.

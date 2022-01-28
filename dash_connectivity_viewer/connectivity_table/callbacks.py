@@ -38,6 +38,14 @@ StateLiveQuery = State(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
 )
 
+OutputLiveQueryToggle = Output(
+    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE},
+    "options",
+)
+OutputLiveQueryValue = Output(
+    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
+)
+
 
 def register_callbacks(app, config):
     c = ConnectivityConfig(config)
@@ -71,6 +79,20 @@ def register_callbacks(app, config):
             return datastack
 
     @app.callback(
+        OutputLiveQueryToggle,
+        OutputLiveQueryValue,
+        InputDatastack,
+        StateLiveQuery,
+    )
+    def disable_live_query(_, lq):
+        options_active = [{"label": "Live Query", "value": 1}]
+        options_disabled = [{"label": "Live Query", "value": 1, "disabled": True}]
+        if c.disallow_live_query:
+            return options_disabled, ""
+        else:
+            return options_active, lq
+
+    @app.callback(
         Output("target-table-json", "data"),
         Output("source-table-json", "data"),
         Output("output-tab", "label"),
@@ -92,7 +114,7 @@ def register_callbacks(app, config):
             t0 = time.time()
 
         try:
-            client = make_client(c.default_datastack, c.server_address)
+            client = make_client(datastack_name, c.server_address)
             info_cache = client.info.info_cache[datastack_name]
             info_cache["global_server"] = client.server_address
         except Exception as e:
@@ -128,10 +150,12 @@ def register_callbacks(app, config):
             id_type = "anno_id"
 
         live_query = len(live_query_toggle) == 1
-        if live_query:
+        if live_query and not c.disallow_live_query:
             timestamp = datetime.datetime.utcnow()
         else:
-            timestamp = client.materialize.get_timestamp()
+            timestamp = None
+            timestamp_ngl = client.materialize.get_timestamp()
+            info_cache["ngl_timestamp"] = timestamp_ngl.timestamp()
 
         if anno_id is None:
             root_id = None
@@ -144,9 +168,6 @@ def register_callbacks(app, config):
                 object_id_type = "nucleus"
             else:
                 raise ValueError('id_type must be either "root_id" or "nucleus_id"')
-
-        if not live_query:
-            info_cache["ngl_timestamp"] = timestamp.timestamp()
 
         try:
             nrn_data = NeuronData(
@@ -194,11 +215,11 @@ def register_callbacks(app, config):
                 f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {n_syn_post} , syn_out: {n_syn_pre}"
             )
 
-        if live_query:
+        if timestamp is not None:
             output_message = f"Current connectivity for root id {root_id}"
             output_status = "success"
         else:
-            output_message = f"Connectivity for root id {root_id} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
+            output_message = f"Connectivity for root id {root_id} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
             output_status = "success"
 
         return (

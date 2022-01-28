@@ -55,6 +55,14 @@ StateLiveQuery = State(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
 )
 
+OutputLiveQueryToggle = Output(
+    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE},
+    "options",
+)
+OutputLiveQueryValue = Output(
+    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
+)
+
 
 def cell_type_column_lookup(ct, schema_lookup, client):
     if ct is None:
@@ -187,6 +195,20 @@ def register_callbacks(app, config):
             return datastack
 
     @app.callback(
+        OutputLiveQueryToggle,
+        OutputLiveQueryValue,
+        InputDatastack,
+        StateLiveQuery,
+    )
+    def disable_live_query(_, lq):
+        options_active = [{"label": "Live Query", "value": 1}]
+        options_disabled = [{"label": "Live Query", "value": 1, "disabled": True}]
+        if c.disallow_live_query:
+            return options_disabled, ""
+        else:
+            return options_active, lq
+
+    @app.callback(
         OutputCellTypeMenuOptions,
         InputDatastack,
     )
@@ -246,7 +268,7 @@ def register_callbacks(app, config):
             ct_table_value = None
         info_cache["cell_type_column"] = ct_table_value
 
-        if len(query_toggle) == 1 and not config.get("disallow_live_query", False):
+        if len(query_toggle) == 1 and not c.disallow_live_query:
             live_query = True
         else:
             live_query = False
@@ -254,8 +276,9 @@ def register_callbacks(app, config):
         if live_query:
             timestamp = datetime.datetime.utcnow()
         else:
-            timestamp = client.materialize.get_timestamp()
-            info_cache["ngl_timestamp"] = timestamp.timestamp()
+            timestamp = None
+            timestamp_ngl = client.materialize.get_timestamp()
+            info_cache["ngl_timestamp"] = timestamp_ngl.timestamp()
 
         if anno_id is None or len(anno_id) == 0:
             return (
@@ -333,7 +356,7 @@ def register_callbacks(app, config):
             if live_query:
                 message_text = f"Current connectivity for root id {root_id}{nuc_id_text} and {ct_text}"
             else:
-                message_text = f"Connectivity for root id {root_id}{nuc_id_text} and {ct_text} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
+                message_text = f"Connectivity for root id {root_id}{nuc_id_text} and {ct_text} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
 
             plts = make_plots(nrn_data, c)
 

@@ -38,6 +38,15 @@ StateCategoryID = State({"id_inner": "id-type", "type": _COMPONENT_ID_TYPE}, "va
 StateLiveQuery = State(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
 )
+
+OutputLiveQueryToggle = Output(
+    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE},
+    "options",
+)
+OutputLiveQueryValue = Output(
+    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
+)
+
 ######################################
 # register_callbacks must be defined #
 ######################################
@@ -78,6 +87,20 @@ def register_callbacks(app, config):
     )
     def cell_type_dropdown(datastack):
         return get_type_tables(c.allowed_cell_type_schema, datastack, c)
+
+    @app.callback(
+        OutputLiveQueryToggle,
+        OutputLiveQueryValue,
+        InputDatastack,
+        StateLiveQuery,
+    )
+    def disable_live_query(_, lq):
+        options_active = [{"label": "Live Query", "value": 1}]
+        options_disabled = [{"label": "Live Query", "value": 1, "disabled": True}]
+        if c.disallow_live_query:
+            return options_disabled, ""
+        else:
+            return options_active, lq
 
     @app.callback(
         Output("data-table", "columns"),
@@ -127,11 +150,12 @@ def register_callbacks(app, config):
 
         live_query = len(live_query_toggle) == 1
 
-        if live_query:
+        if live_query and not c.disallow_live_query:
             timestamp = datetime.datetime.utcnow()
         else:
-            timestamp = client.materialize.get_timestamp()
-            info_cache["ngl_timestamp"] = timestamp.timestamp()
+            timestamp = None
+            timestamp_ngl = client.materialize.get_timestamp()
+            info_cache["ngl_timestamp"] = timestamp_ngl.timestamp()
 
         anno_type_lookup = {
             "root_id": "root",
@@ -159,7 +183,7 @@ def register_callbacks(app, config):
             if live_query:
                 output_report = f"Current state of cell type table {cell_type_table}"
             else:
-                output_report = f"Table {cell_type_table} materialized on {timestamp:%m/%d/%Y} (v{client.materialize.version})"
+                output_report = f"Table {cell_type_table} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
             output_color = "success"
         except Exception as e:
             df = pd.DataFrame(columns=c.ct_table_columns)

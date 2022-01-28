@@ -23,6 +23,7 @@ class CommonConfig(object):
         if self.server_address is None:
             raise ValueError("Must set server address parameter!")
 
+        self.disallow_live_query = config.get("disallow_live_query", False)
         self.image_black = config.get("image_black", 0)
         self.image_white = config.get("image_white", 1)
 
