@@ -58,6 +58,16 @@ flywire_config = {
 }
 
 
+fanc_config = {
+    "datastack": "fanc_production_mar2021",
+    "server_address": "https://global.daf-apis.com",
+    "syn_position_column": "pre_pt",
+    "ct_conn_cell_type_schema": {
+        "cell_type_local": None,
+    },
+    "ct_conn_show_depth_plots": False,
+}
+
 if __name__ == "__main__":
     app = create_app(config=flywire_config)
     app.run_server(port=8050)
