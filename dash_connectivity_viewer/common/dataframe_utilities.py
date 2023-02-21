@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import numpy as np
 
+DESIRED_RESOLUTION = [1,1,1]
 
 def assemble_pt_position(row, prefix=""):
     return np.array(
@@ -13,13 +14,51 @@ def assemble_pt_position(row, prefix=""):
         ]
     )
 
+def query_table_any(table, root_id_column, root_ids, client, timestamp):
+    ref_table = client.materialize.get_table_metadata(table).get('reference_table')
+    if ref_table is not None:
+        return _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table)
+    else:
+        return _query_table_single(table, root_id_column, root_ids, client, timestamp)
+
+def _query_table_single(table, root_id_column, root_ids, client, timestamp):
+    filter_kwargs = {}
+    if root_ids is not None:
+        if len(root_ids) == 1:
+            filter_kwargs['filter_equal_dict'] = {table: {root_id_column: root_ids[0]}}
+        else:
+            filter_kwargs['filter_in_dict'] = {table: {root_id_column: root_ids}}
+    return client.materialize.live_live_query(
+        table,
+        timestamp=timestamp,
+        split_positions=True,
+        desired_resolution=DESIRED_RESOLUTION,
+        **filter_kwargs,
+    )
+
+
+def _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table):
+    join = [[table, 'target_id', ref_table, 'id']]
+    filter_kwargs = {}
+    if root_ids is not None:
+        if len(root_ids) == 1:
+            filter_kwargs = {'filter_equal_dict': {ref_table: {root_id_column: root_ids[0]}}}
+        else:
+            filter_kwargs = {'filter_in_dict': {ref_table: {root_id_column: root_ids}}}
+    return client.materialize.live_live_query(
+        table,
+        joins=join,
+        timestamp=timestamp,
+        split_positions=True,
+        desired_resolution=DESIRED_RESOLUTION,
+        suffixes={table: '', ref_table:'_ref'},
+        allow_missing_lookups=True,
+        **filter_kwargs,
+    ).rename(columns={'idx': 'id'})
+
 
 def get_specific_soma(soma_table, root_id, client, timestamp):
-    soma_df = client.materialize.query_table(
-        soma_table,
-        filter_equal_dict={"pt_root_id": root_id},
-        timestamp=timestamp,
-    )
+    soma_df = query_table_any(soma_table, 'pt_root_id', [root_id], client, timestamp)
     return soma_df
 
 
@@ -38,19 +77,8 @@ def _synapse_df(
         filter_equal_dict={f"{direction}_pt_root_id": root_id},
         split_positions=True,
         timestamp=timestamp,
+        desired_resolution=DESIRED_RESOLUTION,
     )
-
-    grp = re.search("^(.*)pt_position", synapse_position_column)
-    prefix = grp.groups()[0]
-
-    if len(syn_df) > 0:
-        syn_df[synapse_position_column] = syn_df.apply(
-            lambda x: assemble_pt_position(x, prefix=prefix),
-            axis=1,
-        ).values
-    else:
-        syn_df[synapse_position_column] = []
-
     if exclude_autapses:
         syn_df = syn_df.query("pre_pt_root_id != post_pt_root_id").reset_index(
             drop=True
@@ -125,6 +153,13 @@ def stringify_root_ids(df, stringify_cols=None):
         df[col] = df[col].astype(str)
     return df
 
+def stringify_list(col, df):
+    df[col] = df[col].apply(lambda x : str(x)[1:-1]).astype(str)
+    return df
+
+def repopulate_list(col, df):
+    df[col] = df[col].apply(lambda x: [float(y) for y in x.split(',')]).astype(object)
+
 
 def _get_single_table(
     table_name,
@@ -137,24 +172,25 @@ def _get_single_table(
     table_filter=None,
 ):
     keep_columns = include_columns.copy()
-    df = client.materialize.query_table(
-        table_name,
-        filter_in_dict={root_id_column: root_ids},
-        timestamp=timestamp,
-    )
-    if table_filter is not None:
-        df = df.query(table_filter).reset_index(drop=True)
+    try:
+        df = query_table_any(table_name, root_id_column, root_ids, client, timestamp)
+        if table_filter is not None:
+            df = df.query(table_filter).reset_index(drop=True)
 
-    for k, v in aggregate_map.items():
-        df[k] = df.groupby(v["group_by"])[v["column"]].transform(v["agg"])
-        keep_columns.append(k)
-    if len(aggregate_map) != 0:
-        df.loc[df.index[df.duplicated(root_id_column, False)], include_columns] = np.nan
-        df.drop_duplicates(root_id_column, keep="first", inplace=True)
-    else:
-        df.drop_duplicates(root_id_column, keep=False, inplace=True)
-    df.set_index(root_id_column, inplace=True)
-    return df[keep_columns]
+        for k, v in aggregate_map.items():
+            df[k] = df.groupby(v["group_by"])[v["column"]].transform(v["agg"])
+            keep_columns.append(k)
+        if len(aggregate_map) != 0:
+            df.loc[df.index[df.duplicated(root_id_column, False)], include_columns] = np.nan
+            df.drop_duplicates(root_id_column, keep="first", inplace=True)
+        else:
+            df.drop_duplicates(root_id_column, keep=False, inplace=True)
+        df.set_index(root_id_column, inplace=True)
+        return df[keep_columns]
+    except:
+        for k in aggregate_map.keys():
+            keep_columns.append(k)
+        return pd.DataFrame(columns=keep_columns)
 
 
 def property_table_data(

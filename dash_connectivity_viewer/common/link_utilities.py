@@ -38,9 +38,9 @@ def timestamp(info_cache):
 def voxel_resolution_from_info(info_cache):
     try:
         vr = [
-            int(info_cache.get("viewer_resolution_x")),
-            int(info_cache.get("viewer_resolution_y")),
-            int(info_cache.get("viewer_resolution_z")),
+            info_cache.get("viewer_resolution_x"),
+            info_cache.get("viewer_resolution_y"),
+            info_cache.get("viewer_resolution_z"),
         ]
         return vr
     except:
@@ -63,7 +63,7 @@ def generate_statebuilder(
     preselect_all=True,
     anno_column="post_pt_root_id",
     anno_layer="syns",
-    data_resolution=None,
+    data_resolution=[1,1,1],
 ):
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
@@ -98,6 +98,7 @@ def generate_statebuilder(
         multipoint=True,
         set_position=True,
         collapse_groups=True,
+        split_positions=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
         anno_layer,
@@ -115,7 +116,7 @@ def generate_statebuilder(
 
 
 def generate_statebuilder_pre(
-    info_cache, config, preselect=False, data_resolution=None
+    info_cache, config, preselect=False, data_resolution=[1,1,1],
 ):
 
     img = statebuilder.ImageLayerConfig(
@@ -136,6 +137,7 @@ def generate_statebuilder_pre(
         linked_segmentation_column=config.root_id_col,
         set_position=True,
         multipoint=True,
+        split_positions=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
         "output_syns",
@@ -150,7 +152,7 @@ def generate_statebuilder_pre(
     return sb
 
 
-def generate_statebuilder_post(info_cache, config, data_resolution=None):
+def generate_statebuilder_post(info_cache, config, data_resolution=[1,1,1]):
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
         contrast_controls=True,
@@ -169,6 +171,7 @@ def generate_statebuilder_post(info_cache, config, data_resolution=None):
         config.syn_pt_position,
         linked_segmentation_column=config.root_id_col,
         set_position=True,
+        split_positions=True,
         multipoint=True,
     )
     anno = statebuilder.AnnotationLayerConfig(
@@ -190,12 +193,13 @@ def generate_statebuider_syn_grouped(
     config,
     fixed_id_color="#FFFFFF",
     preselect=False,
-    data_resolution=None,
+    data_resolution=[1,1,1],
 ):
     points = statebuilder.PointMapper(
         point_column=config.syn_pt_position,
         linked_segmentation_column=config.root_id_col,
         group_column=config.root_id_col,
+        split_positions=True,
         multipoint=True,
         set_position=True,
         collapse_groups=True,
@@ -246,7 +250,7 @@ def generate_url_cell_types(
     multipoint=False,
     fill_null=None,
     return_as="url",
-    data_resolution=None,
+    data_resolution=[1,1,1],
 ):
     if len(selected_rows) > 0 or selected_rows is None:
         df = df.iloc[selected_rows].reset_index(drop=True)
@@ -284,6 +288,7 @@ def generate_url_cell_types(
                 linked_segmentation_column=config.soma_pt_root_id,
                 set_position=True,
                 multipoint=multipoint,
+                split_positions=True,
             ),
             data_resolution=data_resolution,
         )
@@ -305,7 +310,7 @@ def generate_statebuilder_syn_cell_types(
     cell_type_column="cell_type",
     multipoint=False,
     fill_null=None,
-    data_resolution=None,
+    data_resolution=[1,1,1],
 ):
     df = pd.DataFrame(rows)
     if fill_null:
@@ -342,6 +347,7 @@ def generate_statebuilder_syn_cell_types(
                 linked_segmentation_column=config.root_id_col,
                 set_position=True,
                 multipoint=multipoint,
+                split_positions=True,
             ),
             data_resolution=data_resolution,
         )

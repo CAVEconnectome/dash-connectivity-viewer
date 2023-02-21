@@ -13,14 +13,13 @@ from ..common.link_utilities import (
     make_url_robust,
 )
 from ..common.dataframe_utilities import (
-    stringify_root_ids,
+    stringify_root_ids, stringify_list, repopulate_list
 )
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 from ..common.lookup_utilities import make_client
 from .config import ConnectivityConfig
 
 import datetime
-import flask
 import pandas as pd
 
 try:
@@ -190,6 +189,9 @@ def register_callbacks(app, config):
             post_targ_df = stringify_root_ids(
                 post_targ_df, stringify_cols=[c.root_id_col]
             )
+            for col in nrn_data.config.syn_pt_position_split:
+                stringify_list(col, pre_targ_df)
+                stringify_list(col, post_targ_df)
 
             n_syn_pre = pre_targ_df[c.num_syn_col].sum()
             n_syn_post = post_targ_df[c.num_syn_col].sum()
@@ -272,7 +274,6 @@ def register_callbacks(app, config):
         data_resolution,
     ):
         large_state_text = "State Too Large - Please Filter"
-
         def small_state_text(n):
             return f"Neuroglancer: ({n} partners)"
 
@@ -290,6 +291,8 @@ def register_callbacks(app, config):
             )
         else:
             syn_df = pd.DataFrame(rows)
+            for col in c.syn_pt_position_split:
+                repopulate_list(col, syn_df)
             if len(selected_rows) == 0:
                 if tab_value == "tab-pre":
                     sb = generate_statebuilder_pre(
@@ -352,6 +355,9 @@ def register_callbacks(app, config):
             return html.Div("No inputs to show")
         else:
             syn_df = pd.DataFrame(rows)
+            for col in c.syn_pt_position_split:
+                repopulate_list(col, syn_df)
+
             sb = generate_statebuilder_post(
                 info_cache, c, data_resolution=data_resolution
             )
@@ -394,6 +400,8 @@ def register_callbacks(app, config):
             return html.Div("No outputs to show")
         else:
             syn_df = pd.DataFrame(rows)
+            for col in c.syn_pt_position_split:
+                repopulate_list(col, syn_df)
             sb = generate_statebuilder_pre(
                 info_cache, c, data_resolution=data_resolution
             )

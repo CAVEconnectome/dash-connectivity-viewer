@@ -1,6 +1,9 @@
 ###########################################
 ### Default data and request parameters ###
 ###########################################
+SPLIT_SUFFIXES = ["x", "y", "z"]
+
+
 def parse_environ_vector(input, num_type):
     return [num_type(x) for x in input.split(",")]
 
@@ -11,6 +14,10 @@ def bound_pt_position(pt):
 
 def bound_pt_root_id(pt):
     return f"{pt}_root_id"
+
+
+def split_pt_position(pt):
+    return [f"{pt}_{suf}" for suf in SPLIT_SUFFIXES]
 
 
 class CommonConfig(object):
@@ -59,6 +66,7 @@ class CommonConfig(object):
 
         self.syn_pt_prefix = config.get("syn_position_column", "ctr_pt")
         self.syn_pt_position = bound_pt_position(self.syn_pt_prefix)
+        self.syn_pt_position_split = split_pt_position(self.syn_pt_position)
 
         self.soma_pt_prefix = config.get("soma_postion_column", "pt")
         self.soma_pt_position = bound_pt_position(self.soma_pt_prefix)
@@ -86,8 +94,7 @@ class CommonConfig(object):
             "id",
             self.pre_pt_root_id,
             self.post_pt_root_id,
-            self.syn_pt_position,
-        ]
+        ] + split_pt_position(self.syn_pt_position)
 
         additional_syn_merges = []
         for _, v in self.synapse_aggregation_rules.items():
@@ -98,15 +105,17 @@ class CommonConfig(object):
             self.synapse_table_columns_base + additional_syn_merges
         )
 
-        self.target_table_display = [
-            self.root_id_col,
-            self.syn_pt_position,
-            self.num_syn_col,
-            self.num_soma_col,
-        ] + list(self.synapse_aggregation_rules.keys())
+        self.target_table_display = (
+            [self.root_id_col]
+            + split_pt_position(self.syn_pt_position)
+            + [
+                self.num_syn_col,
+                self.num_soma_col,
+            ]
+            + list(self.synapse_aggregation_rules.keys())
+        )
 
         self.soma_table_columns = [
             self.soma_pt_root_id,
-            self.soma_pt_position,
             self.num_soma_col,
-        ]
+        ] + split_pt_position(self.soma_pt_position)

@@ -11,13 +11,13 @@ from dash_connectivity_viewer.common.lookup_utilities import (
 from .dataframe_utilities import *
 from .link_utilities import voxel_resolution_from_info
 from multiprocessing import cpu_count
-
+from ..common.config import split_pt_position
 
 def _soma_property_entry(soma_table, c):
     return {
         soma_table: {
             "root_id": c.soma_pt_root_id,
-            "include": [c.soma_pt_position],
+            "include": split_pt_position(c.soma_pt_position),
             "aggregate": {
                 c.num_soma_prefix: {
                     "group_by": c.soma_pt_root_id,
@@ -29,6 +29,7 @@ def _soma_property_entry(soma_table, c):
             "table_filter": c.soma_table_query,
             "data": None,
             "data_resolution": None,
+            "fill_missing": True,
         }
     }
 
@@ -97,7 +98,7 @@ class NeuronData(object):
 
         self._pre_syn_df = None
         self._post_syn_df = None
-        self._synapse_data_resolution = None
+        self._synapse_data_resolution = np.array([1,1,1])
 
         self._viewer_resolution = voxel_resolution_from_info(client.info.info_cache)
 
@@ -168,8 +169,6 @@ class NeuronData(object):
 
     @property
     def synapse_data_resolution(self):
-        if self._pre_syn_df is None:
-            self._get_syn_df()
         return self._synapse_data_resolution
 
     @property
@@ -194,9 +193,6 @@ class NeuronData(object):
             timestamp=self.timestamp,
             config=self.config,
             n_threads=self.n_threads,
-        )
-        self._synapse_data_resolution = self._pre_syn_df.attrs.get(
-            "table_voxel_resolution"
         )
         self._populate_property_tables()
 
@@ -243,14 +239,13 @@ class NeuronData(object):
         return targ_df
 
     def _make_simple_targ_df(self, df_grp):
-        pts = df_grp[self.config.syn_pt_position].agg(list)
-        num_syn = df_grp[self.config.syn_pt_position].agg(len)
-        syn_df = pd.DataFrame(
-            {
-                self.config.syn_pt_position: pts,
-                self.config.num_syn_col: num_syn,
-            }
-        )
+        num_syn = df_grp[self.config.syn_pt_position_split[0]].agg(len)
+        syn_data_dict = {}
+        for k in self.config.syn_pt_position_split:
+            syn_data_dict[k] = df_grp[k].agg(list)
+        syn_data_dict[self.config.num_syn_col] = num_syn
+        syn_df = pd.DataFrame(syn_data_dict)
+
         for k, v in self.config.synapse_aggregation_rules.items():
             syn_df[k] = df_grp[v["column"]].agg(v["agg"])
         return syn_df.sort_values(
