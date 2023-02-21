@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
 from dfbridge import DataframeBridge
-from caveclient import CAVEclient
 
 from dash_connectivity_viewer.common.lookup_utilities import (
     get_nucleus_id_from_root_id,
     get_root_id_from_nuc_id,
+    make_client
 )
 
 from .dataframe_utilities import *
@@ -71,10 +71,9 @@ class NeuronData(object):
             self._root_id = None
             self._nucleus_id = object_id
 
-        self._client = CAVEclient(
+        self._client = make_client(
             datastack_name=client.datastack_name,
             server_address=client.server_address,
-            auth_token=client.auth.token,
             pool_block=True,
             pool_maxsize=config.pool_maxsize,
         )

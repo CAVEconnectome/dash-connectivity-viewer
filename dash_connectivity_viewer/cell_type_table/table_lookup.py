@@ -1,8 +1,7 @@
 import pandas as pd
 import numpy as np
-from ..common.lookup_utilities import get_root_id_from_nuc_id
+from ..common.lookup_utilities import get_root_id_from_nuc_id, make_client
 from ..common.link_utilities import voxel_resolution_from_info
-from caveclient import CAVEclient
 from dfbridge import DataframeBridge
 from copy import copy
 
@@ -19,11 +18,11 @@ class TableViewer(object):
         column_query={},
     ):
 
-        self._client = CAVEclient(
+        self._client = make_client(
             datastack_name=client.datastack_name,
             server_address=client.server_address,
-            auth_token=client.auth.token,
         )
+        
         self._table_schema = self._client.materialize.get_table_metadata(table_name)[
             "schema_type"
         ]

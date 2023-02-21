@@ -1,6 +1,5 @@
 import flask
-from caveclient import CAVEclient
-
+from caveclient.tools.caching import CachedClient as CAVEclient
 
 def get_all_schema_tables(
     schemata,
@@ -41,7 +40,7 @@ def get_type_tables(schemata, datastack, config):
     return new_tables
 
 
-def make_client(datastack, server_address):
+def make_client(datastack, server_address, **kwargs):
     """Build a framework client with appropriate auth token
 
     Parameters
@@ -55,7 +54,7 @@ def make_client(datastack, server_address):
 
     """
     auth_token = flask.g.get("auth_token", None)
-    client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token)
+    client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token, **kwargs)
     return client
 
 

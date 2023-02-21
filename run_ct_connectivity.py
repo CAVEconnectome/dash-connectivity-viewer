@@ -69,5 +69,5 @@ fanc_config = {
 }
 
 if __name__ == "__main__":
-    app = create_app(config=flywire_config)
-    app.run_server(port=8050)
+    app = create_app(config=fanc_config)
+    app.run_server(port=8050, debug=True)
