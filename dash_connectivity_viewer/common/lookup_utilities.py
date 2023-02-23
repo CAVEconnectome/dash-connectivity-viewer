@@ -2,26 +2,20 @@ import flask
 from caveclient.tools.caching import CachedClient as CAVEclient
 
 def get_all_schema_tables(
-    schemata,
     datastack,
     config,
 ):
-    if isinstance(schemata, str):
-        schemata = [schemata]
     client = make_client(datastack, config.server_address)
     tables = client.materialize.get_tables()
     schema_tables = []
     for t in tables:
         if t in config.omit_cell_type_tables:
             continue
-        meta = client.materialize.get_table_metadata(t)
-        if meta["schema"] in schemata:
-            schema_tables.append(t)
+        schema_tables.append(t)
     return [{"label": t, "value": t} for t in sorted(schema_tables)]
 
-
-def get_type_tables(schemata, datastack, config):
-    tables = get_all_schema_tables(schemata, datastack, config)
+def get_type_tables(datastack, config):
+    tables = get_all_schema_tables(datastack, config)
 
     named_options = config.cell_type_dropdown_options
     if named_options is None:
@@ -53,7 +47,10 @@ def make_client(datastack, server_address, **kwargs):
         Global server address for the client, by default None. If None, uses the config dict.
 
     """
-    auth_token = flask.g.get("auth_token", None)
+    try:
+        auth_token = flask.g.get("auth_token", None)
+    except:
+        auth_token = None
     client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token, **kwargs)
     return client
 

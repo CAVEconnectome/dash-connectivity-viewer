@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
-from ..com 
+from ..common.schema_utils import get_table_info
 from ..common.neuron_data_base import NeuronData
+
 
 def _property_table_factory(root_id_col="pt_root_id", additional_col=[]):
     prop_table = {
@@ -56,13 +57,13 @@ class NeuronDataCortex(NeuronData):
         self.config = config
         self.schema_type = schema_name
 
-        self.merge_root_id_column, self.merge
 
         if cell_type_table is not None:
             property_tables = {self.merge_table: _property_table_factory()
-            } _cell_type_property_entry(
-                self.merge_table, config, schema_name=self.schema_type
-            )
+            } 
+            # _cell_type_property_entry(
+            #     self.merge_table, config, schema_name=self.schema_type
+            # )
         else:
             property_tables = dict()
 

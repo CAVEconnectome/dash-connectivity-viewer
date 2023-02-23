@@ -299,7 +299,30 @@ def page_layout(state: State = {}):
                     ]
                 ),
             ),
-        ]
+            dbc.Col(
+                dbc.Card(
+                    dbc.CardBody(
+                        [
+                            html.H4('Grouping', className='card-title'),
+                            dbc.Checklist(
+                                options=[
+                                    {"label": "Group annotations", "value": 1},
+                                ],
+                                value=[],
+                                id="do-group",
+                                switch=True,
+                            ),
+                            dcc.Dropdown(
+                                options={},
+                                value='cell_type',
+                                id='group-by',
+                                searchable=False,
+                            ),
+                        ]
+                    )
+                )
+            )
+        ],
     )
 
     datastack_comp = (
@@ -335,6 +358,8 @@ def page_layout(state: State = {}):
             dcc.Store(id="client-info-json"),
             dcc.Store(id="table-resolution-json"),
             dcc.Store(id='data-resolution-json'),
+            dcc.Store(id='pt-column'),
+            dcc.Store(id='value-columns'),
         ]
     )
     return layout

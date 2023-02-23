@@ -1,21 +1,13 @@
 from concurrent.futures import ThreadPoolExecutor
+from .schema_utils import table_metadata
 import pandas as pd
 import re
 import numpy as np
 
 DESIRED_RESOLUTION = [1,1,1]
 
-def assemble_pt_position(row, prefix=""):
-    return np.array(
-        [
-            row[f"{prefix}pt_position_x"],
-            row[f"{prefix}pt_position_y"],
-            row[f"{prefix}pt_position_z"],
-        ]
-    )
-
 def query_table_any(table, root_id_column, root_ids, client, timestamp):
-    ref_table = client.materialize.get_table_metadata(table).get('reference_table')
+    ref_table = table_metadata(table, client).get('reference_table')
     if ref_table is not None:
         return _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table)
     else:
@@ -35,7 +27,6 @@ def _query_table_single(table, root_id_column, root_ids, client, timestamp):
         desired_resolution=DESIRED_RESOLUTION,
         **filter_kwargs,
     )
-
 
 def _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table):
     join = [[table, 'target_id', ref_table, 'id']]
@@ -159,7 +150,6 @@ def stringify_list(col, df):
 
 def repopulate_list(col, df):
     df[col] = df[col].apply(lambda x: [float(y) for y in x.split(',')]).astype(object)
-
 
 def _get_single_table(
     table_name,

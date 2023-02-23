@@ -3,7 +3,8 @@ import seaborn as sns
 import pandas as pd
 import os
 import pathlib
-from ..common.config import CommonConfig, bound_pt_position, bound_pt_root_id
+from ..common.config import CommonConfig
+from ..common.schema_utils import bound_pt_position, bound_pt_root_id
 
 ####################
 ### Column names ###
@@ -114,6 +115,7 @@ class TypedConnectivityConfig(CommonConfig):
         self.synapse_aggregation_rules = config.get("synapse_aggregation_rules", {})
         self.aggregation_columns = list(self.synapse_aggregation_rules.keys())
         self.table_valence_map = config.get("valence_map", {})
+
         self.table_columns = (
             [
                 self.root_id_col,
@@ -161,3 +163,4 @@ class TypedConnectivityConfig(CommonConfig):
             tick_locs=ticklocs,
             tick_labels=["L1", "L2/3", "L4", "L5", "L6", "WM", ""],
         )
+

@@ -1,23 +1,12 @@
 ###########################################
 ### Default data and request parameters ###
 ###########################################
-SPLIT_SUFFIXES = ["x", "y", "z"]
+from .schema_utils import bound_pt_position, split_pt_position, bound_pt_root_id
 
+DATA_RESOLUTION = [1,1,1]
 
 def parse_environ_vector(input, num_type):
     return [num_type(x) for x in input.split(",")]
-
-
-def bound_pt_position(pt):
-    return f"{pt}_position"
-
-
-def bound_pt_root_id(pt):
-    return f"{pt}_root_id"
-
-
-def split_pt_position(pt):
-    return [f"{pt}_{suf}" for suf in SPLIT_SUFFIXES]
 
 
 class CommonConfig(object):
@@ -38,6 +27,8 @@ class CommonConfig(object):
         self.max_chunks = config.get("max_chunks", 20)
         self.pool_maxsize = 2 * self.max_chunks
         self.voxel_resolution = config.get("voxel_resolution")
+
+        self.data_resolution = DATA_RESOLUTION
 
         ##############################
         ### Link generation limits ###

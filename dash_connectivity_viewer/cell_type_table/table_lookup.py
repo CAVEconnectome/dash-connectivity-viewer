@@ -1,10 +1,19 @@
 import pandas as pd
 import numpy as np
 from ..common.lookup_utilities import get_root_id_from_nuc_id, make_client
-from ..common.link_utilities import voxel_resolution_from_info
+from ..common.dataframe_utilities import query_table_any 
+from ..common.schema_utils import get_table_info
+from .config import RegisterTable
 from dfbridge import DataframeBridge
 from copy import copy
 
+def _table_schema(config):
+    base_schema = {config.root_id_col: config.ct_cell_type_root_id}
+    for ptx, sptx in zip(['pt_position_x', 'pt_position_y', 'pt_position_z'], config.ct_cell_type_pt_position_split):
+        base_schema[ptx] = sptx
+    for k in config.value_columns:
+        base_schema[k] = k
+    return base_schema
 
 class TableViewer(object):
     def __init__(
@@ -19,26 +28,22 @@ class TableViewer(object):
     ):
 
         self._client = make_client(
-            datastack_name=client.datastack_name,
+            datastack=client.datastack_name,
             server_address=client.server_address,
         )
-        
-        self._table_schema = self._client.materialize.get_table_metadata(table_name)[
-            "schema_type"
-        ]
+        pt, add_cols = get_table_info(table_name, self._client)
+        config = RegisterTable(pt, add_cols, config)
         self.config = config
-        self._cell_type_bridge_schema = config.allowed_cell_type_schema_bridge.get(
-            self._table_schema
-        )
+        self._cell_type_bridge_schema = _table_schema(config)
 
         if config.soma_table is None:
-            soma_table = client.info.get_datastack_info().get("soma_table")
+            soma_table = self._client.info.get_datastack_info().get("soma_table")
 
         self._soma_table = soma_table
         self._table_name = table_name
 
         self._data = None
-        self._data_resolution = None
+        self._data_resolution = config.data_resolution
 
         self._column_query = column_query
         self._annotation_query = None
@@ -75,8 +80,6 @@ class TableViewer(object):
 
     @property
     def table_resolution(self):
-        if self._data_resolution is None:
-            self._populate_data()
         return self._data_resolution
 
     @property
@@ -84,23 +87,17 @@ class TableViewer(object):
         return DataframeBridge(self._cell_type_bridge_schema)
 
     def _populate_data(self):
-        filter_in_dict = {}
+        id_column = None
+        ids = None
         if self._id_query is not None:
-            filter_in_dict.update({self.config.ct_cell_type_root_id: self._id_query})
+            id_column = self.config.ct_cell_type_root_id
+            ids = self._id_query
         if self._annotation_query is not None:
-            filter_in_dict.update({"id": self._annotation_query})
-        filter_in_dict.update(self._column_query)
-
-        df = self.client.materialize.query_table(
-            self.table_name,
-            filter_in_dict=filter_in_dict,
-            timestamp=self.timestamp,
-            split_positions=True,
-        )
-
+            id_column = 'id'
+            ids = self._annotation_query
+        
+        df = query_table_any(self.table_name, id_column, ids, self.client, self.timestamp)
         self._data = self.cell_type_bridge.reformat(df).fillna(np.nan)
-
-        self._data_resolution = df.attrs.get("table_voxel_resolution")
 
     def _process_id_query(self):
         if self._id_query_type == "root":

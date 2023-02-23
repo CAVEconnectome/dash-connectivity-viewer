@@ -5,6 +5,7 @@ import numpy as np
 from seaborn import color_palette
 from itertools import cycle
 from .lookup_utilities import make_client
+from .schema_utils import bound_pt_position, bound_pt_root_id
 
 EMPTY_INFO_CACHE = {"aligned_volume": {}, "cell_type_column": None}
 MAX_URL_LENGTH = 1_750_000
@@ -247,18 +248,18 @@ def generate_url_cell_types(
     df,
     info_cache,
     config,
+    pt_column,
+    cell_type_column='cell_type',
+    group_annotations=False,
     multipoint=False,
     fill_null=None,
     return_as="url",
     data_resolution=[1,1,1],
 ):
+    
     if len(selected_rows) > 0 or selected_rows is None:
         df = df.iloc[selected_rows].reset_index(drop=True)
-    if fill_null:
-        df["cell_type"].cat.add_categories(fill_null, inplace=True)
-        df["cell_type"].fillna(fill_null, inplace=True)
 
-    cell_types = pd.unique(df["cell_type"].dropna())
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
         contrast_controls=True,
@@ -270,37 +271,88 @@ def generate_url_cell_types(
         alpha_3d=0.8,
         timestamp=timestamp(info_cache),
     )
-    sbs = [
-        statebuilder.StateBuilder(
-            [img, seg],
-            **statebuilder_kwargs(info_cache),
+    # sbs = [
+    #     statebuilder.StateBuilder(
+    #         [img, seg],
+    #         **statebuilder_kwargs(info_cache),
+    #     )
+    # ]
+    annos = []
+    if group_annotations:
+        if fill_null:
+            df[cell_type_column].cat.add_categories(fill_null, inplace=True)
+            df[cell_type_column].fillna(fill_null, inplace=True)
+        cell_types = np.sort(pd.unique(df[cell_type_column].dropna()))
+        colors = color_palette("tab20").as_hex()
+
+        for ct, clr in zip(cell_types, cycle(colors)):
+            annos.append(
+                statebuilder.AnnotationLayerConfig(
+                    ct,
+                    color=clr,
+                    linked_segmentation_layer=seg.name,
+                    data_resolution=data_resolution,
+                    mapping_rules=statebuilder.PointMapper(
+                        bound_pt_position(pt_column),
+                        linked_segmentation_column=config.root_id_col,
+                        set_position=True,
+                        multipoint=multipoint,
+                        split_positions=True,
+                        mapping_set=ct,
+                    )
+                )
+            )
+        sb = statebuilder.StateBuilder([img, seg] + annos, **statebuilder_kwargs(info_cache))
+        return sb.render_state(
+            {ct: df.query(f"{cell_type_column}==@ct") for ct in cell_types},
+            return_as=return_as,
         )
-    ]
-    dfs = [None]
-    colors = color_palette("tab20").as_hex()
-    for ct, clr in zip(cell_types, cycle(colors)):
+    else:
+        if cell_type_column is not None:
+            if len(cell_type_column)==0:
+                cell_type_column=None
         anno = statebuilder.AnnotationLayerConfig(
-            ct,
-            color=clr,
+            'Annotations',
             linked_segmentation_layer=seg.name,
             mapping_rules=statebuilder.PointMapper(
-                config.soma_pt_position,
-                linked_segmentation_column=config.soma_pt_root_id,
-                set_position=True,
-                multipoint=multipoint,
+                bound_pt_position(pt_column),
+                linked_segmentation_column=config.root_id_col,
                 split_positions=True,
+                multipoint=multipoint,
+                set_position=True,
+                description_column=cell_type_column,
             ),
             data_resolution=data_resolution,
         )
-        sbs.append(
-            statebuilder.StateBuilder(
-                [anno],
-                **statebuilder_kwargs(info_cache),
-            )
+        sb = statebuilder.StateBuilder([img, seg, anno], **statebuilder_kwargs(info_cache))
+        return sb.render_state(
+            df,
+            return_as=return_as,
         )
-        dfs.append(df.query("cell_type == @ct"))
-    csb = statebuilder.ChainedStateBuilder(sbs)
-    return csb.render_state(dfs, return_as=return_as)
+
+    # for ct, clr in zip(cell_types, cycle(colors)):
+    #     anno = statebuilder.AnnotationLayerConfig(
+    #         ct,
+    #         color=clr,
+    #         linked_segmentation_layer=seg.name,
+    #         mapping_rules=statebuilder.PointMapper(
+    #             bound_pt_position(pt_column),
+    #             linked_segmentation_column=config.root_id_col,
+    #             set_position=True,
+    #             multipoint=multipoint,
+    #             split_positions=True,
+    #         ),
+    #         data_resolution=data_resolution,
+    #     )
+    #     sbs.append(
+    #         statebuilder.StateBuilder(
+    #             [anno],
+    #             **statebuilder_kwargs(info_cache),
+    #         )
+    #     )
+    #     dfs.append(df.query("cell_type == @ct"))
+    # csb = statebuilder.ChainedStateBuilder(sbs)
+    # return csb.render_state(dfs, return_as=return_as)
 
 
 def generate_statebuilder_syn_cell_types(
@@ -308,6 +360,7 @@ def generate_statebuilder_syn_cell_types(
     rows,
     config,
     cell_type_column="cell_type",
+    group_annotations=True,
     multipoint=False,
     fill_null=None,
     data_resolution=[1,1,1],
@@ -316,7 +369,7 @@ def generate_statebuilder_syn_cell_types(
     if fill_null:
         df[cell_type_column].fillna(fill_null, inplace=True)
 
-    cell_types = pd.unique(df[cell_type_column].dropna())
+    cell_types = np.sort(pd.unique(df[cell_type_column].dropna()))
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
         contrast_controls=True,
@@ -335,8 +388,8 @@ def generate_statebuilder_syn_cell_types(
             **statebuilder_kwargs(info_cache),
         )
     ]
-    dfs = [None]
     colors = color_palette("tab20").as_hex()
+    annos = []
     for ct, clr in zip(cell_types, cycle(colors)):
         anno = statebuilder.AnnotationLayerConfig(
             ct,

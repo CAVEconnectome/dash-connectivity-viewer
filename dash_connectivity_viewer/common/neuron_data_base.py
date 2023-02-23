@@ -11,7 +11,7 @@ from dash_connectivity_viewer.common.lookup_utilities import (
 from .dataframe_utilities import *
 from .link_utilities import voxel_resolution_from_info
 from multiprocessing import cpu_count
-from ..common.config import split_pt_position
+from ..common.schema_utils import split_pt_position
 
 def _soma_property_entry(soma_table, c):
     return {
