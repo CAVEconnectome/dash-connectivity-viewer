@@ -26,6 +26,10 @@ from .ct_utils import process_dataframe
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 
 InputDatastack = Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
+InputCellTypeMenu = Input(
+    {"id_inner": "cell-type-table-menu", "type": _COMPONENT_ID_TYPE}, "value"
+)
+
 OutputDatastack = Output({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
 OutputCellTypeMenuOptions = Output(
     {"id_inner": "cell-type-table-menu", "type": _COMPONENT_ID_TYPE}, "options"
@@ -39,6 +43,9 @@ StateCategoryID = State({"id_inner": "id-type", "type": _COMPONENT_ID_TYPE}, "va
 StateLiveQuery = State(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
 )
+StateValueSearch = State(
+    {"id_inner": "value-column-search", "type": _COMPONENT_ID_TYPE}, "value"
+)
 
 OutputLiveQueryToggle = Output(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE},
@@ -46,6 +53,9 @@ OutputLiveQueryToggle = Output(
 )
 OutputLiveQueryValue = Output(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
+)
+OutputValueSearch = Output(
+    {"id_inner": "value-column-search", "type": _COMPONENT_ID_TYPE}, "options"
 )
 
 ######################################
@@ -104,11 +114,25 @@ def register_callbacks(app, config):
             return options_active, lq
 
     @app.callback(
+        OutputValueSearch,
+        InputDatastack,
+        InputCellTypeMenu,
+    )
+    def update_value_search_list(datastack, table_name):
+        if table_name is None:
+            return []
+        client = make_client(datastack, c.server_address)
+        _, cols = get_table_info(table_name, client, merge_schema=False)
+        return [{"label": i, "value": i} for i in cols]
+
+
+    @app.callback(
         Output("group-by", "options"),
+        Input("submit-button", "n_clicks"),
         StateCellTypeMenu,
         InputDatastack,
     )
-    def update_groupby_list(cell_type_table, datastack):
+    def update_groupby_list(_, cell_type_table, datastack):
         if len(cell_type_table) == 0 or cell_type_table is None:
             return {}
         else:
@@ -148,6 +172,7 @@ def register_callbacks(app, config):
         StateCategoryID,
         StateCellType,
         StateLiveQuery,
+        StateValueSearch,
     )
     def update_table(
         clicks,
@@ -155,8 +180,9 @@ def register_callbacks(app, config):
         cell_type_table,
         anno_id,
         id_type,
-        cell_type,
+        value_search,
         live_query_toggle,
+        value_search_field,
     ):
         try:
             client = make_client(datastack, c.server_address)
@@ -188,10 +214,10 @@ def register_callbacks(app, config):
             "anno_id": "annotation",
         }
 
-        if cell_type is None or len(cell_type) == 0:
-            annotation_filter = {}
-        else:
-            annotation_filter = {"cell_type": cell_type}
+        annotation_filter = {}
+        if value_search is not None or value_search_field is not None:
+            if len(value_search_field) > 0 and len(value_search) > 0:
+                annotation_filter = {value_search_field: value_search.split(',')}
 
         try:
             tv = TableViewer(
@@ -318,67 +344,90 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("data-resolution-json", "data"),
+        Input("pt-column", "data"),
+        Input("do-group", "value"),
+        Input("group-by", "value"),
         prevent_initial_call=True,
     )
-    def update_whole_table_link(_1, _2, rows, info_cache, datastack, data_resolution):
-        # ctx = callback_context
-        # if not ctx.triggered:
-        #     return ""
-        # trigger_src = ctx.triggered[0]["prop_id"].split(".")[0]
-        # if trigger_src in [
-        #     "submit-button",
-        #     "client-info-json",
-        #     "data-table",
-        # ]:
-        #     return "", "Generate Link", False
+    def update_whole_table_link(_1, _2, rows, info_cache, datastack, data_resolution, pt_column, do_group, group_column):
+        ctx = callback_context
+        if not ctx.triggered:
+            return ""
+        trigger_src = ctx.triggered[0]["prop_id"].split(".")[0]
+        if trigger_src in [
+            "submit-button",
+            "client-info-json",
+            "data-table",
+            "pt-column",
+            "do-group",
+            "group-by",
+        ]:
+            return "", "Generate Link", False
 
-        # if rows is None or len(rows) == 0:
-        #     return html.Div("No items to show"), "Error", True
+        if rows is None or len(rows) == 0:
+            return html.Div("No items to show"), "Error", True
 
-        # df = pd.DataFrame(rows)
-        # if len(df) > c.max_server_dataframe_length:
-        #     df = df.sample(c.max_server_dataframe_length)
-        #     sampled = True
-        # else:
-        #     sampled = False
+        if pt_column is None:
+            return "", "No clear point field in table", True, ""
 
-        # df["pt_position"] = df.apply(assemble_pt_position, axis=1)
+        if 1 in do_group:
+            do_group = True
+        else:
+            do_group = False
 
-        # if len(df) > c.max_dataframe_length:
-        #     try:
-        #         client = make_client(datastack, c.server_address)
-        #         state = generate_url_cell_types(
-        #             [],
-        #             df,
-        #             info_cache,
-        #             c,
-        #             return_as="dict",
-        #             data_resolution=data_resolution,
-        #         )
-        #         state_id = client.state.upload_state_json(state)
-        #         ngl_url = client.info.viewer_site()
-        #         if ngl_url is None:
-        #             ngl_url = DEFAULT_NGL
-        #         url = client.state.build_neuroglancer_url(state_id, ngl_url=ngl_url)
-        #     except Exception as e:
-        #         return html.Div(str(e)), "Error", True
-        # else:
-        #     url = generate_url_cell_types(
-        #         [], df, info_cache, c, data_resolution=data_resolution
-        #     )
+        if group_column is None:
+            do_group = False
+        else:
+            if len(group_column) == 0:
+                do_group = False
 
-        # if sampled:
-        #     link_text = f"Neuroglancer Link (State very large — Random {c.max_server_dataframe_length} shown)"
-        # else:
-        #     link_text = f"Neuroglancer Link"
+        df = pd.DataFrame(rows)
+        if len(df) > c.max_server_dataframe_length:
+            df = df.sample(c.max_server_dataframe_length)
+            sampled = True
+        else:
+            sampled = False
 
-        # return (
-        #     html.A(link_text, href=url, target="_blank", style={"font-size": "20px"}),
-        #     "Link Generated",
-        #     True,
-        # )
+        if len(df) > c.max_dataframe_length:
+            try:
+                client = make_client(datastack, c.server_address)
+                state = generate_url_cell_types(
+                    [],
+                    df,
+                    info_cache,
+                    c,
+                    pt_column,
+                    group_annotations=do_group,
+                    cell_type_column=group_column,
+                    data_resolution=data_resolution,
+                    return_as="dict",
+                )
+                state_id = client.state.upload_state_json(state)
+                ngl_url = client.info.viewer_site()
+                if ngl_url is None:
+                    ngl_url = DEFAULT_NGL
+                url = client.state.build_neuroglancer_url(state_id, ngl_url=ngl_url)
+            except Exception as e:
+                return html.Div(str(e)), "Error", True
+        else:
+            url = generate_url_cell_types(
+                [],
+                df,
+                info_cache,
+                c,
+                pt_column,
+                group_annotations=do_group,
+                cell_type_column=group_column,
+                data_resolution= data_resolution,
+            )
+
+        if sampled:
+            link_text = f"Neuroglancer Link (State very large — Random {c.max_server_dataframe_length} shown)"
+        else:
+            link_text = f"Neuroglancer Link"
+
         return (
-            html.A("LinkTest", href="", target="_blank", style={"font-size": "20px"}),
+            html.A(link_text, href=url, target="_blank", style={"font-size": "20px"}),
             "Link Generated",
             True,
         )

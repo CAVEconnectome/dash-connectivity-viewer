@@ -95,8 +95,10 @@ class TableViewer(object):
         if self._annotation_query is not None:
             id_column = 'id'
             ids = self._annotation_query
-        
-        df = query_table_any(self.table_name, id_column, ids, self.client, self.timestamp)
+
+        print('\nAnnotation filter:', self._column_query, '\n')
+
+        df = query_table_any(self.table_name, id_column, ids, self.client, self.timestamp, self._column_query)
         self._data = self.cell_type_bridge.reformat(df).fillna(np.nan)
 
     def _process_id_query(self):

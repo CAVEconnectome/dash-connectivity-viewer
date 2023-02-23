@@ -6,20 +6,25 @@ import numpy as np
 
 DESIRED_RESOLUTION = [1,1,1]
 
-def query_table_any(table, root_id_column, root_ids, client, timestamp):
+def query_table_any(table, root_id_column, root_ids, client, timestamp, extra_query={}):
     ref_table = table_metadata(table, client).get('reference_table')
     if ref_table is not None:
-        return _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table)
+        return _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table, extra_query=extra_query)
     else:
-        return _query_table_single(table, root_id_column, root_ids, client, timestamp)
+        return _query_table_single(table, root_id_column, root_ids, client, timestamp, extra_query=extra_query)
 
-def _query_table_single(table, root_id_column, root_ids, client, timestamp):
+def _query_table_single(table, root_id_column, root_ids, client, timestamp, extra_query):
     filter_kwargs = {}
     if root_ids is not None:
         if len(root_ids) == 1:
             filter_kwargs['filter_equal_dict'] = {table: {root_id_column: root_ids[0]}}
         else:
             filter_kwargs['filter_in_dict'] = {table: {root_id_column: root_ids}}
+    if len(extra_query) != 0:
+        if 'filter_in_dict' in filter_kwargs:
+            filter_kwargs['filter_in_dict'][table].extend(extra_query)
+        else:
+            filter_kwargs['filter_in_dict'] = {table: extra_query}
     return client.materialize.live_live_query(
         table,
         timestamp=timestamp,
@@ -28,7 +33,7 @@ def _query_table_single(table, root_id_column, root_ids, client, timestamp):
         **filter_kwargs,
     )
 
-def _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table):
+def _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table, extra_query):
     join = [[table, 'target_id', ref_table, 'id']]
     filter_kwargs = {}
     if root_ids is not None:
@@ -36,6 +41,11 @@ def _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_ta
             filter_kwargs = {'filter_equal_dict': {ref_table: {root_id_column: root_ids[0]}}}
         else:
             filter_kwargs = {'filter_in_dict': {ref_table: {root_id_column: root_ids}}}
+    if len(extra_query) != 0:
+        if 'filter_in_dict' in filter_kwargs:
+            filter_kwargs['filter_in_dict'][ref_table].extend(extra_query)
+        else:
+            filter_kwargs['filter_in_dict'] = {ref_table: extra_query}
     return client.materialize.live_live_query(
         table,
         joins=join,

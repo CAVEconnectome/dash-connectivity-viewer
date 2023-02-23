@@ -39,5 +39,5 @@ if __name__ == "__main__":
     app = create_app(config=minnie_config)
     app.run_server(
         port=8050,
-        # debug=True,
+        debug=True,
         )

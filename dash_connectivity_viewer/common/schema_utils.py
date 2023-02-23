@@ -40,11 +40,12 @@ def get_col_info(schema_name, client, spatial_point='BoundSpatialPoint', allow_t
 
 _table_cache = TTLCache(maxsize=128, ttl=86_400)
 def _table_key(table_name, client, **kwargs):
-    key = keys.hashkey(table_name)
+    merge_schema = kwargs.get('merge_schema', True)
+    key = keys.hashkey(table_name, merge_schema)
     return key
 
 @cached(cache=_table_cache, key=_table_key)
-def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES):
+def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES, merge_schema=True):
     """Get the point column and additional columns from a table
 
     Parameters
@@ -65,7 +66,7 @@ def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES):
     """
     meta = table_metadata(tn, client)
     ref_table = meta.get('reference_table')
-    if ref_table is None:
+    if ref_table is None or merge_schema is False:
         schema = meta['schema']
         extra_cols = []
     else:
