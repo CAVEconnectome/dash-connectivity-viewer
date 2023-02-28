@@ -19,8 +19,7 @@ from ..common.lookup_utilities import (
     make_client,
 )
 from ..common.schema_utils import get_table_info
-from .table_lookup import TableViewer
-from .ct_utils import process_dataframe
+from ..common.table_lookup import TableViewer
 
 # Callbacks using data from URL-encoded parameters requires this import
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE

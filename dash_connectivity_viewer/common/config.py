@@ -1,3 +1,4 @@
+import copy
 ###########################################
 ### Default data and request parameters ###
 ###########################################
@@ -42,6 +43,7 @@ class CommonConfig(object):
         # If None, the info service is used
         self.nucleus_table = config.get("nucleus_table", None)
         self.nucleus_id_column = config.get("nucleus_id_column", "id")
+        self.nucleus_filter = config.get('nucleus_filter', {})
 
         # Used to look up number of neurons per root id
         self.soma_table = self.nucleus_table
@@ -75,7 +77,6 @@ class CommonConfig(object):
         self.num_soma_prefix = "num"
         self.num_syn_col = "num_syn"
         self.root_id_col = "root_id"
-
         self.num_soma_suffix = "_soma"
         self.num_soma_col = f"{self.num_soma_prefix}{self.num_soma_suffix}"
 
@@ -110,3 +111,14 @@ class CommonConfig(object):
             self.soma_pt_root_id,
             self.num_soma_col,
         ] + split_pt_position(self.soma_pt_position)
+
+
+
+def RegisterTable(pt, value_columns, config):
+    config = copy.deepcopy(config)
+    config.ct_cell_type_point = pt
+    config.ct_cell_type_pt_position = bound_pt_position(pt)
+    config.ct_cell_type_pt_position_split = split_pt_position(pt)
+    config.ct_cell_type_root_id = bound_pt_root_id(pt)
+    config.value_columns = value_columns
+    return config

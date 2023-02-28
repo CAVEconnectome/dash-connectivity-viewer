@@ -6,6 +6,7 @@ from seaborn import color_palette
 from itertools import cycle
 from .lookup_utilities import make_client
 from .schema_utils import bound_pt_position, bound_pt_root_id
+from .dataframe_utilities import rehydrate_dataframe
 
 EMPTY_INFO_CACHE = {"aligned_volume": {}, "cell_type_column": None}
 MAX_URL_LENGTH = 1_750_000
@@ -365,7 +366,7 @@ def generate_statebuilder_syn_cell_types(
     fill_null=None,
     data_resolution=[1,1,1],
 ):
-    df = pd.DataFrame(rows)
+    df = rehydrate_dataframe(rows, config.syn_pt_position_split)
     if fill_null:
         df[cell_type_column].fillna(fill_null, inplace=True)
 
@@ -382,12 +383,13 @@ def generate_statebuilder_syn_cell_types(
         fixed_ids=[int(info_cache["root_id"])],
         timestamp=timestamp(info_cache),
     )
-    sbs = [
-        statebuilder.StateBuilder(
-            [img, seg],
-            **statebuilder_kwargs(info_cache),
-        )
-    ]
+
+    # sbs = [
+    #     statebuilder.StateBuilder(
+    #         [img, seg],
+    #         **statebuilder_kwargs(info_cache),
+    #     )
+    # ]
     colors = color_palette("tab20").as_hex()
     annos = []
     for ct, clr in zip(cell_types, cycle(colors)):
@@ -401,18 +403,21 @@ def generate_statebuilder_syn_cell_types(
                 set_position=True,
                 multipoint=multipoint,
                 split_positions=True,
+                mapping_set=ct,
             ),
             data_resolution=data_resolution,
         )
-        sbs.append(
-            statebuilder.StateBuilder(
-                [anno],
-                **statebuilder_kwargs(info_cache),
-            )
-        )
-        dfs.append(df.query(f"{cell_type_column} == @ct"))
-    csb = statebuilder.ChainedStateBuilder(sbs)
-    return csb, dfs
+        annos.append(anno)
+            # statebuilder.StateBuilder(
+                # [anno],
+                # **statebuilder_kwargs(info_cache),
+            # )
+        # )
+        # dfs.append(df.query(f"{cell_type_column} == @ct"))
+    sb = statebuilder.StateBuilder([img, seg] + annos, **statebuilder_kwargs(info_cache))
+    # csb = statebuilder.ChainedStateBuilder(sbs)
+    df_dict = {ct: df.query(f'{cell_type_column}=="{ct}"') for ct in cell_types}
+    return sb, df_dict
 
 
 def make_url_robust(df, sb, datastack, config):

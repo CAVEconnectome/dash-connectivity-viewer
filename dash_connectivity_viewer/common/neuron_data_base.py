@@ -72,7 +72,7 @@ class NeuronData(object):
             self._nucleus_id = object_id
 
         self._client = make_client(
-            datastack_name=client.datastack_name,
+            datastack=client.datastack_name,
             server_address=client.server_address,
             pool_block=True,
             pool_maxsize=config.pool_maxsize,

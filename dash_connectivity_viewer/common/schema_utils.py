@@ -21,7 +21,7 @@ def _schema_key(schema_name, client, **kwargs):
     return key
 
 @cached(cache=_schema_cache, key=_schema_key)
-def get_col_info(schema_name, client, spatial_point='BoundSpatialPoint', allow_types=ALLOW_COLUMN_TYPES):
+def get_col_info(schema_name, client, spatial_point='BoundSpatialPoint', allow_types=ALLOW_COLUMN_TYPES, omit_fields=[]):
     schema = client.schema.schema_definition(schema_name)
     sp_name = f"#/definitions/{spatial_point}"
     n_sp = 0
@@ -32,6 +32,8 @@ def get_col_info(schema_name, client, spatial_point='BoundSpatialPoint', allow_t
             pt_name = k
             n_sp+=1
         else:
+            if k in omit_fields:
+                continue
             if v.get('type', '') in allow_types:
                 add_cols.append(k)
     if n_sp != 1:
@@ -71,7 +73,7 @@ def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES, merge_schema=True
         extra_cols = []
     else:
         schema = table_metadata(ref_table, client).get('schema')
-        _, extra_cols = get_col_info(meta['schema'], client, allow_types=allow_types)
+        _, extra_cols = get_col_info(meta['schema'], client, allow_types=allow_types, omit_fields=['target_id'])
     pt, add_cols = get_col_info(schema, client)
     cols = add_cols + extra_cols
     return pt, cols

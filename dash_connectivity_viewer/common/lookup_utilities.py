@@ -1,5 +1,13 @@
 import flask
+from .schema_utils import get_table_info
 from caveclient.tools.caching import CachedClient as CAVEclient
+
+def table_is_value_source(table, client):
+    pt, vals = get_table_info(table, client)
+    if pt is not None and len(vals) > 0:
+        return True
+    else:
+        return False
 
 def get_all_schema_tables(
     datastack,
@@ -11,7 +19,8 @@ def get_all_schema_tables(
     for t in tables:
         if t in config.omit_cell_type_tables:
             continue
-        schema_tables.append(t)
+        if table_is_value_source(t, client):
+            schema_tables.append(t)
     return [{"label": t, "value": t} for t in sorted(schema_tables)]
 
 def get_type_tables(datastack, config):
@@ -100,10 +109,13 @@ def get_nucleus_id_from_root_id(
     config,
     timestamp=None,
 ):
+    filter_equal_dict = {config.soma_pt_root_id: root_id}
+    if config.soma_table_query is not None:
+        filter_equal_dict.update(config.soma_table_query)
 
     df = client.materialize.query_table(
         nucleus_table,
-        filter_equal_dict={config.soma_pt_root_id: root_id},
+        filter_equal_dict=filter_equal_dict,
         timestamp=timestamp,
     )
 

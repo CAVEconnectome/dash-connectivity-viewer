@@ -120,9 +120,7 @@ class TypedConnectivityConfig(CommonConfig):
             [
                 self.root_id_col,
                 self.num_syn_col,
-                self.ct_conn_cell_type_column,
                 self.soma_depth_column,
-                self.is_inhibitory_column,
             ]
             + self.aggregation_columns
             + [self.num_soma_col]

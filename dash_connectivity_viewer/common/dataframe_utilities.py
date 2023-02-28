@@ -161,6 +161,12 @@ def stringify_list(col, df):
 def repopulate_list(col, df):
     df[col] = df[col].apply(lambda x: [float(y) for y in x.split(',')]).astype(object)
 
+def rehydrate_dataframe(rows, columns=[]):
+    df = pd.DataFrame(rows)
+    for col in columns:
+        repopulate_list(col, df)
+    return df
+
 def _get_single_table(
     table_name,
     root_ids,

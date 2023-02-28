@@ -287,7 +287,7 @@ def page_layout(state: State = None):
                     [
                         dbc.CardBody(
                             [
-                                html.H4("Cell-typed Inputs", className="card-title"),
+                                html.H4("Grouped Inputs", className="card-title"),
                                 html.Div(
                                     children=[
                                         dbc.Button(
@@ -348,7 +348,7 @@ def page_layout(state: State = None):
                     [
                         dbc.CardBody(
                             [
-                                html.H4("Cell-typed Outputs", className="card-title"),
+                                html.H4("Grouped Outputs", className="card-title"),
                                 html.Div(
                                     children=[
                                         dbc.Button(
@@ -385,13 +385,32 @@ def page_layout(state: State = None):
                         className="d-grid gap-2 col-6 mx-auto",
                     ),
                     dbc.Collapse(
-                        dbc.Card(
+                        dbc.Row(
                             [
-                                dbc.Tabs(
+                                dbc.Card(
                                     [
-                                        dbc.Tab(input_tab, label="Input Links"),
-                                        dbc.Tab(output_tab, label="Output Links"),
+                                        dbc.Tabs(
+                                            [
+                                                dbc.Tab(input_tab, label="Input Links"),
+                                                dbc.Tab(output_tab, label="Output Links"),
+                                            ]
+                                        )
                                     ]
+                                ),
+                                dbc.Col(
+                                    dbc.Card(
+                                        dbc.CardBody(
+                                            [
+                                                html.H5('Annotation grouping', className='card-title'),
+                                                dcc.Dropdown(
+                                                    options={},
+                                                    value='cell_type',
+                                                    id='group-by',
+                                                    searchable=False,
+                                                ),
+                                            ]
+                                        )
+                                    )
                                 )
                             ]
                         ),
@@ -445,6 +464,7 @@ def page_layout(state: State = None):
             dcc.Store("source-table-json"),
             dcc.Store("client-info-json"),
             dcc.Store("synapse-table-resolution-json"),
+            dcc.Store('value-columns'),
             html.Div(
                 dcc.Input(
                     **create_component_kwargs(

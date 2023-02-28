@@ -1,19 +1,24 @@
 import pandas as pd
 import numpy as np
-from ..common.lookup_utilities import get_root_id_from_nuc_id, make_client
-from ..common.dataframe_utilities import query_table_any 
-from ..common.schema_utils import get_table_info
-from .config import RegisterTable
+from .lookup_utilities import get_root_id_from_nuc_id, make_client
+from .dataframe_utilities import query_table_any
+from .schema_utils import get_table_info
+from ..common.config import RegisterTable
 from dfbridge import DataframeBridge
 from copy import copy
 
+
 def _table_schema(config):
     base_schema = {config.root_id_col: config.ct_cell_type_root_id}
-    for ptx, sptx in zip(['pt_position_x', 'pt_position_y', 'pt_position_z'], config.ct_cell_type_pt_position_split):
+    for ptx, sptx in zip(
+        ["pt_position_x", "pt_position_y", "pt_position_z"],
+        config.ct_cell_type_pt_position_split,
+    ):
         base_schema[ptx] = sptx
     for k in config.value_columns:
         base_schema[k] = k
     return base_schema
+
 
 class TableViewer(object):
     def __init__(
@@ -93,12 +98,17 @@ class TableViewer(object):
             id_column = self.config.ct_cell_type_root_id
             ids = self._id_query
         if self._annotation_query is not None:
-            id_column = 'id'
+            id_column = "id"
             ids = self._annotation_query
 
-        print('\nAnnotation filter:', self._column_query, '\n')
-
-        df = query_table_any(self.table_name, id_column, ids, self.client, self.timestamp, self._column_query)
+        df = query_table_any(
+            self.table_name,
+            id_column,
+            ids,
+            self.client,
+            self.timestamp,
+            self._column_query,
+        )
         self._data = self.cell_type_bridge.reformat(df).fillna(np.nan)
 
     def _process_id_query(self):

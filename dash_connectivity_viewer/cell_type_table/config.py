@@ -1,4 +1,4 @@
-from ..common.config import CommonConfig
+from ..common.config import CommonConfig, RegisterTable
 from ..common.schema_utils import bound_pt_position, bound_pt_root_id, split_pt_position
 import copy
 
@@ -40,9 +40,3 @@ class CellTypeConfig(CommonConfig):
             + self.value_columns
             + self.ct_cell_type_pt_position_split
         )
-
-def RegisterTable(pt, value_columns, config):
-    config = copy.deepcopy(config)
-    config.ct_cell_type_point = pt
-    config.value_columns = value_columns
-    return config

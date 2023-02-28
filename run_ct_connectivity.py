@@ -28,19 +28,7 @@ minnie_config = {
     "ct_conn_cell_type_schema": {
         "cell_type_local": None,
     },
-    "omit_cell_type_tables": ["nucleus_neuron_svm"],
-    "valence_map": {
-        "allen_v1_column_types_slanted": {
-            "column": "classification_system",
-            "e": "aibs_coarse_excitatory",
-            "i": "aibs_coarse_inhibitory",
-        },
-        "allen_soma_coarse_cell_class_model_v1": {
-            "column": "classification_system",
-            "e": "aibs_coarse_excitatory",
-            "i": "aibs_coarse_inhibitory",
-        },
-    },
+    "omit_cell_type_tables": ["nucleus_detection_v0", "nucleus_neuron_svm"],
     "default_cell_type_option": "allen_soma_coarse_cell_class_model_v1",
     "image_black": 0.35,
     "image_white": 0.7,
@@ -69,5 +57,5 @@ fanc_config = {
 }
 
 if __name__ == "__main__":
-    app = create_app(config=fanc_config)
+    app = create_app(config=minnie_config)
     app.run_server(port=8050, debug=True)

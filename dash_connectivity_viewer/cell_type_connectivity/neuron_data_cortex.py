@@ -1,33 +1,21 @@
-import pandas as pd
 import numpy as np
 from ..common.schema_utils import get_table_info
+from ..common.table_lookup import TableViewer
 from ..common.neuron_data_base import NeuronData
+from ..common.transform_utils import get_transform
+from ..common.config import RegisterTable
 
-
-def _property_table_factory(root_id_col="pt_root_id", additional_col=[]):
-    prop_table = {
-        "root_id": root_id_col,
-        "include": additional_col,
-    }
-    return prop_table
-
-def _compute_depth_y(xyz, data_resolution):
-    if np.any(pd.isna(xyz)):
-        return np.nan
-    else:
-        return xyz[1] * data_resolution[1] / 1_000
-
-
-def _extract_depth(df, depth_column, position_column, data_resolution):
+def _extract_depth(df, depth_column, position_column, aligned_volume):
     if len(df) == 0:
         df[depth_column] = None
         return df
-
-    df[depth_column] = df[position_column].apply(
-        lambda x: _compute_depth_y(x, data_resolution)
-    )
+    tform = get_transform(aligned_volume)
+    df[depth_column] = tform.apply_dataframe(position_column, df, projection='y')
     return df
 
+def _compute_depth_y(pt, aligned_volume):
+    tform = get_transform(aligned_volume)
+    return tform.apply_project('y', pt)
 
 class NeuronDataCortex(NeuronData):
     def __init__(
@@ -35,8 +23,7 @@ class NeuronDataCortex(NeuronData):
         object_id,
         client,
         config,
-        merge_table=None,
-        schema_name=None,
+        value_table=None,
         timestamp=None,
         n_threads=None,
         id_type="root",
@@ -46,27 +33,29 @@ class NeuronDataCortex(NeuronData):
             object_id,
             client,
             config,
-            property_tables=property_tables,
             timestamp=timestamp,
             n_threads=n_threads,
             id_type=id_type,
         )
-        # Tomorrow, cell type table to this. reusing the logic from the Table viewer to
-        # 
-        self.merge_table = merge_table
-        self.config = config
-        self.schema_type = schema_name
+        self.value_table = value_table
+        self._value_data = None
+        self._value_columns = None
+    
+    @property
+    def aligned_volume(self):
+        return self.client.info.get_datastack_info()['aligned_volume']['name']
 
-
-        if cell_type_table is not None:
-            property_tables = {self.merge_table: _property_table_factory()
-            } 
-            # _cell_type_property_entry(
-            #     self.merge_table, config, schema_name=self.schema_type
-            # )
-        else:
-            property_tables = dict()
-
+    def create_table_viewer(self, root_ids):
+        pt, vals = get_table_info(self.value_table, self.client)
+        cfg = RegisterTable(pt, vals, self.config)
+        return TableViewer(
+            self.value_table,
+            self.client,
+            cfg,
+            timestamp=self.timestamp,
+            id_query=root_ids,
+            id_query_type="root",
+        )
 
     def _decorate_synapse_dataframe(self, df, merge_column):
         df = self._merge_property_tables(df, merge_column)
@@ -76,7 +65,7 @@ class NeuronDataCortex(NeuronData):
                 df,
                 self.config.soma_depth_column,
                 self.config.soma_position_agg,
-                self.property_data_resolution(self.soma_table),
+                self.aligned_volume,
             )
 
         return df
@@ -97,15 +86,48 @@ class NeuronDataCortex(NeuronData):
                 df,
                 self.config.soma_depth_column,
                 self.config.soma_position_agg,
-                self.property_data_resolution(self.soma_table),
+                self.aligned_volume,
             )
-        return df
+        val_df = self.value_data
+        if val_df is None:
+            return df
+        else:
+            return df.merge(
+                val_df,
+                on=self.config.root_id_col,
+                how='left',
+            )
 
     def partners_in_plus(self):
         return self._decorate_partner_dataframe(self.partners_in())
 
     def partners_out_plus(self):
         return self._decorate_partner_dataframe(self.partners_out())
+
+    @property
+    def value_data(self):
+        if self.value_table is None:
+            return None
+        if self._value_data is None:
+            root_ids = np.unique(
+                np.concatenate(
+                    (
+                        self.pre_syn_df()[self.config.post_pt_root_id],
+                        self.post_syn_df()[self.config.pre_pt_root_id],
+                    )
+                )
+            )
+            tl = self.create_table_viewer(root_ids)
+            self._value_data = tl.table_data().drop_duplicates(
+                self.config.root_id_col, keep=False
+            )[self.value_table_columns]
+        return self._value_data
+
+    @property
+    def value_table_columns(self):
+        if self._value_columns is None:
+            _, self._value_columns = get_table_info(self.value_table, self.client)
+        return [self.config.root_id_col] + self._value_columns
 
     def _get_syn_df(self):
         super()._get_syn_df()
@@ -115,10 +137,10 @@ class NeuronDataCortex(NeuronData):
                     syn_df,
                     self.config.synapse_depth_column,
                     self.config.syn_pt_position,
-                    self._synapse_data_resolution,
+                    self.aligned_volume,
                 )
 
     def soma_depth(self):
         return _compute_depth_y(
-            self.soma_location(), self.property_data_resolution(self.soma_table)
+            self.soma_location(), self.aligned_volume
         )
