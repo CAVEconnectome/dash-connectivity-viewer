@@ -1,3 +1,4 @@
+from plotly import colors
 import plotly.graph_objects as go
 import numpy as np
 
@@ -50,59 +51,58 @@ def pre_violin_plot(
         yaxis=yaxis,
     )
 
+def _colorscheme(n):
+    if n <= 10:
+        return colors.qualitative.G10
+    else:
+        return colors.qualitative.Dark24
 
 def synapse_soma_scatterplot(
-    ndat,
-    syn_depth_column,
-    soma_depth_column,
+    targ_df,
+    config,
+    color_column,
     xaxis=None,
     yaxis=None,
 ):
-    drop_columns = [syn_depth_column, soma_depth_column]
-    targ_df = ndat.pre_syn_df_plus().dropna(subset=drop_columns)
 
-    inhibitory_string_column = "inhib_string_column"
-    targ_df[inhibitory_string_column] = ndat.config.vis.valence_string_map(
-        targ_df[ndat.config.is_inhibitory_column]
-    )
+    null_type = config.null_cell_type_label
+    if color_column is None:
+        fake_cell_type_column = 'HereIsADummyColumn_'
+        while fake_cell_type_column in targ_df.columns:
+            fake_cell_type_column += 'a'
+        targ_df[fake_cell_type_column] = null_type
+        color_column = fake_cell_type_column
 
+    ctypes = list(np.unique(targ_df[color_column].dropna()))
+    targ_df[color_column] = targ_df[color_column].fillna(null_type)
+    ctypes = ctypes+[null_type]
+
+    cmap = _colorscheme(len(ctypes))
+    cmap_default = {null_type: 'rgb(0.4, 0.4, 0.5)'}
+    alpha_default = {null_type: 0.3}
     panels = []
-    valence_order = [
-        ndat.config.vis.u_string,
-        ndat.config.vis.e_string,
-        ndat.config.vis.i_string,
-    ]
-    color_order = [
-        ndat.config.vis.u_color,
-        ndat.config.vis.e_color,
-        ndat.config.vis.i_color,
-    ]
-    opacity_order = [
-        ndat.config.vis.u_opacity,
-        ndat.config.vis.e_opacity,
-        ndat.config.vis.i_opacity,
-    ]
-
-    for val, color, alpha in zip(valence_order, color_order, opacity_order):
-        targ_df_r = targ_df.query(f"{inhibitory_string_column}=='{val}'")
+    alpha= config.vis.e_opacity
+    
+    for ct, clr in zip(ctypes, cmap):
+        targ_df_r = targ_df.query(f"{color_column}=='{ct}'")
         panel = go.Scattergl(
-            x=targ_df_r[soma_depth_column],
-            y=targ_df_r[syn_depth_column],
+            x=targ_df_r[config.soma_depth_column],
+            y=targ_df_r[config.synapse_depth_column],
             mode="markers",
             marker=dict(
-                color=f"rgb{_format_color(color)}",
+                color=cmap_default.get(ct, clr),
                 line_width=0,
-                size=5,
-                opacity=alpha,
+                size=4,
+                opacity=alpha_default.get(ct, alpha),
             ),
             xaxis=xaxis,
             yaxis=yaxis,
-            name=val,
+            name=ct,
+            hoverinfo='none',
         )
         panels.append(panel)
 
     return panels
-
 
 def bar_data(
     ndat,

@@ -339,8 +339,12 @@ class NeuronData(object):
         pre_df["direction"] = "pre"
         post_df = self.post_syn_df()
         post_df["direction"] = "post"
+
+        pre_df.attrs = {}
+        post_df.attrs = {}
         syn_df = pd.concat([pre_df, post_df])
         syn_df["x"] = 0
+
         return syn_df
 
     def soma_location(self):

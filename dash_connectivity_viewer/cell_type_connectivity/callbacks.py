@@ -25,9 +25,9 @@ from ..common.lookup_utilities import (
 )
 from ..common.schema_utils import get_table_info
 from ..common.dataframe_utilities import (
-    stringify_root_ids, stringify_list, rehydrate_dataframe
+    stringify_root_ids, stringify_list, rehydrate_dataframe, rebuild_synapse_dataframe
 )
-from ..cell_type_table.config import CellTypeConfig, RegisterTable
+from ..cell_type_table.config import CellTypeConfig
 from .neuron_data_cortex import NeuronDataCortex as NeuronData
 from .cortex_panels import *
 
@@ -111,48 +111,57 @@ def generic_syn_link_generation(
 
     return html.A(link_text, href=url, target="_blank", style={"font-size": "20px"})
 
+def make_plots(rows, config, aligned_volume, color_column):
+    df = rebuild_synapse_dataframe(
+        rows,
+        config,
+        aligned_volume,
+        value_cols=[color_column],
+    )
+    scatter_fig = scatter_fig_df(df, config, color_column, width=450, height=350)
 
-def make_plots(ndat, config):
-    # if ndat is None:
-    return html.Div("")
+    return scatter_fig
 
-    # if config.show_depth_plots and ndat.soma_table:
-    #     scatter = scatter_fig(ndat, width=450, height=350)
-    #     violin = violin_fig(ndat, height=350)
+def make_plots_old(ndat, config, color_column):
+    if ndat is None:
+        return html.Div("")
+    if config.show_depth_plots and ndat.soma_table:
+        violin = violin_fig(ndat, height=350)
+        scatter = scatter_fig(ndat, color_column, width=450, height=350)
 
-    # if ndat.cell_type_table is not None:
-    #     if ndat.valence_map is not None:
+    # if ndat.value_table is not None:
+        # if ndat.valence_map is not None:
     #         bars = split_bar_fig(ndat, height=350)
     #     else:
     #         bars = single_bar_fig(ndat, height=350)
 
-    # row_contents = []
-    # if config.show_depth_plots and ndat.soma_table:
-    #     row_contents.append(
-    #         dbc.Col(
-    #             html.Div(
-    #                 [
-    #                     html.H5("Input/Output Depth", style={"text-align": "center"}),
-    #                     dcc.Graph(
-    #                         figure=violin, style={"width": "100%", "height": "100%"}
-    #                     ),
-    #                 ],
-    #                 style={"align-content": "right"},
-    #             )
-    #         )
-    #     )
-    #     row_contents.append(
-    #         dbc.Col(
-    #             [
-    #                 html.H5(
-    #                     "Synapse/Target Synapse Depth", style={"text-align": "center"}
-    #                 ),
-    #                 dcc.Graph(
-    #                     figure=scatter, style={"text-align": "center", "width": "100%"}
-    #                 ),
-    #             ]
-    #         )
-    #     )
+    row_contents = []
+    if config.show_depth_plots and ndat.soma_table:
+        row_contents.append(
+            dbc.Col(
+                html.Div(
+                    [
+                        html.H5("Input/Output Depth", style={"text-align": "center"}),
+                        dcc.Graph(
+                            figure=violin, style={"width": "100%", "height": "100%"}
+                        ),
+                    ],
+                    style={"align-content": "right"},
+                )
+            )
+        )
+        row_contents.append(
+            dbc.Col(
+                [
+                    html.H5(
+                        "Synapse/Target Synapse Depth", style={"text-align": "center"}
+                    ),
+                    dcc.Graph(
+                        figure=scatter, style={"text-align": "center", "width": "100%"}
+                    ),
+                ]
+            )
+        )
     # if ndat.cell_type_table is not None:
     #     row_contents.append(
     #         dbc.Col(
@@ -164,9 +173,9 @@ def make_plots(ndat, config):
     #             ]
     #         )
     #     )
-    # plot_content = dbc.Row(row_contents)
+    plot_content = dbc.Row(row_contents)
 
-    # return html.Div(plot_content)
+    return html.Div(plot_content)
 
 
 def register_callbacks(app, config):
@@ -308,7 +317,7 @@ def register_callbacks(app, config):
                 "Input",
                 1,
                 EMPTY_INFO_CACHE,
-                make_plots(None, c),
+                make_plots(None, c, None),
                 None,
             )
         else:
@@ -378,7 +387,7 @@ def register_callbacks(app, config):
             else:
                 message_text = f"Connectivity for root id {root_id}{nuc_id_text} and {ct_text} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
 
-            plts = make_plots(nrn_data, c)
+            plts = make_plots(nrn_data, c, None)
             syn_res = nrn_data.synapse_data_resolution
             del nrn_data
             del client
@@ -563,6 +572,8 @@ def register_callbacks(app, config):
     def generate_cell_typed_input_link(
         _1, _2, rows, info_cache, datastack, data_resolution, value_column,
     ):
+        if value_column is None:
+            return "  ", "No Annotation Column Set", True
         if not allowed_action_trigger(
             callback_context, ["cell-typed-input-link-button"]
         ):
@@ -639,6 +650,9 @@ def register_callbacks(app, config):
     def generate_cell_typed_output_link(
         _1, _2, rows, info_cache, datastack, data_resolution, value_column,
     ):
+        if value_column is None:
+            return "  ", "No Annotation Column Set", True
+
         if not allowed_action_trigger(
             callback_context, ["cell-typed-output-link-button"]
         ):

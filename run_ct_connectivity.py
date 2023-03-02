@@ -32,6 +32,8 @@ minnie_config = {
     "default_cell_type_option": "allen_soma_coarse_cell_class_model_v1",
     "image_black": 0.35,
     "image_white": 0.7,
+    'height_bounds': [0, 950],
+    'layer_bounds': [114, 302, 450, 610, 774],
 }
 
 

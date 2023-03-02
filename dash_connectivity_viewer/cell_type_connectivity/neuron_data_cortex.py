@@ -2,20 +2,9 @@ import numpy as np
 from ..common.schema_utils import get_table_info
 from ..common.table_lookup import TableViewer
 from ..common.neuron_data_base import NeuronData
-from ..common.transform_utils import get_transform
+from ..common.transform_utils import extract_depth, compute_depth_y
 from ..common.config import RegisterTable
 
-def _extract_depth(df, depth_column, position_column, aligned_volume):
-    if len(df) == 0:
-        df[depth_column] = None
-        return df
-    tform = get_transform(aligned_volume)
-    df[depth_column] = tform.apply_dataframe(position_column, df, projection='y')
-    return df
-
-def _compute_depth_y(pt, aligned_volume):
-    tform = get_transform(aligned_volume)
-    return tform.apply_project('y', pt)
 
 class NeuronDataCortex(NeuronData):
     def __init__(
@@ -61,7 +50,7 @@ class NeuronDataCortex(NeuronData):
         df = self._merge_property_tables(df, merge_column)
 
         if self.config.soma_depth_column is not None and self.soma_table is not None:
-            df = _extract_depth(
+            df = extract_depth(
                 df,
                 self.config.soma_depth_column,
                 self.config.soma_position_agg,
@@ -82,7 +71,7 @@ class NeuronDataCortex(NeuronData):
 
     def _decorate_partner_dataframe(self, df):
         if self.config.soma_depth_column is not None and self.soma_table is not None:
-            df = _extract_depth(
+            df = extract_depth(
                 df,
                 self.config.soma_depth_column,
                 self.config.soma_position_agg,
@@ -133,7 +122,7 @@ class NeuronDataCortex(NeuronData):
         super()._get_syn_df()
         if self.config.synapse_depth_column is not None:
             for syn_df in [self._pre_syn_df, self._post_syn_df]:
-                _ = _extract_depth(
+                _ = extract_depth(
                     syn_df,
                     self.config.synapse_depth_column,
                     self.config.syn_pt_position,
@@ -141,6 +130,6 @@ class NeuronDataCortex(NeuronData):
                 )
 
     def soma_depth(self):
-        return _compute_depth_y(
+        return compute_depth_y(
             self.soma_location(), self.aligned_volume
         )

@@ -3,6 +3,7 @@ from .schema_utils import table_metadata
 import pandas as pd
 import re
 import numpy as np
+from .transform_utils import extract_depth
 
 DESIRED_RESOLUTION = [1,1,1]
 
@@ -166,6 +167,36 @@ def rehydrate_dataframe(rows, columns=[]):
     for col in columns:
         repopulate_list(col, df)
     return df
+
+
+def _expand_column(df, column, len_column='num_syn'):
+    def _expand_column(row):
+        return [row[column]] * row[len_column]
+    return np.concatenate(list(df.apply(_expand_column, axis=1)))
+
+def _slam_column(df, column):
+    return np.concatenate(df[column].values)
+
+def rebuild_synapse_dataframe(rows, config, aligned_volume, value_cols=[]):
+    if len(rows) == 0:
+        return pd.DataFrame(columns=config.syn_pt_position_split + value_cols)
+
+    df = pd.DataFrame(rows).replace('nan', None)
+    dfnn = df.dropna(subset=config.soma_depth_column)
+    data_dict = {k: _slam_column(dfnn, k) for k in config.syn_pt_position_split}
+    
+    value_cols.append(config.soma_depth_column)
+    for col in value_cols:
+        data_dict[col] = _expand_column(dfnn, col)
+    df_rh = pd.DataFrame(data_dict).replace('nan', None)
+
+    extract_depth(
+        df_rh,
+        config.synapse_depth_column,
+        config.syn_pt_position,
+        aligned_volume,
+    )
+    return df_rh
 
 def _get_single_table(
     table_name,

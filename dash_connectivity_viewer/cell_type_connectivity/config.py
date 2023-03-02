@@ -128,15 +128,26 @@ class TypedConnectivityConfig(CommonConfig):
 
         self.show_plots = config.get("ct_conn_show_plots", True)
         self.show_depth_plots = config.get("ct_conn_show_depth_plots", True)
+        self.null_cell_type_label = config.get('null_cell_type_label', "No Type")
 
         # Next thing to fix!
         base_dir = pathlib.Path(os.path.dirname(__file__))
         data_path = base_dir.parent.joinpath("common/data")
-        self.layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
-        self.height_bnds = np.load(f"{data_path}/height_bounds_v1.npy")
-        ticklocs = np.concatenate(
-            [self.height_bnds[0:1], self.layer_bnds, self.height_bnds[1:]]
-        )
+        # self.layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
+        # self.height_bnds = np.load(f"{data_path}/height_bounds_v1.npy")
+        self.height_bnds = config.get('height_bounds', None)
+        if self.height_bnds is not None:
+            self.height_bnds = np.array(self.height_bnds)
+        self.layer_bnds = config.get('layer_bounds', None)
+        if self.layer_bnds is not None:
+            self.layer_bnds = np.array(self.layer_bnds)
+
+        if self.layer_bnds is not None and self.height_bnds is not None:
+            ticklocs = np.concatenate(
+                [self.height_bnds[0:1], self.layer_bnds, self.height_bnds[1:]]
+            )
+        else:
+            ticklocs = np.array([])
 
         self.allowed_cell_type_schema_bridge = config.get("ct_conn_cell_type_schema")
         self.allowed_cell_type_schema = list(
