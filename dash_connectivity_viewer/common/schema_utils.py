@@ -3,8 +3,7 @@ SPLIT_SUFFIXES = ["x", "y", "z"]
 
 
 #json schema column types that can act as potential columns for looking at tables
-ALLOW_COLUMN_TYPES = ['integer', 'boolean', 'string', 'float', 'number']
-
+ALLOW_COLUMN_TYPES = ['integer', 'boolean', 'string', 'float']
 # Helper functions for turning schema field names ot column names
 def bound_pt_position(pt):
     return f"{pt}_position"
@@ -17,7 +16,8 @@ def split_pt_position(pt_position):
 
 _schema_cache = TTLCache(maxsize=128, ttl=86_400)
 def _schema_key(schema_name, client, **kwargs):
-    key = keys.hashkey(schema_name)
+    allow_types = kwargs.get('allow_types', ALLOW_COLUMN_TYPES)
+    key = keys.hashkey(schema_name, str(allow_types))
     return key
 
 @cached(cache=_schema_cache, key=_schema_key)
@@ -34,7 +34,8 @@ def get_col_info(schema_name, client, spatial_point='BoundSpatialPoint', allow_t
         else:
             if k in omit_fields:
                 continue
-            if v.get('type', '') in allow_types:
+            # Field type is format if exists, type otherwise
+            if v.get('format', v.get('type')) in allow_types:
                 add_cols.append(k)
     if n_sp != 1:
         pt_name = None
@@ -43,7 +44,8 @@ def get_col_info(schema_name, client, spatial_point='BoundSpatialPoint', allow_t
 _table_cache = TTLCache(maxsize=128, ttl=86_400)
 def _table_key(table_name, client, **kwargs):
     merge_schema = kwargs.get('merge_schema', True)
-    key = keys.hashkey(table_name, merge_schema)
+    allow_types = kwargs.get('allow_types', ALLOW_COLUMN_TYPES)
+    key = keys.hashkey(table_name, merge_schema, str(allow_types))
     return key
 
 @cached(cache=_table_cache, key=_table_key)
@@ -74,7 +76,7 @@ def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES, merge_schema=True
     else:
         schema = table_metadata(ref_table, client).get('schema')
         _, extra_cols = get_col_info(meta['schema'], client, allow_types=allow_types, omit_fields=['target_id'])
-    pt, add_cols = get_col_info(schema, client)
+    pt, add_cols = get_col_info(schema, client, allow_types=allow_types)
     cols = add_cols + extra_cols
     return pt, cols
 

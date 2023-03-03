@@ -16,6 +16,8 @@ DEFAULT_NGL = "https://neuromancer-seung-import.appspot.com/"
 def image_source(info_cache):
     return info_cache["aligned_volume"].get("image_source", "")
 
+def aligned_volume(info_cache):
+    return info_cache['aligned_volume'].get('name')
 
 def seg_source(info_cache):
     return info_cache.get("segmentation_source", "")

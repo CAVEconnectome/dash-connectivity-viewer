@@ -437,7 +437,40 @@ def page_layout(state: State = None):
                     dbc.Collapse(
                         [
                             html.Br(),
-                            html.Div("", id="plot-content"),
+                            html.Div(
+                                [
+                                    dbc.Row(
+                                        [
+                                            dbc.Col(
+                                                dcc.Dropdown(
+                                                    options={'cell_type': 'cell_type'},
+                                                    value='cell_type',
+                                                    id='plot-color-value',
+                                                    searchable=False,
+                                                ),
+                                                style={'align-content': 'right'}
+                                            )
+                                        ]
+                                    ),
+                                    dbc.Row(
+                                        [
+                                            dbc.Col(
+                                                html.Div("", id="violin-plot"),
+                                                style={'align-content': 'right'},
+                                            ),
+                                            dbc.Col(
+                                                html.Div("", id="scatter-plot"),
+                                                style={'align-content': 'right'},
+                                            ),
+                                            dbc.Col(
+                                                html.Div("", id="bar-plot"),
+                                                style={'align-content': 'right'},
+                                            )
+                                        ]
+                                    )
+                                ]
+
+                            )
                         ],
                         id="plot-collapse",
                         is_open=True,

@@ -149,11 +149,6 @@ class TypedConnectivityConfig(CommonConfig):
         else:
             ticklocs = np.array([])
 
-        self.allowed_cell_type_schema_bridge = config.get("ct_conn_cell_type_schema")
-        self.allowed_cell_type_schema = list(
-            self.allowed_cell_type_schema_bridge.keys()
-        )
-
         dendrite_color = config.get("ct_conn_dendrite_color", (0.894, 0.102, 0.110))
         axon_color = config.get("ct_conn_axon_color", (0.227, 0.459, 0.718))
 

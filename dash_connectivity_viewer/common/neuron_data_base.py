@@ -62,6 +62,7 @@ class NeuronData(object):
         timestamp=None,
         n_threads=None,
         id_type="root",
+        is_live=True,
     ):
 
         if id_type == "root":
@@ -94,6 +95,7 @@ class NeuronData(object):
         self.config = config
 
         self._timestamp = timestamp
+        self.is_live = is_live
 
         self._pre_syn_df = None
         self._post_syn_df = None
@@ -107,6 +109,8 @@ class NeuronData(object):
 
         self._partner_soma_table = None
         self._partner_root_ids = None
+
+        self.check_root_id()
 
         if soma_table is not None:
             self._property_tables.update(
@@ -131,6 +135,12 @@ class NeuronData(object):
             else:
                 self._root_id = new_root_id
         return self._root_id
+
+    def check_root_id(self):
+        if self.client.chunkedgraph.is_latest_roots([self.root_id])[0]:
+            pass
+        else:
+            raise Exception(f"Root id is not valid at this timestamp.")
 
     @property
     def nucleus_id(self):
@@ -192,6 +202,7 @@ class NeuronData(object):
             timestamp=self.timestamp,
             config=self.config,
             n_threads=self.n_threads,
+            is_live=self.is_live,
         )
         self._populate_property_tables()
 
@@ -258,6 +269,7 @@ class NeuronData(object):
             self.client,
             self.timestamp,
             self.n_threads,
+            self.is_live,
         )
         for k, df in dfs.items():
             dbf = DataframeBridge(
@@ -327,6 +339,7 @@ class NeuronData(object):
             self.root_id,
             self.client,
             self.timestamp,
+            self.is_live,
         )
         if len(own_soma_df) != 1:
             own_soma_loc = np.nan

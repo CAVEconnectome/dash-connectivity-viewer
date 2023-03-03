@@ -5,7 +5,7 @@ from ..common.neuron_data_base import NeuronData
 from ..common.transform_utils import extract_depth, compute_depth_y
 from ..common.config import RegisterTable
 
-
+ALLOW_COLUMN_TYPES_DISCRETE = ['integer', 'boolean', 'string']
 class NeuronDataCortex(NeuronData):
     def __init__(
         self,
@@ -16,6 +16,7 @@ class NeuronDataCortex(NeuronData):
         timestamp=None,
         n_threads=None,
         id_type="root",
+        is_live=True,
     ):
         self.config = config
         super().__init__(
@@ -25,6 +26,7 @@ class NeuronDataCortex(NeuronData):
             timestamp=timestamp,
             n_threads=n_threads,
             id_type=id_type,
+            is_live=is_live,
         )
         self.value_table = value_table
         self._value_data = None
@@ -35,7 +37,7 @@ class NeuronDataCortex(NeuronData):
         return self.client.info.get_datastack_info()['aligned_volume']['name']
 
     def create_table_viewer(self, root_ids):
-        pt, vals = get_table_info(self.value_table, self.client)
+        pt, vals = get_table_info(self.value_table, self.client, allow_types=ALLOW_COLUMN_TYPES_DISCRETE)
         cfg = RegisterTable(pt, vals, self.config)
         return TableViewer(
             self.value_table,
@@ -44,6 +46,7 @@ class NeuronDataCortex(NeuronData):
             timestamp=self.timestamp,
             id_query=root_ids,
             id_query_type="root",
+            is_live=self.is_live,
         )
 
     def _decorate_synapse_dataframe(self, df, merge_column):

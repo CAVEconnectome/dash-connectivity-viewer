@@ -136,7 +136,7 @@ def register_callbacks(app, config):
             return {}
         else:
             client = make_client(datastack, c.server_address)
-            _, cols = get_table_info(cell_type_table, client)
+            _, cols = get_table_info(cell_type_table, client, allow_types=['boolean', 'integer', 'string'])
             return {k: k for k in cols}
 
     @app.callback(

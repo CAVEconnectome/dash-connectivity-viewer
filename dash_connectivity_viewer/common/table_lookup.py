@@ -30,6 +30,7 @@ class TableViewer(object):
         id_query=None,
         id_query_type=None,
         column_query={},
+        is_live=True,
     ):
 
         self._client = make_client(
@@ -55,6 +56,7 @@ class TableViewer(object):
         self._id_query = id_query
         self._id_query_type = id_query_type
         self._timestamp = timestamp
+        self.is_live = is_live
 
         self._process_id_query()
 
@@ -108,6 +110,7 @@ class TableViewer(object):
             self.client,
             self.timestamp,
             self._column_query,
+            is_live=self.is_live,
         )
         self._data = self.cell_type_bridge.reformat(df).fillna(np.nan)
 
