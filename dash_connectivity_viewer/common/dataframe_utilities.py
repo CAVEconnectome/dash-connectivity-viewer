@@ -8,6 +8,7 @@ from .transform_utils import extract_depth
 DESIRED_RESOLUTION = [1,1,1]
 
 def query_table_any(table, root_id_column, root_ids, client, timestamp, extra_query={}, is_live=True):
+    root_ids = root_ids[root_ids!=0]
     ref_table = table_metadata(table, client).get('reference_table')
     if ref_table is not None:
         return _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table, extra_query=extra_query, is_live=is_live)
@@ -255,7 +256,6 @@ def _get_single_table(
     is_live=True,
 ):
     keep_columns = include_columns.copy()
-    # try:
     df = query_table_any(table_name, root_id_column, root_ids, client, timestamp, is_live=is_live)
     if table_filter is not None:
         df = df.query(table_filter).reset_index(drop=True)
@@ -270,10 +270,6 @@ def _get_single_table(
         df.drop_duplicates(root_id_column, keep=False, inplace=True)
     df.set_index(root_id_column, inplace=True)
     return df[keep_columns]
-    # except:
-        # for k in aggregate_map.keys():
-            # keep_columns.append(k)
-        # return pd.DataFrame(columns=keep_columns)
 
 
 def property_table_data(

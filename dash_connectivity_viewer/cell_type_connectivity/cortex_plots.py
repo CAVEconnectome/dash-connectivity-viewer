@@ -15,6 +15,8 @@ def _violin_plot(syn_df, x_col, y_col, name, side, color, xaxis, yaxis):
         fillcolor=f"rgb{color}",
         xaxis=xaxis,
         yaxis=yaxis,
+        hoverinfo='text',
+        hovertext=f"{len(syn_df)} Syn.",
     )
 
 
@@ -77,18 +79,22 @@ def synapse_soma_scatterplot(
     else:
         if targ_df[color_column].dtype == 'float64':
             targ_df[color_column] = targ_df[color_column].astype(pd.Int64Dtype())
-        ctypes = sorted(list(np.unique(targ_df[color_column].dropna()).astype(str)))
+            ctypes = sorted(list(np.unique(targ_df[color_column].dropna()).astype(str)))
+            targ_df[color_column] = targ_df[color_column].astype(str).replace(
+                {'<NA>': config.null_cell_type_label}
+            )
+        else:
+            ctypes = sorted(list(np.unique(targ_df[color_column].dropna()).astype(str)))
+            targ_df[color_column] = targ_df[color_column].fillna(config.null_cell_type_label).astype(str)
         ctypes = ctypes+[config.null_cell_type_label]
-        targ_df[color_column] = targ_df[color_column].astype(str).replace(
-            {'<NA>': config.null_cell_type_label}
-        )
+
     
     if len(ctypes)>1:
         cmap = _colorscheme(len(ctypes)-1) + ['#333333']
     else:
         cmap = ['#333333']
 
-    alpha_default = {config.null_cell_type_label: 0.3}
+    alpha_default = {config.null_cell_type_label: 0.2}
     panels = []
     alpha= config.vis.e_opacity
     for ct, clr in zip(ctypes, cmap):
@@ -106,7 +112,7 @@ def synapse_soma_scatterplot(
             xaxis=xaxis,
             yaxis=yaxis,
             name=ct,
-            hoverinfo='none',
+            # hoverinfo='none',
         )
         panels.append(panel)
 

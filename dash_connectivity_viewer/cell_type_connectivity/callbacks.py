@@ -118,9 +118,9 @@ def make_violin_plot(ndat, height=350):
 
     violin = violin_fig(ndat, height=height)
     contents = [
-        html.H5("Input/Output Depth", style={"text-align": "center"}),
+        html.H5("Input/Output Depth", className='card-title'),
         dcc.Graph(
-            figure=violin, style={"width": "100%", "height": "100%"}
+            figure=violin, style={"margin-left": "5rem", "margin-right": "5rem", "width": "auto", "height": "25rem"}
         ),
     ]
     return contents
@@ -151,9 +151,9 @@ def make_scatter_div(
 ):
     scatter_fig = scatter_fig_df(df, config, color_column, width, height)
     contents = [
-        html.H5("Synapse/Target Soma Depth", style={'text-align': 'center'}),
+        html.H5("Synapse/Target Soma Depth", className='card-title'),
         dcc.Graph(
-            figure=scatter_fig, style={"width": "100%", "height": "100%"}
+            figure=scatter_fig, style={"height": "100%",  "width": "auto"},
         ),
     ]
     return contents
@@ -161,73 +161,23 @@ def make_scatter_div(
 def make_bar_div(df, config, color_column, width=450, height=350):
     if color_column is None:
         contents = [
-            html.H4("Select value column for bar chart", style={'text-align': 'center'}),
+            html.H4(
+                "Select value column for bar chart",
+                style=
+                    {
+                        'text-align': 'center', 'vertical-align': 'middle'
+                    },
+                ),
         ]
     else:
         bar_fig = bar_fig_df(df, config, color_column)
         contents = [
             html.H5("Target Distribution", style={'text-align': 'center'}),
             dcc.Graph(
-                figure=bar_fig, style={"width": "100%", "height": "100%"}
+                figure=bar_fig, style={"width": "auto", "height": "100%"}
             )
         ]
     return contents
-
-# def make_plots_old(ndat, config, color_column):
-#     if ndat is None:
-#         return html.Div("")
-#     if config.show_depth_plots and ndat.soma_table:
-#         violin = violin_fig(ndat, height=350)
-#         scatter = scatter_fig(ndat, color_column, width=450, height=350)
-
-#     # if ndat.value_table is not None:
-#         # if ndat.valence_map is not None:
-#     #         bars = split_bar_fig(ndat, height=350)
-#     #     else:
-#     #         bars = single_bar_fig(ndat, height=350)
-
-#     row_contents = []
-#     if config.show_depth_plots and ndat.soma_table:
-#         row_contents.append(
-#             dbc.Col(
-#                 html.Div(
-#                     [
-#                         html.H5("Input/Output Depth", style={"text-align": "center"}),
-#                         dcc.Graph(
-#                             figure=violin, style={"width": "100%", "height": "100%"}
-#                         ),
-#                     ],
-#                     style={"align-content": "right"},
-#                 )
-#             )
-#         )
-#         row_contents.append(
-#             dbc.Col(
-#                 [
-#                     html.H5(
-#                         "Synapse/Target Synapse Depth", style={"text-align": "center"}
-#                     ),
-#                     dcc.Graph(
-#                         figure=scatter, style={"text-align": "center", "width": "100%"}
-#                     ),
-#                 ]
-#             )
-#         )
-#     # if ndat.cell_type_table is not None:
-#     #     row_contents.append(
-#     #         dbc.Col(
-#     #             [
-#     #                 html.H5(
-#     #                     "Target Synapse by Cell Type", style={"text-align": "center"}
-#     #                 ),
-#     #                 dcc.Graph(figure=bars, style={"text-align": "center"}),
-#     #             ]
-#     #         )
-#     #     )
-#     plot_content = dbc.Row(row_contents)
-
-#     return html.Div(plot_content)
-
 
 def register_callbacks(app, config):
 
@@ -647,17 +597,20 @@ def register_callbacks(app, config):
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
         Input('group-by', 'value'),
+        Input('no-type-annotation', 'value'),
         prevent_initial_call=True,
     )
     def generate_cell_typed_input_link(
-        _1, _2, rows, info_cache, datastack, data_resolution, value_column,
+        _1, _2, rows, info_cache, datastack, data_resolution, value_column, include_no_type,
     ):
-        if value_column is None:
+        if value_column is None or value_column == "":
             return "  ", "No Annotation Column Set", True
         if not allowed_action_trigger(
             callback_context, ["cell-typed-input-link-button"]
         ):
             return "  ", "Generate Link", False
+
+        include_no_type = 1 in include_no_type
 
         sb, dfs = generate_statebuilder_syn_cell_types(
             info_cache,
@@ -667,6 +620,7 @@ def register_callbacks(app, config):
             multipoint=True,
             fill_null="NoType",
             data_resolution=data_resolution,
+            include_no_type=include_no_type,
         )
         try:
             url = make_url_robust(dfs, sb, datastack, c)
@@ -725,18 +679,22 @@ def register_callbacks(app, config):
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
         Input('group-by', 'value'),
+        Input('no-type-annotation', 'value'),
         prevent_initial_call=True,
     )
     def generate_cell_typed_output_link(
-        _1, _2, rows, info_cache, datastack, data_resolution, value_column,
+        _1, _2, rows, info_cache, datastack, data_resolution, value_column, include_no_type,
     ):
-        if value_column is None:
+        if value_column is None or value_column == "":
             return "  ", "No Annotation Column Set", True
-
+        
         if not allowed_action_trigger(
             callback_context, ["cell-typed-output-link-button"]
         ):
             return "  ", "Generate Link", False
+
+        include_no_type = 1 in include_no_type
+
         sb, df_dict = generate_statebuilder_syn_cell_types(
             info_cache,
             rows,
@@ -745,6 +703,7 @@ def register_callbacks(app, config):
             multipoint=True,
             fill_null="NoType",
             data_resolution=data_resolution,
+            include_no_type=include_no_type,
         )
         try:
             url = make_url_robust(df_dict, sb, datastack, c)

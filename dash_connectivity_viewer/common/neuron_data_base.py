@@ -95,6 +95,7 @@ class NeuronData(object):
         self.config = config
 
         self._timestamp = timestamp
+
         self.is_live = is_live
 
         self._pre_syn_df = None
@@ -111,7 +112,6 @@ class NeuronData(object):
         self._partner_root_ids = None
 
         self.check_root_id()
-
         if soma_table is not None:
             self._property_tables.update(
                 _soma_property_entry(
@@ -216,7 +216,7 @@ class NeuronData(object):
         if self._pre_syn_df is None:
             self._get_syn_df()
 
-        return np.unique(
+        root_ids = np.unique(
             np.concatenate(
                 (
                     self._pre_syn_df[self.config.post_pt_root_id].values,
@@ -224,6 +224,7 @@ class NeuronData(object):
                 )
             )
         )
+        return root_ids[root_ids!=0]
 
     def partners_out(self, properties=True):
         return self._targ_table("pre", properties)

@@ -8,19 +8,8 @@ from ..common.dash_url_helper import create_component_kwargs, State
 title = "Connectivity Viewer"
 
 
-def page_layout(state: State = None):
-    state = state or {}
-
-    header_text = dbc.Row(
-        [
-            dbc.Col(
-                html.H3(f"Neuron Target Info:"),
-                width={"size": 6, "offset": 1},
-            ),
-        ],
-    )
-
-    input_row = html.Div(
+def make_input_row(state):
+    return html.Div(
         [
             dbc.Row(
                 [
@@ -139,7 +128,20 @@ def page_layout(state: State = None):
         ]
     )
 
-    message_row = dbc.Row(
+
+def make_header(state):
+    return dbc.Row(
+        [
+            dbc.Col(
+                html.H3(f"Neuron Target Info:"),
+                width={"size": 6, "offset": 1},
+            ),
+        ],
+    )
+
+
+def make_message_row(state):
+    return dbc.Row(
         dbc.Col(
             dbc.Alert(
                 id="message-text",
@@ -151,7 +153,9 @@ def page_layout(state: State = None):
         justify="center",
     )
 
-    top_link = dbc.Row(
+
+def make_table_link_row(state):
+    return dbc.Row(
         [
             dbc.Col(
                 dbc.Spinner(
@@ -198,6 +202,175 @@ def page_layout(state: State = None):
         justify="start",
     )
 
+
+def make_data_table_content():
+    return html.Div(
+        dbc.Row(
+            [
+                dbc.Col(
+                    dash_table.DataTable(
+                        id="data-table",
+                        columns=[{"name": i, "id": i} for i in [""]],
+                        data=[],
+                        css=[
+                            {
+                                "selector": "table",
+                                "rule": "table-layout: fixed",
+                            }
+                        ],
+                        style_cell={
+                            "height": "auto",
+                            "width": "12%",
+                            "minWidth": "10%",
+                            "maxWidth": "15%",
+                            "whiteSpace": "normal",
+                            "font-size": "11px",
+                        },
+                        style_header={
+                            "font-size": "12px",
+                            "fontWeight": "bold",
+                        },
+                        sort_action="native",
+                        sort_mode="multi",
+                        filter_action="native",
+                        row_selectable="multi",
+                        page_current=0,
+                        page_action="native",
+                        page_size=30,
+                        export_format="csv",
+                        export_headers="names",
+                    ),
+                    width=10,
+                ),
+            ],
+            justify="center",
+        )
+    )
+
+def make_input_link_tab():
+    return [
+        dbc.Card(
+            [
+                dbc.CardBody(
+                    [
+                        html.H4("All Inputs", className="card-title"),
+                        html.Div(
+                            children=[
+                                dbc.Button(
+                                    "Generate Link",
+                                    id="all-input-link-button",
+                                    color="secondary",
+                                    className="d-grid gap-2 col-6 mx-auto",
+                                    style={"align-items":"center", "justify-content":"center"}
+                                ),
+                            ]
+                        ),
+                        dbc.Spinner(
+                            html.Div(
+                                "", id="all-input-link", className="card-text"
+                            ),
+                            size="sm",
+                        ),
+                    ]
+                )
+            ]
+        ),
+        dbc.Col(
+            dbc.Card(
+                [
+                    dbc.CardBody(
+                        [
+                            html.H4("Grouped Inputs", className="card-title"),
+                            html.Div(
+                                children=[
+                                    dbc.Button(
+                                        "Generate Link",
+                                        id="cell-typed-input-link-button",
+                                        color="secondary",
+                                        className="d-grid gap-2 col-6 mx-auto",
+                                    ),
+                                ]
+                            ),
+                            dbc.Spinner(
+                                html.Div(
+                                    "",
+                                    id="cell-typed-input-link",
+                                    className="card-text",
+                                ),
+                                size="sm",
+                            ),
+                        ]
+                    )
+                ]
+            ),
+        ),
+    ]
+
+def make_output_link_tab():
+    return [
+        dbc.Card(
+            [
+                dbc.CardBody(
+                    [
+                        html.H4("All Outputs", className="card-title"),
+                        html.Div(
+                            children=[
+                                dbc.Button(
+                                    "Generate Link",
+                                    id="all-output-link-button",
+                                    color="secondary",
+                                    className="d-grid gap-2 col-6 mx-auto",
+                                    style={"align-items":"center", "justify-content":"center"},
+                                ),
+                            ]
+                        ),
+                        dbc.Spinner(
+                            html.Div(
+                                "", id="all-output-link", className="card-text"
+                            ),
+                            size="sm",
+                        ),
+                    ]
+                )
+            ],
+            style={"width": "18rem"},
+        ),
+        dbc.Card(
+            [
+                dbc.CardBody(
+                    [
+                        html.H4("Grouped Outputs", className="card-title"),
+                        html.Div(
+                            children=[
+                                dbc.Button(
+                                    "Generate Link",
+                                    id="cell-typed-output-link-button",
+                                    color="secondary",
+                                    className="d-grid gap-2 col-6 mx-auto",
+                                ),
+                            ]
+                        ),
+                        dbc.Spinner(
+                            html.Div(
+                                "",
+                                id="cell-typed-output-link",
+                                className="card-text",
+                            ),
+                            size="sm",
+                        ),
+                    ]
+                )
+            ]
+        ),
+    ]
+
+def page_layout(state: State = None):
+    state = state or {}
+
+    header_text = make_header(state)
+    input_row = make_input_row(state)
+    message_row = make_message_row(state)
+    top_link = make_table_link_row(state)
     data_table = html.Div(
         [
             dcc.Tabs(
@@ -208,276 +381,152 @@ def page_layout(state: State = None):
                     dcc.Tab(id="output-tab", label="Output", value="tab-pre"),
                 ],
             ),
-            html.Div(
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            dash_table.DataTable(
-                                id="data-table",
-                                columns=[{"name": i, "id": i} for i in [""]],
-                                data=[],
-                                css=[
-                                    {
-                                        "selector": "table",
-                                        "rule": "table-layout: fixed",
-                                    }
-                                ],
-                                style_cell={
-                                    "height": "auto",
-                                    "width": "12%",
-                                    "minWidth": "10%",
-                                    "maxWidth": "15%",
-                                    "whiteSpace": "normal",
-                                    "font-size": "11px",
-                                },
-                                style_header={
-                                    "font-size": "12px",
-                                    "fontWeight": "bold",
-                                },
-                                sort_action="native",
-                                sort_mode="multi",
-                                filter_action="native",
-                                row_selectable="multi",
-                                page_current=0,
-                                page_action="native",
-                                page_size=30,
-                                export_format="csv",
-                                export_headers="names",
-                            ),
-                            width=10,
-                        ),
-                    ],
-                    justify="center",
-                )
-            ),
+            make_data_table_content(),
         ]
     )
 
-    input_tab = dbc.Row(
-        [
-            dbc.Col(
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.H4("All Inputs", className="card-title"),
-                                html.Div(
-                                    children=[
-                                        dbc.Button(
-                                            "Generate Link",
-                                            id="all-input-link-button",
-                                            color="secondary",
-                                            className="d-grid gap-2 col-6 mx-auto",
-                                        ),
-                                    ]
-                                ),
-                                dbc.Spinner(
-                                    html.Div(
-                                        "", id="all-input-link", className="card-text"
-                                    ),
-                                    size="sm",
-                                ),
-                            ]
-                        )
-                    ]
-                ),
-            ),
-            dbc.Col(
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.H4("Grouped Inputs", className="card-title"),
-                                html.Div(
-                                    children=[
-                                        dbc.Button(
-                                            "Generate Link",
-                                            id="cell-typed-input-link-button",
-                                            color="secondary",
-                                            className="d-grid gap-2 col-6 mx-auto",
-                                        ),
-                                    ]
-                                ),
-                                dbc.Spinner(
-                                    html.Div(
-                                        "",
-                                        id="cell-typed-input-link",
-                                        className="card-text",
-                                    ),
-                                    size="sm",
-                                ),
-                            ]
-                        )
-                    ]
-                ),
-            ),
-        ],
-    )
 
-    output_tab = dbc.Row(
-        [
-            dbc.Col(
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.H4("All Outputs", className="card-title"),
-                                html.Div(
-                                    children=[
-                                        dbc.Button(
-                                            "Generate Link",
-                                            id="all-output-link-button",
-                                            color="secondary",
-                                            className="d-grid gap-2 col-6 mx-auto",
-                                        ),
-                                    ]
-                                ),
-                                dbc.Spinner(
-                                    html.Div(
-                                        "", id="all-output-link", className="card-text"
-                                    ),
-                                    size="sm",
-                                ),
-                            ]
-                        )
-                    ]
-                ),
-            ),
-            dbc.Col(
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.H4("Grouped Outputs", className="card-title"),
-                                html.Div(
-                                    children=[
-                                        dbc.Button(
-                                            "Generate Link",
-                                            id="cell-typed-output-link-button",
-                                            color="secondary",
-                                            className="d-grid gap-2 col-6 mx-auto",
-                                        ),
-                                    ]
-                                ),
-                                dbc.Spinner(
-                                    html.Div(
-                                        "",
-                                        id="cell-typed-output-link",
-                                        className="card-text",
-                                    ),
-                                    size="sm",
-                                ),
-                            ]
-                        )
-                    ]
-                ),
-            ),
-        ],
-    )
-    cell_links = dbc.Row(
-        dbc.Col(
-            html.Div(
-                [
-                    dbc.Button(
-                        html.H5("Whole Cell Links (click to toggle visibility)"),
-                        id="collapse-button",
-                        color="secondary",
-                        className="d-grid gap-2 col-6 mx-auto",
+    input_tab = make_input_link_tab()
+    output_tab = make_output_link_tab()
+
+    cell_links = [
+        dbc.Row(
+            [
+                dbc.Col(
+                    dbc.CardGroup(
+                        input_tab + output_tab,
                     ),
-                    dbc.Collapse(
-                        dbc.Row(
-                            [
-                                dbc.Card(
-                                    [
-                                        dbc.Tabs(
-                                            [
-                                                dbc.Tab(input_tab, label="Input Links"),
-                                                dbc.Tab(output_tab, label="Output Links"),
-                                            ]
-                                        )
-                                    ]
-                                ),
-                                dbc.Col(
-                                    dbc.Card(
-                                        dbc.CardBody(
-                                            [
-                                                html.H5('Annotation grouping', className='card-title'),
-                                                dcc.Dropdown(
-                                                    options={},
-                                                    value='cell_type',
-                                                    id='group-by',
-                                                    searchable=False,
-                                                ),
-                                            ]
-                                        )
-                                    )
-                                )
-                            ]
-                        ),
-                        id="collapse-card",
-                        is_open=False,
-                    ),
-                ]
-            ),
-            width=6,
+                    width={"size": 10, "offset": 1},
+                ),
+            ]
         ),
-        justify="center",
-    )
-
-    plot_data = dbc.Row(
-        dbc.Col(
-            html.Div(
-                [
-                    dbc.Button(
-                        html.H5("Output Plots (click to toggle visibility)"),
-                        id="plot-collapse-button",
-                        color="secondary",
-                        className="d-grid gap-2 col-6 mx-auto",
-                    ),
-                    dbc.Collapse(
+        dbc.Row(
+            dbc.Col(
+                dbc.Card(
+                    dbc.CardBody(
                         [
-                            html.Br(),
-                            html.Div(
+                            dbc.Row(
                                 [
-                                    dbc.Row(
+                                    dbc.Col(
                                         [
-                                            dbc.Col(
-                                                dcc.Dropdown(
-                                                    options={'cell_type': 'cell_type'},
-                                                    value='cell_type',
-                                                    id='plot-color-value',
-                                                    searchable=False,
-                                                ),
-                                                style={'align-content': 'right'}
-                                            )
-                                        ]
+                                            html.H5(
+                                                "Annotation grouping:",
+                                                className="card-title",
+                                            ),
+                                            dbc.Checklist(
+                                                options=[
+                                                    {
+                                                        "label": "Include No Type",
+                                                        "value": 1,
+                                                    },
+                                                ],
+                                                value=[],
+                                                switch=True,
+                                                style={"font-size": "16px"},
+                                                id='no-type-annotation',
+                                            ),
+                                        ],
+                                        width={"size": 2},
                                     ),
-                                    dbc.Row(
-                                        [
-                                            dbc.Col(
-                                                html.Div("", id="violin-plot"),
-                                                style={'align-content': 'right'},
-                                            ),
-                                            dbc.Col(
-                                                html.Div("", id="scatter-plot"),
-                                                style={'align-content': 'right'},
-                                            ),
-                                            dbc.Col(
-                                                html.Div("", id="bar-plot"),
-                                                style={'align-content': 'right'},
-                                            )
-                                        ]
-                                    )
-                                ]
+                                    dbc.Col(
+                                        dcc.Dropdown(
+                                            options={},
+                                            value="",
+                                            id="group-by",
+                                            searchable=True,
+                                        ),
+                                        width={'size': 8},
+                                    ),
+                                ],
+                            ),
+                        ]
+                    )
+                ),
+                width={"size": 10, "offset": 1},
+            ),
+        ),
+    ]
 
-                            )
+    plot_data = [
+        dbc.Row(
+            [
+                dbc.Col(
+                    dbc.CardGroup(
+                        [
+                            dbc.Card(
+                                dbc.CardBody(
+                                    html.Div(
+                                        "",
+                                        id="violin-plot",
+                                        className="text-center v-100 h-100",
+                                    ),
+                                )
+                            ),
+                            dbc.Card(
+                                dbc.CardBody(
+                                    html.Div("", id="scatter-plot", className="text-center h-100 v-100"),
+                                )
+                            ),
+                            dbc.Card(
+                                dbc.CardBody(
+                                    html.Div("", id="bar-plot", className="text-center v-100 h-100"),
+                                )
+                            ),
                         ],
-                        id="plot-collapse",
-                        is_open=True,
+                    className="h-100",
                     ),
-                ]
+                )
+            ],
+        ),
+        dbc.Row(
+            dbc.Col(
+                dbc.Card(
+                    dbc.CardBody(
+                        [
+                            dbc.Row(
+                                [
+                                    dbc.Col(
+                                        [
+                                            html.Div(
+                                                "Color by value:",
+                                                style={'align-content': 'right'},
+                                            ),
+                                        ],
+                                        style={'align-content': 'right'},
+                                        width={"size": 1, 'offset':1},
+                                    ),
+                                    dbc.Col(
+                                        dcc.Dropdown(
+                                            options={"cell_type": "cell_type"},
+                                            value="cell_type",
+                                            id="plot-color-value",
+                                        ),  
+                                        style={"align-content": "left"},
+                                        width={'size': 9},
+                                    ),
+                                ],
+                            ),
+                        ]
+                    )
+                ),
+                # width={"size": 12},
+            ),
+        ),
+    ]
+
+    main_tab = dbc.Row(
+        [
+            dbc.Col(
+                dbc.Tabs(
+                    [
+                        dbc.Tab(html.Div(), label="Table Only"),
+                        dbc.Tab(plot_data, label="Plots"),
+                        dbc.Tab(cell_links, label="Neuroglancer Links")
+                    ],
+                ),
+                width={'size': 10, 'offset': 1},
             )
-        )
+        ]
     )
 
     layout = html.Div(
@@ -487,9 +536,10 @@ def page_layout(state: State = None):
             html.Br(),
             html.Div(message_row),
             html.Hr(),
-            html.Div(plot_data),
-            html.Hr(),
-            dbc.Container(cell_links),
+            html.Div(main_tab),
+            # html.Div(plot_data),
+            # html.Hr(),
+            # dbc.Container(cell_links),
             html.Hr(),
             top_link,
             data_table,
@@ -497,7 +547,7 @@ def page_layout(state: State = None):
             dcc.Store("source-table-json"),
             dcc.Store("client-info-json"),
             dcc.Store("synapse-table-resolution-json"),
-            dcc.Store('value-columns'),
+            dcc.Store("value-columns"),
             html.Div(
                 dcc.Input(
                     **create_component_kwargs(

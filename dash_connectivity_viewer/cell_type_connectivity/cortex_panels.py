@@ -44,10 +44,10 @@ def violin_fig(ndat, height=350, width=200):
     )
 
     fig.update_yaxes(
-        tickvals=ndat.config.vis.ticklocs - ndat.config.vis.ticklocs[0],
+        tickvals=ndat.config.vis.ticklocs,
         ticktext=ndat.config.vis.tick_labels,
         ticklabelposition="outside bottom",
-        range=(ndat.config.height_bnds-ndat.config.height_bnds[0]).astype(int)[::-1].tolist(),
+        range=ndat.config.height_bnds.astype(int)[::-1].tolist(),
         gridcolor="#CCC",
         gridwidth=2,
     )

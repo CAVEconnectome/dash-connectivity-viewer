@@ -367,9 +367,10 @@ def generate_statebuilder_syn_cell_types(
     multipoint=False,
     fill_null=None,
     data_resolution=[1,1,1],
+    include_no_type=True,
 ):
     df = rehydrate_dataframe(rows, config.syn_pt_position_split)
-    if fill_null:
+    if fill_null and include_no_type:
         df[cell_type_column].fillna(fill_null, inplace=True)
 
     cell_types = np.sort(pd.unique(df[cell_type_column].dropna()))

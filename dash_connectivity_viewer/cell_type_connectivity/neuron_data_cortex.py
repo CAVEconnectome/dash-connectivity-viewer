@@ -125,7 +125,7 @@ class NeuronDataCortex(NeuronData):
         super()._get_syn_df()
         if self.config.synapse_depth_column is not None:
             for syn_df in [self._pre_syn_df, self._post_syn_df]:
-                _ = extract_depth(
+                extract_depth(
                     syn_df,
                     self.config.synapse_depth_column,
                     self.config.syn_pt_position,

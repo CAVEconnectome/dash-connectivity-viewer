@@ -33,9 +33,29 @@ minnie_config = {
     "image_black": 0.35,
     "image_white": 0.7,
     'height_bounds': [0, 950],
-    'layer_bounds': [114, 302, 450, 610, 774],
+    'layer_bounds': [106, 276, 411, 535, 768],
 }
 
+v1dd_config = {
+    "datastack": "v1dd",
+    "server_address": "https://globalv1.em.brain.allentech.org",
+    "syn_position_column": "ctr_pt",
+    "synapse_aggregation_rules": {
+        "mean_size": {
+            "column": "size",
+            "agg": "mean",
+        },
+        "net_size": {
+            "column": "size",
+            "agg": "sum",
+        },
+    },
+    "omit_cell_type_tables": ["nucleus_detection_v0"],
+    "image_black": 0.35,
+    "image_white": 0.7,
+    'height_bounds': [-20, 900],
+    'layer_bounds': [100, 270, 400, 550, 750],
+}
 
 flywire_config = {
     "datastack": "flywire_fafb_production",
@@ -59,7 +79,7 @@ fanc_config = {
 }
 
 if __name__ == "__main__":
-    app = create_app(config=minnie_config)
+    app = create_app(config=v1dd_config)
     app.run_server(
         port=8050,
         # debug=True,

@@ -130,9 +130,6 @@ class TypedConnectivityConfig(CommonConfig):
         self.show_depth_plots = config.get("ct_conn_show_depth_plots", True)
         self.null_cell_type_label = config.get('null_cell_type_label', "No Type")
 
-        # Next thing to fix!
-        base_dir = pathlib.Path(os.path.dirname(__file__))
-        data_path = base_dir.parent.joinpath("common/data")
         # self.layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
         # self.height_bnds = np.load(f"{data_path}/height_bounds_v1.npy")
         self.height_bnds = config.get('height_bounds', None)
@@ -141,6 +138,7 @@ class TypedConnectivityConfig(CommonConfig):
         self.layer_bnds = config.get('layer_bounds', None)
         if self.layer_bnds is not None:
             self.layer_bnds = np.array(self.layer_bnds)
+        self.layer_labels = config.get('layer_labels', None)
 
         if self.layer_bnds is not None and self.height_bnds is not None:
             ticklocs = np.concatenate(
@@ -148,6 +146,10 @@ class TypedConnectivityConfig(CommonConfig):
             )
         else:
             ticklocs = np.array([])
+
+        if self.layer_labels is None:
+            self.layer_labels = self.layer_bnds.astype(str)
+
 
         dendrite_color = config.get("ct_conn_dendrite_color", (0.894, 0.102, 0.110))
         axon_color = config.get("ct_conn_axon_color", (0.227, 0.459, 0.718))
