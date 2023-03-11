@@ -162,7 +162,7 @@ class NeuronData(object):
 
     @property
     def live_query(self):
-        return self._timestamp is not None
+        return self.is_live
 
     @property
     def timestamp(self):
@@ -335,6 +335,7 @@ class NeuronData(object):
         return df
 
     def _get_own_soma_loc(self):
+        print("self is live", self.is_live)
         own_soma_df = get_specific_soma(
             self.soma_table,
             self.root_id,

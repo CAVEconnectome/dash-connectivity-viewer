@@ -360,6 +360,7 @@ def register_callbacks(app, config):
                 value_table=ct_table_value,
                 timestamp=timestamp,
                 id_type=object_id_type,
+                is_live=live_query,
                 n_threads=2,
             )
 
@@ -389,7 +390,11 @@ def register_callbacks(app, config):
                     f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {len(pre_targ_df)} , syn_out: {len(post_targ_df)}"
                 )
             if nrn_data.nucleus_id is not None and nrn_data.soma_table is not None:
-                nuc_id_text = f"  (nucleus id: {nrn_data.nucleus_id})"
+                # print(type(nrn_data.nucleus_id))
+                if isinstance(nrn_data.nucleus_id, np.integer):
+                    nuc_id_text = f"  (nucleus id: {nrn_data.nucleus_id})"
+                else:
+                    nuc_id_text = f" (Multiple nucleus ids in segment: {', '.join([str(x) for x in nrn_data.nucleus_id])})"
             else:
                 nuc_id_text = ""
             if ct_table_value:

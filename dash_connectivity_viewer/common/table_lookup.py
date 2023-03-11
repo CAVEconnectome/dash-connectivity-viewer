@@ -66,7 +66,7 @@ class TableViewer(object):
 
     @property
     def live_query(self):
-        return self._timestamp is not None
+        return self.is_live
 
     @property
     def timestamp(self):

@@ -15,7 +15,7 @@ def query_table_any(table, root_id_column, root_ids, client, timestamp, extra_qu
     else:
         return _query_table_single(table, root_id_column, root_ids, client, timestamp, extra_query=extra_query, is_live=is_live)
 
-def _query_table_single(table, root_id_column, root_ids, client, timestamp, extra_query, is_live=True):
+def _query_table_single(table, root_id_column, root_ids, client, timestamp, extra_query, is_live):
     filter_kwargs = {}
     if root_ids is not None:
         if len(root_ids) == 1:
@@ -55,7 +55,7 @@ def _query_table_single(table, root_id_column, root_ids, client, timestamp, extr
             **filter_kwargs,
         )
 
-def _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table, extra_query, is_live=True):
+def _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table, extra_query, is_live):
     join = [[table, 'target_id', ref_table, 'id']]
     filter_kwargs = {}
     if root_ids is not None:
@@ -297,7 +297,7 @@ def property_table_data(
                     client,
                     timestamp,
                     attrs.get("table_filter", None),
-                    is_live=is_live,
+                    is_live,
                 )
             )
     return {tname: job.result() for tname, job in zip(property_mapping, jobs)}
