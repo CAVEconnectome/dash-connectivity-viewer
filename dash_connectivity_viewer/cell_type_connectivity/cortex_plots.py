@@ -9,6 +9,7 @@ def _violin_plot(syn_df, x_col, y_col, name, side, color, xaxis, yaxis):
         y=syn_df[y_col],
         side=side,
         scalegroup="syn",
+        spanmode='hard',
         name=name,
         points=False,
         line_color=f"rgb{color}",
@@ -17,6 +18,7 @@ def _violin_plot(syn_df, x_col, y_col, name, side, color, xaxis, yaxis):
         yaxis=yaxis,
         hoverinfo='text',
         hovertext=f"{len(syn_df)} Syn.",
+        # bandwidth=0.2,
     )
 
 

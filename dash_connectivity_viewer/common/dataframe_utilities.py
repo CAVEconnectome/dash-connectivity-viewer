@@ -5,46 +5,74 @@ import re
 import numpy as np
 from .transform_utils import extract_depth
 
-DESIRED_RESOLUTION = [1,1,1]
+DESIRED_RESOLUTION = [1, 1, 1]
 
-def query_table_any(table, root_id_column, root_ids, client, timestamp, extra_query={}, is_live=True):
-    root_ids = root_ids[root_ids!=0]
-    ref_table = table_metadata(table, client).get('reference_table')
+
+def query_table_any(
+    table, root_id_column, root_ids, client, timestamp, extra_query={}, is_live=True
+):
+    if root_ids is not None:
+        root_ids = np.array(root_ids)
+        root_ids = root_ids[root_ids != 0]
+    ref_table = table_metadata(table, client).get("reference_table")
     if ref_table is not None:
-        return _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table, extra_query=extra_query, is_live=is_live)
+        return _query_table_join(
+            table,
+            root_id_column,
+            root_ids,
+            client,
+            timestamp,
+            ref_table,
+            extra_query=extra_query,
+            is_live=is_live,
+        )
     else:
-        return _query_table_single(table, root_id_column, root_ids, client, timestamp, extra_query=extra_query, is_live=is_live)
+        return _query_table_single(
+            table,
+            root_id_column,
+            root_ids,
+            client,
+            timestamp,
+            extra_query=extra_query,
+            is_live=is_live,
+        )
 
-def _query_table_single(table, root_id_column, root_ids, client, timestamp, extra_query, is_live):
+
+def _query_table_single(
+    table, root_id_column, root_ids, client, timestamp, extra_query, is_live
+):
     filter_kwargs = {}
     if root_ids is not None:
         if len(root_ids) == 1:
             if is_live:
-                filter_kwargs['filter_equal_dict'] = {table: {root_id_column: root_ids[0]}}
+                filter_kwargs["filter_equal_dict"] = {
+                    table: {root_id_column: root_ids[0]}
+                }
             else:
-                filter_kwargs['filter_equal_dict'] = {root_id_column: root_ids[0]}
+                filter_kwargs["filter_equal_dict"] = {root_id_column: root_ids[0]}
         else:
             if is_live:
-                filter_kwargs['filter_in_dict'] = {table: {root_id_column: root_ids}}
+                filter_kwargs["filter_in_dict"] = {table: {root_id_column: root_ids}}
             else:
-                filter_kwargs['filter_in_dict'] = {root_id_column: root_ids}
+                filter_kwargs["filter_in_dict"] = {root_id_column: root_ids}
     if len(extra_query) != 0:
-        if 'filter_in_dict' in filter_kwargs:
+        if "filter_in_dict" in filter_kwargs:
             if is_live:
-                filter_kwargs['filter_in_dict'][table].extend(extra_query)
+                filter_kwargs["filter_in_dict"][table].extend(extra_query)
             else:
-                filter_kwargs['filter_in_dict'].extend(extra_query)
+                filter_kwargs["filter_in_dict"].extend(extra_query)
         else:
             if is_live:
-                filter_kwargs['filter_in_dict'] = {table: extra_query}
+                filter_kwargs["filter_in_dict"] = {table: extra_query}
             else:
-                filter_kwargs['filter_in_dict'] = extra_query
+                filter_kwargs["filter_in_dict"] = extra_query
     if is_live:
         return client.materialize.live_live_query(
             table,
             timestamp=timestamp,
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
+            allow_missing_lookups=True,
             **filter_kwargs,
         )
     else:
@@ -55,41 +83,50 @@ def _query_table_single(table, root_id_column, root_ids, client, timestamp, extr
             **filter_kwargs,
         )
 
-def _query_table_join(table, root_id_column, root_ids, client, timestamp, ref_table, extra_query, is_live):
-    join = [[table, 'target_id', ref_table, 'id']]
+
+def _query_table_join(
+    table, root_id_column, root_ids, client, timestamp, ref_table, extra_query, is_live
+):
     filter_kwargs = {}
     if root_ids is not None:
         if len(root_ids) == 1:
-            filter_kwargs = {'filter_equal_dict': {ref_table: {root_id_column: root_ids[0]}}}
+            filter_kwargs = {
+                "filter_equal_dict": {ref_table: {root_id_column: root_ids[0]}}
+            }
         else:
-            filter_kwargs = {'filter_in_dict': {ref_table: {root_id_column: root_ids}}}
+            filter_kwargs = {"filter_in_dict": {ref_table: {root_id_column: root_ids}}}
     if len(extra_query) != 0:
-        if 'filter_in_dict' in filter_kwargs:
-            filter_kwargs['filter_in_dict'][table].extend(extra_query)
+        if "filter_in_dict" in filter_kwargs:
+            filter_kwargs["filter_in_dict"][table].extend(extra_query)
         else:
-            filter_kwargs['filter_in_dict'] = {table: extra_query}
+            filter_kwargs["filter_in_dict"] = {table: extra_query}
     if is_live:
+        join = [[table, "target_id", ref_table, "id"]]
         return client.materialize.live_live_query(
             table,
             joins=join,
             timestamp=timestamp,
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
-            suffixes={table: '', ref_table:'_ref'},
+            suffixes={table: "", ref_table: "_ref"},
             allow_missing_lookups=True,
             **filter_kwargs,
-        ).rename(columns={'idx': 'id'})
+        ).rename(columns={"idx": "id"})
     else:
+        join = [[table, "target_id"], [ref_table, "id"]]
         return client.materialize.join_query(
-            [[table, 'target_id'], [ref_table, 'id']],
-            suffixes={table: '', ref_table: '_ref'},
+            join,
+            suffixes={table: "", ref_table: "_ref"},
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
             **filter_kwargs,
         )
 
+
 def get_specific_soma(soma_table, root_id, client, timestamp, is_live=True):
-    soma_df = query_table_any(soma_table, 'pt_root_id', [root_id], client, timestamp, is_live=is_live)
+    soma_df = query_table_any(
+        soma_table, "pt_root_id", [root_id], client, timestamp, is_live=is_live
+    )
     return soma_df
 
 
@@ -200,12 +237,15 @@ def stringify_root_ids(df, stringify_cols=None):
         df[col] = df[col].astype(str)
     return df
 
+
 def stringify_list(col, df):
-    df[col] = df[col].apply(lambda x : str(x)[1:-1]).astype(str)
+    df[col] = df[col].apply(lambda x: str(x)[1:-1]).astype(str)
     return df
 
+
 def repopulate_list(col, df):
-    df[col] = df[col].apply(lambda x: [float(y) for y in x.split(',')]).astype(object)
+    df[col] = df[col].apply(lambda x: [float(y) for y in x.split(",")]).astype(object)
+
 
 def rehydrate_dataframe(rows, columns=[]):
     df = pd.DataFrame(rows)
@@ -214,27 +254,30 @@ def rehydrate_dataframe(rows, columns=[]):
     return df
 
 
-def _expand_column(df, column, len_column='num_syn'):
+def _expand_column(df, column, len_column="num_syn"):
     def _expand_column(row):
         return [row[column]] * row[len_column]
+
     return np.concatenate(list(df.apply(_expand_column, axis=1)))
+
 
 def _slam_column(df, column):
     return np.concatenate(df[column].values)
+
 
 def rebuild_synapse_dataframe(rows, config, aligned_volume, value_cols=[]):
     if len(rows) == 0:
         return pd.DataFrame(columns=config.syn_pt_position_split + value_cols)
 
-    df = rehydrate_dataframe(rows, config.syn_pt_position_split).replace('nan', None)
+    df = rehydrate_dataframe(rows, config.syn_pt_position_split).replace("nan", None)
     dfnn = df.dropna(subset=config.soma_depth_column)
     data_dict = {k: _slam_column(dfnn, k) for k in config.syn_pt_position_split}
-    
+
     value_cols.append(config.soma_depth_column)
     for col in value_cols:
-        if col != '':
+        if col != "":
             data_dict[col] = _expand_column(dfnn, col)
-    df_rh = pd.DataFrame(data_dict).replace('nan', None)
+    df_rh = pd.DataFrame(data_dict).replace("nan", None)
 
     extract_depth(
         df_rh,
@@ -243,6 +286,7 @@ def rebuild_synapse_dataframe(rows, config, aligned_volume, value_cols=[]):
         aligned_volume,
     )
     return df_rh
+
 
 def _get_single_table(
     table_name,
@@ -256,7 +300,9 @@ def _get_single_table(
     is_live=True,
 ):
     keep_columns = include_columns.copy()
-    df = query_table_any(table_name, root_id_column, root_ids, client, timestamp, is_live=is_live)
+    df = query_table_any(
+        table_name, root_id_column, root_ids, client, timestamp, is_live=is_live
+    )
     if table_filter is not None:
         df = df.query(table_filter).reset_index(drop=True)
 
@@ -264,7 +310,9 @@ def _get_single_table(
         df[k] = df.groupby(v["group_by"])[v["column"]].transform(v["agg"])
         keep_columns.append(k)
     if len(aggregate_map) != 0:
-        df.loc[df.index[df.duplicated(root_id_column, False)], include_columns] = np.nan
+        is_dup = df.duplicated(root_id_column, False)
+        if np.any(is_dup):
+            df.loc[df.index[is_dup], include_columns] = np.nan
         df.drop_duplicates(root_id_column, keep="first", inplace=True)
     else:
         df.drop_duplicates(root_id_column, keep=False, inplace=True)

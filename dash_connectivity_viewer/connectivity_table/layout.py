@@ -7,17 +7,16 @@ from ..common.dash_url_helper import create_component_kwargs, State
 
 title = "Synapse Table Viewer"
 
-header_text = html.H3(f"Connectivity Info:")
-
-
 url_bar_and_content_div = html.Div(
     [dcc.Location(id="url", refresh=False), html.Div(id="page-layout")]
 )
 
-
 def page_layout(state: State = None):
     state = state or {}
-
+    header_bar = html.Div(
+        html.H3(f"Synapse Table Viewer"),
+        id='header-bar',
+    )
     input_row = [
         dbc.Row(
             [
@@ -241,7 +240,8 @@ def page_layout(state: State = None):
 
     layout = html.Div(
         children=[
-            html.Div(header_text),
+            # html.Div(header_text),
+            header_bar,
             dbc.Container(
                 input_row,
                 fluid=True,

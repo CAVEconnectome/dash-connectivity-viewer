@@ -132,13 +132,13 @@ class TypedConnectivityConfig(CommonConfig):
 
         # self.layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
         # self.height_bnds = np.load(f"{data_path}/height_bounds_v1.npy")
-        self.height_bnds = config.get('height_bounds', None)
+        self.height_bnds = config.get('height_bounds', [])
         if self.height_bnds is not None:
             self.height_bnds = np.array(self.height_bnds)
-        self.layer_bnds = config.get('layer_bounds', None)
+        self.layer_bnds = config.get('layer_bounds', [])
         if self.layer_bnds is not None:
             self.layer_bnds = np.array(self.layer_bnds)
-        self.layer_labels = config.get('layer_labels', None)
+        self.layer_labels = config.get('layer_labels', [])
 
         if self.layer_bnds is not None and self.height_bnds is not None:
             ticklocs = np.concatenate(

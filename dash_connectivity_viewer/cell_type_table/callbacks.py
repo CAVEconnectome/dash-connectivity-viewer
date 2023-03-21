@@ -132,7 +132,7 @@ def register_callbacks(app, config):
         InputDatastack,
     )
     def update_groupby_list(_, cell_type_table, datastack):
-        if len(cell_type_table) == 0 or cell_type_table is None:
+        if cell_type_table == "" or cell_type_table is None:
             return {}
         else:
             client = make_client(datastack, c.server_address)
@@ -188,10 +188,10 @@ def register_callbacks(app, config):
             info_cache = client.info.get_datastack_info()
             info_cache["global_server"] = client.server_address
         except Exception as e:
-            return [], str(e), "", EMPTY_INFO_CACHE, "danger"
+            return [], str(e), "", EMPTY_INFO_CACHE, "danger", c.data_resolution
 
         if cell_type_table is None:
-            return [], "No Cell Type Table Selected", "", info_cache, "info"
+            return [], "No Cell Type Table Selected", "", info_cache, "info", c.data_resolution
 
         if len(anno_id) == 0:
             anno_id = None

@@ -57,6 +57,8 @@ class CommonConfig(object):
         self.post_pt_root_id = "post_pt_root_id"
         self.synapse_aggregation_rules = config.get("synapse_aggregation_rules", {})
 
+        self.ct_cell_type_point = None
+
         self.syn_pt_prefix = config.get("syn_position_column", "ctr_pt")
         self.syn_pt_position = bound_pt_position(self.syn_pt_prefix)
         self.syn_pt_position_split = split_pt_position(self.syn_pt_position)
@@ -112,13 +114,27 @@ class CommonConfig(object):
             self.num_soma_col,
         ] + split_pt_position(self.soma_pt_position)
 
+    @property
+    def ct_cell_type_pt_position(self):
+        if self.ct_cell_type_point is None:
+            return None
+        return bound_pt_position(self.ct_cell_type_point)
+
+    @property
+    def ct_cell_type_pt_position_split(self):
+        if self.ct_cell_type_point is None:
+            return None
+        return split_pt_position(self.ct_cell_type_pt_position)
+
+    @property
+    def ct_cell_type_root_id(self):
+        if self.ct_cell_type_point is None:
+            return None
+        return bound_pt_root_id(self.ct_cell_type_point)
 
 
 def RegisterTable(pt, value_columns, config):
     config = copy.deepcopy(config)
     config.ct_cell_type_point = pt
-    config.ct_cell_type_pt_position = bound_pt_position(pt)
-    config.ct_cell_type_pt_position_split = split_pt_position(pt)
-    config.ct_cell_type_root_id = bound_pt_root_id(pt)
-    config.value_columns = value_columns
+    config.value_columns = [config.nucleus_id_column] + value_columns
     return config

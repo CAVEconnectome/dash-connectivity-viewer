@@ -88,4 +88,4 @@ def _metadata_key(tn, client):
 @cached(cache=_metadata_cache, key=_metadata_key)
 def table_metadata(table_name, client):
     "Caches getting table metadata"
-    return client.materialize.get_table_metadata(table_name)
+    return client.annotation.get_table_metadata(table_name)

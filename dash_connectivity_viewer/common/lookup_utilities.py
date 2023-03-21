@@ -1,6 +1,8 @@
 import flask
 from .schema_utils import get_table_info
 from caveclient.tools.caching import CachedClient as CAVEclient
+from .dataframe_utilities import query_table_any
+import numpy as np
 
 def table_is_value_source(table, client):
     pt, vals = get_table_info(table, client)
@@ -70,6 +72,7 @@ def get_root_id_from_nuc_id(
     nucleus_table,
     config,
     timestamp=None,
+    is_live=True,
 ):
     """Look up current root id from a nucleus id
 
@@ -91,10 +94,14 @@ def get_root_id_from_nuc_id(
     [type]
         [description]
     """
-    df = client.materialize.query_table(
-        nucleus_table,
-        filter_equal_dict={config.nucleus_id_column: nuc_id},
-        timestamp=timestamp,
+    df = query_table_any(
+            nucleus_table,
+            config.soma_pt_root_id,
+            None,
+            client,
+            timestamp=timestamp,
+            extra_query={config.nucleus_id_column: [nuc_id]},
+            is_live=is_live,
     )
     if len(df) == 0:
         return None
@@ -108,15 +115,15 @@ def get_nucleus_id_from_root_id(
     nucleus_table,
     config,
     timestamp=None,
+    is_live=True,
 ):
-    filter_equal_dict = {config.soma_pt_root_id: root_id}
-    if config.soma_table_query is not None:
-        filter_equal_dict.update(config.soma_table_query)
-
-    df = client.materialize.query_table(
+    df = query_table_any(
         nucleus_table,
-        filter_equal_dict=filter_equal_dict,
+        config.soma_pt_root_id,
+        np.array([root_id]),
+        client,
         timestamp=timestamp,
+        is_live=is_live,
     )
 
     if config.soma_table_query is not None:

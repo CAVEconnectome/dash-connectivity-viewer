@@ -14,28 +14,42 @@ DEFAULT_NGL = "https://neuromancer-seung-import.appspot.com/"
 
 
 def image_source(info_cache):
+    if info_cache is None:
+        return None
     return info_cache["aligned_volume"].get("image_source", "")
 
 def aligned_volume(info_cache):
-    return info_cache['aligned_volume'].get('name')
+    if info_cache is None:
+        return None
+    return info_cache.get('aligned_volume', {}).get('name')
 
 def seg_source(info_cache):
+    if info_cache is None:
+        return None
     return info_cache.get("segmentation_source", "")
 
 
 def viewer_site(info_cache):
+    if info_cache is None:
+        return None
     return info_cache.get("viewer_site", "")
 
 
 def state_server(info_cache):
+    if info_cache is None:
+        return None
     return f"{info_cache.get('global_server', '')}/nglstate/api/v1/post"
 
 
 def root_id(info_cache):
+    if info_cache is None:
+        return None
     return int(info_cache.get("root_id", None))
 
 
 def timestamp(info_cache):
+    if info_cache is None:
+        return None
     return info_cache.get("ngl_timestamp", None)
 
 

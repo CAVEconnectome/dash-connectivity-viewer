@@ -17,7 +17,7 @@ def _soma_property_entry(soma_table, c):
     return {
         soma_table: {
             "root_id": c.soma_pt_root_id,
-            "include": split_pt_position(c.soma_pt_position),
+            "include": split_pt_position(c.soma_pt_position) + [c.nucleus_id_column],
             "aggregate": {
                 c.num_soma_prefix: {
                     "group_by": c.soma_pt_root_id,
