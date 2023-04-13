@@ -71,11 +71,6 @@ OutputLiveQueryValue = Output(
 )
 
 
-def cell_type_column_lookup(ct, schema_lookup, client):
-    if ct is None:
-        return {}
-    schema = client.materialize.get_table_metadata(ct)["schema"]
-    return schema_lookup.get(schema)
 
 
 def allowed_action_trigger(ctx, allowed_buttons):
@@ -195,6 +190,14 @@ def register_callbacks(app, config):
     )
     def reset_selection(n_clicks, tab_value):
         return []
+
+    @app.callback(
+        Output("header-bar", 'children'),
+        InputDatastack,
+    )
+    def set_header(datastack):
+        return html.H3(f"Typed Connectivity Viewer — {datastack}", className="bg-primary text-white p-2 mb-2 text-center")
+
 
     @app.callback(
         Output("data-table", "columns"),

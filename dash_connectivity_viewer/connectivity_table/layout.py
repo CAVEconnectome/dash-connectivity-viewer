@@ -11,12 +11,20 @@ url_bar_and_content_div = html.Div(
     [dcc.Location(id="url", refresh=False), html.Div(id="page-layout")]
 )
 
+
 def page_layout(state: State = None):
     state = state or {}
-    header_bar = html.Div(
-        html.H3(f"Synapse Table Viewer"),
-        id='header-bar',
+    
+    header_row = dbc.Row(
+        [
+            dbc.Col(
+                html.Div(id='header-bar'),
+                width={"size": 12},
+            ),
+        ],
     )
+
+
     input_row = [
         dbc.Row(
             [
@@ -223,7 +231,6 @@ def page_layout(state: State = None):
                         disabled=False,
                     ),
                 ],
-                # width={"size": 2, "offset": 0},
             ),
             dbc.Col(
                 dbc.Button(
@@ -232,7 +239,6 @@ def page_layout(state: State = None):
                     color="warning",
                     size="sm",
                 ),
-                # width={"size": 2, "offset": 0},
             ),
         ],
         justify="left",
@@ -240,8 +246,7 @@ def page_layout(state: State = None):
 
     layout = html.Div(
         children=[
-            # html.Div(header_text),
-            header_bar,
+            header_row,
             dbc.Container(
                 input_row,
                 fluid=True,

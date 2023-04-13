@@ -92,6 +92,13 @@ def register_callbacks(app, config):
             return datastack
 
     @app.callback(
+        Output("header-bar", 'children'),
+        InputDatastack,
+    )
+    def set_header(datastack):
+        return html.H3(f"Table Info — {datastack}", className="bg-primary text-white p-2 mb-2 text-center")
+
+    @app.callback(
         OutputCellTypeMenuOptions,
         InputDatastack,
     )

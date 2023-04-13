@@ -3,8 +3,11 @@ from .schema_utils import get_table_info
 from caveclient.tools.caching import CachedClient as CAVEclient
 from .dataframe_utilities import query_table_any
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 
 def table_is_value_source(table, client):
+    if table is None:
+        return False
     pt, vals = get_table_info(table, client)
     if pt is not None and len(vals) > 0:
         return True
@@ -18,11 +21,9 @@ def get_all_schema_tables(
     client = make_client(datastack, config.server_address)
     tables = client.materialize.get_tables()
     schema_tables = []
-    for t in tables:
-        if t in config.omit_cell_type_tables:
-            continue
-        if table_is_value_source(t, client):
-            schema_tables.append(t)
+    exe = ThreadPoolExecutor(max_workers=10)
+    is_val_source = {t: exe.submit(table_is_value_source, t, client) for t in tables if t not in config.omit_cell_type_tables}
+    schema_tables = [k for k, v in is_val_source.items() if v.result()]
     return [{"label": t, "value": t} for t in sorted(schema_tables)]
 
 def get_type_tables(datastack, config):

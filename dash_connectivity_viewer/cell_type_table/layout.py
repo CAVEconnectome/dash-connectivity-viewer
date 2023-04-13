@@ -33,6 +33,14 @@ def page_layout(state: State = {}):
     layout : list
         List of layout components for the dash app.
     """
+    header_row = dbc.Row(
+        [
+            dbc.Col(
+                html.Div(id='header-bar'),
+                width={"size": 12},
+            ),
+        ],
+    )
 
     cell_type_query = html.Div(
         children=[
@@ -373,7 +381,7 @@ def page_layout(state: State = {}):
 
     layout = html.Div(
         children=[
-            title_row,
+            header_row,
             dbc.Container(cell_type_query, fluid=True),
             dbc.Container(message_row),
             dbc.Container(whole_column_link),

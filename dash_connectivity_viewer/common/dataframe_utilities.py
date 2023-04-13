@@ -73,6 +73,7 @@ def _query_table_single(
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
             allow_missing_lookups=True,
+            metadata=False,
             **filter_kwargs,
         )
     else:
@@ -80,6 +81,7 @@ def _query_table_single(
             table,
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
+            metadata=False,
             **filter_kwargs,
         )
 
@@ -110,6 +112,7 @@ def _query_table_join(
             desired_resolution=DESIRED_RESOLUTION,
             suffixes={table: "", ref_table: "_ref"},
             allow_missing_lookups=True,
+            metadata=False,
             **filter_kwargs,
         ).rename(columns={"idx": "id"})
     else:
@@ -119,6 +122,7 @@ def _query_table_join(
             suffixes={table: "", ref_table: "_ref"},
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
+            metadata=False,
             **filter_kwargs,
         )
 
@@ -148,6 +152,7 @@ def _synapse_df(
             split_positions=True,
             timestamp=timestamp,
             desired_resolution=DESIRED_RESOLUTION,
+            metadata=False,
         )
     else:
         syn_df = client.materialize.query_table(
@@ -155,6 +160,7 @@ def _synapse_df(
             filter_equal_dict={f"{direction}_pt_root_id": root_id},
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
+            metadata=False,
         )
 
     if exclude_autapses:

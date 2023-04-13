@@ -129,17 +129,6 @@ def make_input_row(state):
     )
 
 
-def make_header(state):
-    return dbc.Row(
-        [
-            dbc.Col(
-                html.H3(f"Neuron Target Info:"),
-                width={"size": 6, "offset": 1},
-            ),
-        ],
-    )
-
-
 def make_message_row(state):
     return dbc.Row(
         dbc.Col(
@@ -367,7 +356,14 @@ def make_output_link_tab():
 def page_layout(state: State = None):
     state = state or {}
 
-    header_text = make_header(state)
+    header_text = dbc.Row(
+        [
+            dbc.Col(
+                html.Div(id='header-bar'),
+                width={"size": 12},
+            ),
+        ],
+    )
     input_row = make_input_row(state)
     message_row = make_message_row(state)
     top_link = make_table_link_row(state)
@@ -531,7 +527,7 @@ def page_layout(state: State = None):
 
     layout = html.Div(
         children=[
-            html.Div(header_text),
+            header_text,
             dbc.Container(input_row, fluid=True),
             html.Br(),
             html.Div(message_row),

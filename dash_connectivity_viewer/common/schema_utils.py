@@ -88,4 +88,7 @@ def _metadata_key(tn, client):
 @cached(cache=_metadata_cache, key=_metadata_key)
 def table_metadata(table_name, client):
     "Caches getting table metadata"
-    return client.annotation.get_table_metadata(table_name)
+    meta = client.materialize.get_table_metadata(table_name)
+    if "schema" not in meta:
+        meta["schema"] = meta.get('schema_type')
+    return meta

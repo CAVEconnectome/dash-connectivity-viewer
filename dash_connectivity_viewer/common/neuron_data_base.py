@@ -277,9 +277,7 @@ class NeuronData(object):
                 self._property_tables[k].get("table_bridge_schema", None)
             )
             self._property_tables[k]["data"] = dbf.reformat(df).fillna(np.nan)
-            self._property_tables[k]["data_resolution"] = df.attrs.get(
-                "table_voxel_resolution"
-            )
+            self._property_tables[k]["data_resolution"] = DESIRED_RESOLUTION
 
     def property_data(self, table_name):
         if self._property_tables.get(table_name).get("data") is None:
@@ -355,8 +353,6 @@ class NeuronData(object):
         post_df = self.post_syn_df()
         post_df["direction"] = "post"
 
-        pre_df.attrs = {}
-        post_df.attrs = {}
         syn_df = pd.concat([pre_df, post_df])
         syn_df["x"] = 0
 

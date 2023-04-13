@@ -11,11 +11,8 @@ minnie_config = {
 }
 
 v1dd_config = {
-    "datastack": "minnie65_phase3_v1",
-    "server_address": "https://global.daf-apis.com",
-    "ct_cell_type_schema": {
-        "cell_type_local": None,
-    },
+    "datastack": "v1dd",
+    "server_address": "https://globalv1.em.brain.allentech.org",
     "image_black": 0.35,
     "image_white": 0.7,
 }
@@ -37,7 +34,7 @@ fanc_config = {
 }
 
 if __name__ == "__main__":
-    app = create_app(config=fanc_config)
+    app = create_app(config=v1dd_config)
     app.run_server(
         port=8050,
         )
