@@ -1,0 +1,15 @@
+nglui>=2.9
+pandas>=1.5
+numpy
+seaborn
+flask
+dash>=2
+dash_bootstrap_components>=1
+cachetools
+requests
+caveclient>=4.11
+dfbridge>=0.0.2
+plotly
+loguru
+orjson
+standard-transform

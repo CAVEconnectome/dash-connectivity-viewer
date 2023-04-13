@@ -1,28 +1,33 @@
 import flask
-from caveclient import CAVEclient
+from .schema_utils import get_table_info
+from caveclient.tools.caching import CachedClient as CAVEclient
+from .dataframe_utilities import query_table_any
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 
+def table_is_value_source(table, client):
+    if table is None:
+        return False
+    pt, vals = get_table_info(table, client)
+    if pt is not None and len(vals) > 0:
+        return True
+    else:
+        return False
 
 def get_all_schema_tables(
-    schemata,
     datastack,
     config,
 ):
-    if isinstance(schemata, str):
-        schemata = [schemata]
     client = make_client(datastack, config.server_address)
     tables = client.materialize.get_tables()
     schema_tables = []
-    for t in tables:
-        if t in config.omit_cell_type_tables:
-            continue
-        meta = client.materialize.get_table_metadata(t)
-        if meta["schema"] in schemata:
-            schema_tables.append(t)
+    exe = ThreadPoolExecutor(max_workers=10)
+    is_val_source = {t: exe.submit(table_is_value_source, t, client) for t in tables if t not in config.omit_cell_type_tables}
+    schema_tables = [k for k, v in is_val_source.items() if v.result()]
     return [{"label": t, "value": t} for t in sorted(schema_tables)]
 
-
-def get_type_tables(schemata, datastack, config):
-    tables = get_all_schema_tables(schemata, datastack, config)
+def get_type_tables(datastack, config):
+    tables = get_all_schema_tables(datastack, config)
 
     named_options = config.cell_type_dropdown_options
     if named_options is None:
@@ -41,7 +46,7 @@ def get_type_tables(schemata, datastack, config):
     return new_tables
 
 
-def make_client(datastack, server_address):
+def make_client(datastack, server_address, **kwargs):
     """Build a framework client with appropriate auth token
 
     Parameters
@@ -54,8 +59,11 @@ def make_client(datastack, server_address):
         Global server address for the client, by default None. If None, uses the config dict.
 
     """
-    auth_token = flask.g.get("auth_token", None)
-    client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token)
+    try:
+        auth_token = flask.g.get("auth_token", None)
+    except:
+        auth_token = None
+    client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token, **kwargs)
     return client
 
 
@@ -65,6 +73,7 @@ def get_root_id_from_nuc_id(
     nucleus_table,
     config,
     timestamp=None,
+    is_live=True,
 ):
     """Look up current root id from a nucleus id
 
@@ -86,10 +95,14 @@ def get_root_id_from_nuc_id(
     [type]
         [description]
     """
-    df = client.materialize.query_table(
-        nucleus_table,
-        filter_equal_dict={config.nucleus_id_column: nuc_id},
-        timestamp=timestamp,
+    df = query_table_any(
+            nucleus_table,
+            config.soma_pt_root_id,
+            None,
+            client,
+            timestamp=timestamp,
+            extra_query={config.nucleus_id_column: [nuc_id]},
+            is_live=is_live,
     )
     if len(df) == 0:
         return None
@@ -103,12 +116,15 @@ def get_nucleus_id_from_root_id(
     nucleus_table,
     config,
     timestamp=None,
+    is_live=True,
 ):
-
-    df = client.materialize.query_table(
+    df = query_table_any(
         nucleus_table,
-        filter_equal_dict={config.soma_pt_root_id: root_id},
+        config.soma_pt_root_id,
+        np.array([root_id]),
+        client,
         timestamp=timestamp,
+        is_live=is_live,
     )
 
     if config.soma_table_query is not None:

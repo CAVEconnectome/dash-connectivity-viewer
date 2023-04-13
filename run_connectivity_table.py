@@ -9,6 +9,14 @@ minnie_config = {
     "image_white": 0.7,
 }
 
+v1dd_config = {
+    "datastack": "v1dd",
+    "syn_position_column": "ctr_pt",
+    "server_address": "https://globalv1.em.brain.allentech.org",
+    "image_black": 0.35,
+    "image_white": 0.7,
+}
+
 flywire_config = {
     "datastack": "flywire_fafb_production",
     "server_address": "https://global.daf-apis.com",
@@ -22,5 +30,5 @@ fanc_config = {
 }
 
 if __name__ == "__main__":
-    app = create_app(config=flywire_config)
-    app.run_server(port=8050)
+    app = create_app(config=v1dd_config)
+    app.run_server(port=8050, debug=True)

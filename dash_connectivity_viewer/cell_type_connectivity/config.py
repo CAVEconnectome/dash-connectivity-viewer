@@ -3,7 +3,8 @@ import seaborn as sns
 import pandas as pd
 import os
 import pathlib
-from ..common.config import CommonConfig, bound_pt_position, bound_pt_root_id
+from ..common.config import CommonConfig
+from ..common.schema_utils import bound_pt_position, bound_pt_root_id
 
 ####################
 ### Column names ###
@@ -114,13 +115,12 @@ class TypedConnectivityConfig(CommonConfig):
         self.synapse_aggregation_rules = config.get("synapse_aggregation_rules", {})
         self.aggregation_columns = list(self.synapse_aggregation_rules.keys())
         self.table_valence_map = config.get("valence_map", {})
+
         self.table_columns = (
             [
                 self.root_id_col,
                 self.num_syn_col,
-                self.ct_conn_cell_type_column,
                 self.soma_depth_column,
-                self.is_inhibitory_column,
             ]
             + self.aggregation_columns
             + [self.num_soma_col]
@@ -128,20 +128,28 @@ class TypedConnectivityConfig(CommonConfig):
 
         self.show_plots = config.get("ct_conn_show_plots", True)
         self.show_depth_plots = config.get("ct_conn_show_depth_plots", True)
+        self.null_cell_type_label = config.get('null_cell_type_label', "No Type")
 
-        # Next thing to fix!
-        base_dir = pathlib.Path(os.path.dirname(__file__))
-        data_path = base_dir.parent.joinpath("common/data")
-        self.layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
-        self.height_bnds = np.load(f"{data_path}/height_bounds_v1.npy")
-        ticklocs = np.concatenate(
-            [self.height_bnds[0:1], self.layer_bnds, self.height_bnds[1:]]
-        )
+        # self.layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
+        # self.height_bnds = np.load(f"{data_path}/height_bounds_v1.npy")
+        self.height_bnds = config.get('height_bounds', [])
+        if self.height_bnds is not None:
+            self.height_bnds = np.array(self.height_bnds)
+        self.layer_bnds = config.get('layer_bounds', [])
+        if self.layer_bnds is not None:
+            self.layer_bnds = np.array(self.layer_bnds)
+        self.layer_labels = config.get('layer_labels', [])
 
-        self.allowed_cell_type_schema_bridge = config.get("ct_conn_cell_type_schema")
-        self.allowed_cell_type_schema = list(
-            self.allowed_cell_type_schema_bridge.keys()
-        )
+        if self.layer_bnds is not None and self.height_bnds is not None:
+            ticklocs = np.concatenate(
+                [self.height_bnds[0:1], self.layer_bnds, self.height_bnds[1:]]
+            )
+        else:
+            ticklocs = np.array([])
+
+        if self.layer_labels is None:
+            self.layer_labels = self.layer_bnds.astype(str)
+
 
         dendrite_color = config.get("ct_conn_dendrite_color", (0.894, 0.102, 0.110))
         axon_color = config.get("ct_conn_axon_color", (0.227, 0.459, 0.718))
@@ -161,3 +169,4 @@ class TypedConnectivityConfig(CommonConfig):
             tick_locs=ticklocs,
             tick_labels=["L1", "L2/3", "L4", "L5", "L6", "WM", ""],
         )
+

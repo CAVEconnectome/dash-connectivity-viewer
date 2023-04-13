@@ -10,6 +10,13 @@ minnie_config = {
     "image_white": 0.7,
 }
 
+v1dd_config = {
+    "datastack": "v1dd",
+    "server_address": "https://globalv1.em.brain.allentech.org",
+    "image_black": 0.35,
+    "image_white": 0.7,
+}
+
 flywire_config = {
     "datastack": "flywire_fafb_production",
     "server_address": "https://global.daf-apis.com",
@@ -23,18 +30,11 @@ fanc_config = {
     "server_address": "https://global.daf-apis.com",
     "ct_cell_type_schema": {
         "cell_type_local": None,
-        "bound_tag": {
-            "id": "id",
-            "classification_system": None,
-            "cell_type": "tag",
-            "pt_root_id": "pt_root_id",
-            "pt_position_x": "pt_position_x",
-            "pt_position_y": "pt_position_y",
-            "pt_position_z": "pt_position_z",
-        },
     },
 }
 
 if __name__ == "__main__":
-    app = create_app(config=minnie_config)
-    app.run_server(port=8050)
+    app = create_app(config=v1dd_config)
+    app.run_server(
+        port=8050,
+        )

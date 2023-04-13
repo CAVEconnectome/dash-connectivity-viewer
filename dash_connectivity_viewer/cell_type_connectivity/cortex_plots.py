@@ -1,6 +1,7 @@
+from plotly import colors
 import plotly.graph_objects as go
 import numpy as np
-
+import pandas as pd
 
 def _violin_plot(syn_df, x_col, y_col, name, side, color, xaxis, yaxis):
     return go.Violin(
@@ -8,12 +9,16 @@ def _violin_plot(syn_df, x_col, y_col, name, side, color, xaxis, yaxis):
         y=syn_df[y_col],
         side=side,
         scalegroup="syn",
+        spanmode='hard',
         name=name,
         points=False,
         line_color=f"rgb{color}",
         fillcolor=f"rgb{color}",
         xaxis=xaxis,
         yaxis=yaxis,
+        hoverinfo='text',
+        hovertext=f"{len(syn_df)} Syn.",
+        # bandwidth=0.2,
     )
 
 
@@ -50,58 +55,90 @@ def pre_violin_plot(
         yaxis=yaxis,
     )
 
+from itertools import cycle
+def _colorscheme(n):
+    if n <= 10:
+        clrs = cycle(colors.qualitative.G10)
+    else:
+        clrs = cycle(colors.qualitative.Dark24)
+    return [next(clrs) for i in range(n)]
 
 def synapse_soma_scatterplot(
-    ndat,
-    syn_depth_column,
-    soma_depth_column,
+    targ_df,
+    config,
+    color_column,
     xaxis=None,
     yaxis=None,
 ):
-    drop_columns = [syn_depth_column, soma_depth_column]
-    targ_df = ndat.pre_syn_df_plus().dropna(subset=drop_columns)
 
-    inhibitory_string_column = "inhib_string_column"
-    targ_df[inhibitory_string_column] = ndat.config.vis.valence_string_map(
-        targ_df[ndat.config.is_inhibitory_column]
-    )
+    if color_column is None or color_column == "":
+        fake_cell_type_column = 'DummyColumn_'
+        while fake_cell_type_column in targ_df.columns:
+            fake_cell_type_column += 'a'
+        color_column = fake_cell_type_column
+        targ_df[color_column] = config.null_cell_type_label
+        ctypes = [config.null_cell_type_label]
+    else:
+        if targ_df[color_column].dtype == 'float64':
+            targ_df[color_column] = targ_df[color_column].astype(pd.Int64Dtype())
+            ctypes = sorted(list(np.unique(targ_df[color_column].dropna()).astype(str)))
+            targ_df[color_column] = targ_df[color_column].astype(str).replace(
+                {'<NA>': config.null_cell_type_label}
+            )
+        else:
+            ctypes = sorted(list(np.unique(targ_df[color_column].dropna()).astype(str)))
+            targ_df[color_column] = targ_df[color_column].fillna(config.null_cell_type_label).astype(str)
+        ctypes = ctypes+[config.null_cell_type_label]
 
+    
+    if len(ctypes)>1:
+        cmap = _colorscheme(len(ctypes)-1) + ['#333333']
+    else:
+        cmap = ['#333333']
+
+    alpha_default = {config.null_cell_type_label: 0.2}
     panels = []
-    valence_order = [
-        ndat.config.vis.u_string,
-        ndat.config.vis.e_string,
-        ndat.config.vis.i_string,
-    ]
-    color_order = [
-        ndat.config.vis.u_color,
-        ndat.config.vis.e_color,
-        ndat.config.vis.i_color,
-    ]
-    opacity_order = [
-        ndat.config.vis.u_opacity,
-        ndat.config.vis.e_opacity,
-        ndat.config.vis.i_opacity,
-    ]
-
-    for val, color, alpha in zip(valence_order, color_order, opacity_order):
-        targ_df_r = targ_df.query(f"{inhibitory_string_column}=='{val}'")
+    alpha= config.vis.e_opacity
+    for ct, clr in zip(ctypes, cmap):
+        targ_df_r = targ_df.query(f"{color_column}=='{ct}'")
         panel = go.Scattergl(
-            x=targ_df_r[soma_depth_column],
-            y=targ_df_r[syn_depth_column],
+            x=targ_df_r[config.soma_depth_column],
+            y=targ_df_r[config.synapse_depth_column],
             mode="markers",
             marker=dict(
-                color=f"rgb{_format_color(color)}",
+                color=clr,
                 line_width=0,
-                size=5,
-                opacity=alpha,
+                size=4,
+                opacity=alpha_default.get(ct, alpha),
             ),
             xaxis=xaxis,
             yaxis=yaxis,
-            name=val,
+            name=ct,
+            # hoverinfo='none',
         )
         panels.append(panel)
 
     return panels
+
+def bar_plot_df(
+    targ_df,
+    config,
+    color_value,
+):
+
+    targ_df = targ_df.replace({config.null_cell_type_label: None}).dropna(subset=color_value)
+    xtypes = sorted(list(np.unique(targ_df[color_value])))
+    clrs = _colorscheme(len(xtypes))
+    cnts = targ_df.value_counts(color_value).loc[xtypes]
+
+    bar = go.Bar(
+        name=color_value,
+        x=xtypes,
+        y=cnts,
+        text=cnts,
+        marker_color=clrs,
+    )
+    return bar
 
 
 def bar_data(

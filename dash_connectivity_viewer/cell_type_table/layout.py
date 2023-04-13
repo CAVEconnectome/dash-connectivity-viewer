@@ -12,7 +12,7 @@ from ..common.dash_url_helper import create_component_kwargs, State
 #####################
 
 # The title gives the title of the app in the browser tab
-title = "Cell Type Table Viewer"
+title = "Annotation Table Viewer"
 
 ###################################################################
 # page_layout must be defined to take a state and return a layout #
@@ -33,6 +33,14 @@ def page_layout(state: State = {}):
     layout : list
         List of layout components for the dash app.
     """
+    header_row = dbc.Row(
+        [
+            dbc.Col(
+                html.Div(id='header-bar'),
+                width={"size": 12},
+            ),
+        ],
+    )
 
     cell_type_query = html.Div(
         children=[
@@ -40,7 +48,7 @@ def page_layout(state: State = {}):
                 [
                     dbc.Col(
                         [
-                            html.Div("Cell Type Table:"),
+                            html.Div("Annotation Table:"),
                             dcc.Dropdown(
                                 **create_component_kwargs(
                                     state,
@@ -105,7 +113,7 @@ def page_layout(state: State = {}):
                 [
                     dbc.Col(
                         [
-                            html.Div("Cell ID (optional):"),
+                            html.Div("Cell IDs (optional):"),
                             dbc.Input(
                                 **create_component_kwargs(
                                     state,
@@ -160,7 +168,8 @@ def page_layout(state: State = {}):
                 [
                     dbc.Col(
                         [
-                            html.Div("Cell Type (optional):"),
+                            
+                            html.Div("Value Search (optional):"),
                             dbc.Input(
                                 **create_component_kwargs(
                                     state,
@@ -172,7 +181,28 @@ def page_layout(state: State = {}):
                         ],
                         width={"size": 2, "offset": 1},
                     ),
-                ]
+                    dbc.Col(
+                        [
+                            html.Div("Search Column:"),
+                            dcc.Dropdown(
+                                **create_component_kwargs(
+                                    state,
+                                    id_inner="value-column-search",
+                                    options=[],
+                                    value="",
+                                    style={
+                                        "margin-left": "12px",
+                                        "font-size": "12px",
+                                    },
+                                    clearable=False,
+                                )
+                            ),
+                        ],
+                        width={"size": 1},
+                        align="end",
+                    )
+                ],
+                justify="state",
             ),
             html.Hr(),
         ]
@@ -289,8 +319,12 @@ def page_layout(state: State = {}):
                                     ]
                                 ),
                                 dbc.Spinner(
-                                    html.Div(
-                                        "", id="whole-table-link", className="card-text"
+                                    dbc.Row(
+                                        html.Div(
+                                            "", id="whole-table-link", className="card-text"
+                                        ),
+                                        justify='center',
+                                        align='center',
                                     ),
                                     size="sm",
                                 ),
@@ -299,7 +333,30 @@ def page_layout(state: State = {}):
                     ]
                 ),
             ),
-        ]
+            dbc.Col(
+                dbc.Card(
+                    dbc.CardBody(
+                        [
+                            html.H4('Annotation Grouping', className='card-title'),
+                            dbc.Checklist(
+                                options=[
+                                    {"label": "Group annotations", "value": 1},
+                                ],
+                                value=[],
+                                id="do-group",
+                                switch=True,
+                            ),
+                            dcc.Dropdown(
+                                options={},
+                                value='cell_type',
+                                id='group-by',
+                                searchable=False,
+                            ),
+                        ]
+                    )
+                )
+            )
+        ],
     )
 
     datastack_comp = (
@@ -324,7 +381,7 @@ def page_layout(state: State = {}):
 
     layout = html.Div(
         children=[
-            title_row,
+            header_row,
             dbc.Container(cell_type_query, fluid=True),
             dbc.Container(message_row),
             dbc.Container(whole_column_link),
@@ -335,6 +392,8 @@ def page_layout(state: State = {}):
             dcc.Store(id="client-info-json"),
             dcc.Store(id="table-resolution-json"),
             dcc.Store(id='data-resolution-json'),
+            dcc.Store(id='pt-column'),
+            dcc.Store(id='value-columns'),
         ]
     )
     return layout

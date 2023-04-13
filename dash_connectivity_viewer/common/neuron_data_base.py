@@ -1,23 +1,23 @@
 import pandas as pd
 import numpy as np
 from dfbridge import DataframeBridge
-from caveclient import CAVEclient
 
 from dash_connectivity_viewer.common.lookup_utilities import (
     get_nucleus_id_from_root_id,
     get_root_id_from_nuc_id,
+    make_client
 )
 
 from .dataframe_utilities import *
 from .link_utilities import voxel_resolution_from_info
 from multiprocessing import cpu_count
-
+from ..common.schema_utils import split_pt_position
 
 def _soma_property_entry(soma_table, c):
     return {
         soma_table: {
             "root_id": c.soma_pt_root_id,
-            "include": [c.soma_pt_position],
+            "include": split_pt_position(c.soma_pt_position) + [c.nucleus_id_column],
             "aggregate": {
                 c.num_soma_prefix: {
                     "group_by": c.soma_pt_root_id,
@@ -29,6 +29,7 @@ def _soma_property_entry(soma_table, c):
             "table_filter": c.soma_table_query,
             "data": None,
             "data_resolution": None,
+            "fill_missing": True,
         }
     }
 
@@ -61,6 +62,7 @@ class NeuronData(object):
         timestamp=None,
         n_threads=None,
         id_type="root",
+        is_live=True,
     ):
 
         if id_type == "root":
@@ -70,10 +72,9 @@ class NeuronData(object):
             self._root_id = None
             self._nucleus_id = object_id
 
-        self._client = CAVEclient(
-            datastack_name=client.datastack_name,
+        self._client = make_client(
+            datastack=client.datastack_name,
             server_address=client.server_address,
-            auth_token=client.auth.token,
             pool_block=True,
             pool_maxsize=config.pool_maxsize,
         )
@@ -95,9 +96,11 @@ class NeuronData(object):
 
         self._timestamp = timestamp
 
+        self.is_live = is_live
+
         self._pre_syn_df = None
         self._post_syn_df = None
-        self._synapse_data_resolution = None
+        self._synapse_data_resolution = np.array([1,1,1])
 
         self._viewer_resolution = voxel_resolution_from_info(client.info.info_cache)
 
@@ -108,6 +111,7 @@ class NeuronData(object):
         self._partner_soma_table = None
         self._partner_root_ids = None
 
+        self.check_root_id()
         if soma_table is not None:
             self._property_tables.update(
                 _soma_property_entry(
@@ -132,6 +136,12 @@ class NeuronData(object):
                 self._root_id = new_root_id
         return self._root_id
 
+    def check_root_id(self):
+        if self.client.chunkedgraph.is_latest_roots([self.root_id])[0]:
+            pass
+        else:
+            raise Exception(f"Root id is not valid at this timestamp.")
+
     @property
     def nucleus_id(self):
         if self.soma_table is None:
@@ -152,7 +162,7 @@ class NeuronData(object):
 
     @property
     def live_query(self):
-        return self._timestamp is not None
+        return self.is_live
 
     @property
     def timestamp(self):
@@ -168,8 +178,6 @@ class NeuronData(object):
 
     @property
     def synapse_data_resolution(self):
-        if self._pre_syn_df is None:
-            self._get_syn_df()
         return self._synapse_data_resolution
 
     @property
@@ -194,9 +202,7 @@ class NeuronData(object):
             timestamp=self.timestamp,
             config=self.config,
             n_threads=self.n_threads,
-        )
-        self._synapse_data_resolution = self._pre_syn_df.attrs.get(
-            "table_voxel_resolution"
+            is_live=self.is_live,
         )
         self._populate_property_tables()
 
@@ -210,7 +216,7 @@ class NeuronData(object):
         if self._pre_syn_df is None:
             self._get_syn_df()
 
-        return np.unique(
+        root_ids = np.unique(
             np.concatenate(
                 (
                     self._pre_syn_df[self.config.post_pt_root_id].values,
@@ -218,6 +224,7 @@ class NeuronData(object):
                 )
             )
         )
+        return root_ids[root_ids!=0]
 
     def partners_out(self, properties=True):
         return self._targ_table("pre", properties)
@@ -243,14 +250,13 @@ class NeuronData(object):
         return targ_df
 
     def _make_simple_targ_df(self, df_grp):
-        pts = df_grp[self.config.syn_pt_position].agg(list)
-        num_syn = df_grp[self.config.syn_pt_position].agg(len)
-        syn_df = pd.DataFrame(
-            {
-                self.config.syn_pt_position: pts,
-                self.config.num_syn_col: num_syn,
-            }
-        )
+        num_syn = df_grp[self.config.syn_pt_position_split[0]].agg(len)
+        syn_data_dict = {}
+        for k in self.config.syn_pt_position_split:
+            syn_data_dict[k] = df_grp[k].agg(list)
+        syn_data_dict[self.config.num_syn_col] = num_syn
+        syn_df = pd.DataFrame(syn_data_dict)
+
         for k, v in self.config.synapse_aggregation_rules.items():
             syn_df[k] = df_grp[v["column"]].agg(v["agg"])
         return syn_df.sort_values(
@@ -264,15 +270,14 @@ class NeuronData(object):
             self.client,
             self.timestamp,
             self.n_threads,
+            self.is_live,
         )
         for k, df in dfs.items():
             dbf = DataframeBridge(
                 self._property_tables[k].get("table_bridge_schema", None)
             )
             self._property_tables[k]["data"] = dbf.reformat(df).fillna(np.nan)
-            self._property_tables[k]["data_resolution"] = df.attrs.get(
-                "table_voxel_resolution"
-            )
+            self._property_tables[k]["data_resolution"] = DESIRED_RESOLUTION
 
     def property_data(self, table_name):
         if self._property_tables.get(table_name).get("data") is None:
@@ -328,11 +333,13 @@ class NeuronData(object):
         return df
 
     def _get_own_soma_loc(self):
+        print("self is live", self.is_live)
         own_soma_df = get_specific_soma(
             self.soma_table,
             self.root_id,
             self.client,
             self.timestamp,
+            self.is_live,
         )
         if len(own_soma_df) != 1:
             own_soma_loc = np.nan
@@ -345,8 +352,10 @@ class NeuronData(object):
         pre_df["direction"] = "pre"
         post_df = self.post_syn_df()
         post_df["direction"] = "post"
+
         syn_df = pd.concat([pre_df, post_df])
         syn_df["x"] = 0
+
         return syn_df
 
     def soma_location(self):

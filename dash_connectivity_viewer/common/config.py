@@ -1,16 +1,13 @@
+import copy
 ###########################################
 ### Default data and request parameters ###
 ###########################################
+from .schema_utils import bound_pt_position, split_pt_position, bound_pt_root_id
+
+DATA_RESOLUTION = [1,1,1]
+
 def parse_environ_vector(input, num_type):
     return [num_type(x) for x in input.split(",")]
-
-
-def bound_pt_position(pt):
-    return f"{pt}_position"
-
-
-def bound_pt_root_id(pt):
-    return f"{pt}_root_id"
 
 
 class CommonConfig(object):
@@ -32,6 +29,8 @@ class CommonConfig(object):
         self.pool_maxsize = 2 * self.max_chunks
         self.voxel_resolution = config.get("voxel_resolution")
 
+        self.data_resolution = DATA_RESOLUTION
+
         ##############################
         ### Link generation limits ###
         ##############################
@@ -44,6 +43,7 @@ class CommonConfig(object):
         # If None, the info service is used
         self.nucleus_table = config.get("nucleus_table", None)
         self.nucleus_id_column = config.get("nucleus_id_column", "id")
+        self.nucleus_filter = config.get('nucleus_filter', {})
 
         # Used to look up number of neurons per root id
         self.soma_table = self.nucleus_table
@@ -57,8 +57,11 @@ class CommonConfig(object):
         self.post_pt_root_id = "post_pt_root_id"
         self.synapse_aggregation_rules = config.get("synapse_aggregation_rules", {})
 
+        self.ct_cell_type_point = None
+
         self.syn_pt_prefix = config.get("syn_position_column", "ctr_pt")
         self.syn_pt_position = bound_pt_position(self.syn_pt_prefix)
+        self.syn_pt_position_split = split_pt_position(self.syn_pt_position)
 
         self.soma_pt_prefix = config.get("soma_postion_column", "pt")
         self.soma_pt_position = bound_pt_position(self.soma_pt_prefix)
@@ -76,7 +79,6 @@ class CommonConfig(object):
         self.num_soma_prefix = "num"
         self.num_syn_col = "num_syn"
         self.root_id_col = "root_id"
-
         self.num_soma_suffix = "_soma"
         self.num_soma_col = f"{self.num_soma_prefix}{self.num_soma_suffix}"
 
@@ -86,8 +88,7 @@ class CommonConfig(object):
             "id",
             self.pre_pt_root_id,
             self.post_pt_root_id,
-            self.syn_pt_position,
-        ]
+        ] + split_pt_position(self.syn_pt_position)
 
         additional_syn_merges = []
         for _, v in self.synapse_aggregation_rules.items():
@@ -98,15 +99,42 @@ class CommonConfig(object):
             self.synapse_table_columns_base + additional_syn_merges
         )
 
-        self.target_table_display = [
-            self.root_id_col,
-            self.syn_pt_position,
-            self.num_syn_col,
-            self.num_soma_col,
-        ] + list(self.synapse_aggregation_rules.keys())
+        self.target_table_display = (
+            [self.root_id_col]
+            + split_pt_position(self.syn_pt_position)
+            + [
+                self.num_syn_col,
+                self.num_soma_col,
+            ]
+            + list(self.synapse_aggregation_rules.keys())
+        )
 
         self.soma_table_columns = [
             self.soma_pt_root_id,
-            self.soma_pt_position,
             self.num_soma_col,
-        ]
+        ] + split_pt_position(self.soma_pt_position)
+
+    @property
+    def ct_cell_type_pt_position(self):
+        if self.ct_cell_type_point is None:
+            return None
+        return bound_pt_position(self.ct_cell_type_point)
+
+    @property
+    def ct_cell_type_pt_position_split(self):
+        if self.ct_cell_type_point is None:
+            return None
+        return split_pt_position(self.ct_cell_type_pt_position)
+
+    @property
+    def ct_cell_type_root_id(self):
+        if self.ct_cell_type_point is None:
+            return None
+        return bound_pt_root_id(self.ct_cell_type_point)
+
+
+def RegisterTable(pt, value_columns, config):
+    config = copy.deepcopy(config)
+    config.ct_cell_type_point = pt
+    config.value_columns = [config.nucleus_id_column] + value_columns
+    return config
