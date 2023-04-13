@@ -18,7 +18,7 @@ cachetools==5.3.0
     # via
     #   -r requirements.in
     #   caveclient
-caveclient==5.1.0
+caveclient==5.2.1
     # via -r requirements.in
 certifi==2022.12.7
     # via requests
@@ -30,11 +30,11 @@ contourpy==1.0.7
     # via matplotlib
 cycler==0.11.0
     # via matplotlib
-dash==2.9.0
+dash==2.9.2
     # via
     #   -r requirements.in
     #   dash-bootstrap-components
-dash-bootstrap-components==1.4.0
+dash-bootstrap-components==1.4.1
     # via -r requirements.in
 dash-core-components==2.0.0
     # via dash
@@ -52,11 +52,11 @@ flask==2.2.3
     # via
     #   -r requirements.in
     #   dash
-fonttools==4.39.2
+fonttools==4.39.3
     # via matplotlib
 idna==3.4
     # via requests
-ipython==8.11.0
+ipython==8.12.0
     # via
     #   caveclient
     #   nglui
@@ -70,7 +70,7 @@ jsonschema==4.17.3
     # via caveclient
 kiwisolver==1.4.4
     # via matplotlib
-loguru==0.6.0
+loguru==0.7.0
     # via -r requirements.in
 markupsafe==2.1.2
     # via
@@ -80,9 +80,9 @@ matplotlib==3.7.1
     # via seaborn
 matplotlib-inline==0.1.6
     # via ipython
-networkx==3.0
+networkx==3.1
     # via caveclient
-nglui==2.13.0
+nglui==2.14.0
     # via -r requirements.in
 numpy==1.24.2
     # via
@@ -96,11 +96,13 @@ numpy==1.24.2
     #   scipy
     #   seaborn
     #   standard-transform
-orjson==3.8.7
+orjson==3.8.10
     # via -r requirements.in
-packaging==23.0
-    # via matplotlib
-pandas==1.5.3
+packaging==23.1
+    # via
+    #   matplotlib
+    #   plotly
+pandas==2.0.0
     # via
     #   -r requirements.in
     #   caveclient
@@ -114,9 +116,9 @@ pexpect==4.8.0
     # via ipython
 pickleshare==0.7.5
     # via ipython
-pillow==9.4.0
+pillow==9.5.0
     # via matplotlib
-plotly==5.13.1
+plotly==5.14.1
     # via
     #   -r requirements.in
     #   dash
@@ -128,7 +130,7 @@ pure-eval==0.2.2
     # via stack-data
 pyarrow==11.0.0
     # via caveclient
-pygments==2.14.0
+pygments==2.15.0
     # via ipython
 pyparsing==3.0.9
     # via matplotlib
@@ -138,7 +140,7 @@ python-dateutil==2.8.2
     # via
     #   matplotlib
     #   pandas
-pytz==2022.7.1
+pytz==2023.3
     # via pandas
 requests==2.28.2
     # via
@@ -154,7 +156,7 @@ six==1.16.0
     #   python-dateutil
 stack-data==0.6.2
     # via ipython
-standard-transform==1.1.0
+standard-transform==1.2.0
     # via -r requirements.in
 tenacity==8.2.2
     # via plotly
@@ -162,13 +164,15 @@ traitlets==5.9.0
     # via
     #   ipython
     #   matplotlib-inline
+tzdata==2023.3
+    # via pandas
 urllib3==1.26.15
     # via
     #   caveclient
     #   requests
 wcwidth==0.2.6
     # via prompt-toolkit
-webcolors==1.12
+webcolors==1.13
     # via nglui
 werkzeug==2.2.3
     # via flask
