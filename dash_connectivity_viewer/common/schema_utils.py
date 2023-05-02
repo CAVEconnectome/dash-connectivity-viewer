@@ -68,6 +68,8 @@ def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES, merge_schema=True
     cols
         List of additional columns names
     """
+    if tn is None:
+        return None, []
     meta = table_metadata(tn, client)
     ref_table = meta.get('reference_table')
     if ref_table is None or merge_schema is False:
@@ -81,14 +83,27 @@ def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES, merge_schema=True
     return pt, cols
 
 _metadata_cache = TTLCache(maxsize=128, ttl=86_400)
-def _metadata_key(tn, client):
+def _metadata_key(tn, client, **kwargs):
     key = keys.hashkey(tn)
     return key
 
 @cached(cache=_metadata_cache, key=_metadata_key)
-def table_metadata(table_name, client):
+def table_metadata(table_name, client, meta=None):
     "Caches getting table metadata"
-    meta = client.materialize.get_table_metadata(table_name)
+    if meta is None:
+        meta = client.materialize.get_table_metadata(table_name)
     if "schema" not in meta:
         meta["schema"] = meta.get('schema_type')
     return meta
+
+_table_list_cache = TTLCache(maxsize=64, ttl=86_400)
+def _table_list_key(tables, client):
+    key = keys.hashkey('_'.join(tables))
+    return key
+
+@cached(cache=_table_list_cache, key=_table_list_key)
+def populate_metadata_cache(tables, client):
+    all_meta = client.materialize.get_tables_metadata()
+    for tn, meta in zip(tables, all_meta):
+        table_metadata(tn, client, meta=meta)
+    pass

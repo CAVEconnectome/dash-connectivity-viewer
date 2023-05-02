@@ -5,11 +5,11 @@ minnie_config = {
     "cell_type_dropdown_options": [
         {
             "label": "All Soma Prediction",
-            "value": "allen_soma_coarse_cell_class_model_v1",
+            "value": "aibs_soma_nuc_metamodel_preds_v117",
         },
         {
             "label": "Column Census",
-            "value": "allen_v1_column_types_slanted",
+            "value": "minnie65_phase3_v1",
         },
     ],
     "datastack": "minnie65_phase3_v1",
@@ -26,7 +26,7 @@ minnie_config = {
         },
     },
     "omit_cell_type_tables": ["nucleus_detection_v0", "nucleus_neuron_svm"],
-    "default_cell_type_option": "allen_soma_coarse_cell_class_model_v1",
+    "default_cell_type_option": "aibs_soma_nuc_metamodel_preds_v117",
     "image_black": 0.35,
     "image_white": 0.7,
     'height_bounds': [0, 950],
