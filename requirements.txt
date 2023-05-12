@@ -1,4 +1,4 @@
-nglui
+nglui==2
 pandas<2
 numpy
 seaborn
@@ -9,7 +9,7 @@ cachetools
 requests
 caveclient>=4.11
 dfbridge>=0.0.2
-plotly
+plotly==5
 loguru
 orjson
-standard-transform
+standard-transform==1
