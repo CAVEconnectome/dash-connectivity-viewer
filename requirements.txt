@@ -1,9 +1,9 @@
 nglui
-pandas>=1.5
+pandas<2
 numpy
 seaborn
 flask
-dash>=2
+dash==2
 dash_bootstrap_components>=1
 cachetools
 requests
