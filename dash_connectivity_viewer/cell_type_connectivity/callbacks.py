@@ -39,6 +39,7 @@ try:
 except:
     logger = None
 
+
 InputDatastack = Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
 OutputDatastack = Output({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
 
@@ -364,96 +365,95 @@ def register_callbacks(app, config):
             else:
                 raise ValueError('id_type must be either "root_id" or "nucleus_id"')
         
-        # try:
-        nrn_data = NeuronData(
-            object_id=object_id,
-            client=client,
-            config=c,
-            value_table=ct_table_value,
-            timestamp=timestamp,
-            id_type=object_id_type,
-            is_live=live_query,
-            n_threads=2,
-        )
-
-        root_id = nrn_data.root_id
-        info_cache["root_id"] = str(root_id)
-
-        pre_targ_df = nrn_data.partners_out_plus()
-        pre_targ_df = stringify_root_ids(
-            pre_targ_df, stringify_cols=[c.root_id_col]
-        )
-
-        post_targ_df = nrn_data.partners_in_plus()
-        post_targ_df = stringify_root_ids(
-            post_targ_df, stringify_cols=[c.root_id_col]
-        )
-
-        n_syn_pre = pre_targ_df[c.num_syn_col].sum()
-        n_syn_post = post_targ_df[c.num_syn_col].sum()
-
-        for col in nrn_data.config.syn_pt_position_split:
-            stringify_list(col, pre_targ_df)
-            stringify_list(col, post_targ_df)
-
-
-        if logger is not None:
-            logger.info(
-                f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {len(pre_targ_df)} , syn_out: {len(post_targ_df)}"
+        try:
+            nrn_data = NeuronData(
+                object_id=object_id,
+                client=client,
+                config=c,
+                value_table=ct_table_value,
+                timestamp=timestamp,
+                id_type=object_id_type,
+                is_live=live_query,
+                n_threads=2,
             )
-        if nrn_data.nucleus_id is not None and nrn_data.soma_table is not None:
-            # print(type(nrn_data.nucleus_id))
-            if np.issubdtype(type(nrn_data.nucleus_id), np.integer):
-                nuc_id_text = f"  (nucleus id: {nrn_data.nucleus_id})"
+
+            root_id = nrn_data.root_id
+            info_cache["root_id"] = str(root_id)
+
+            pre_targ_df = nrn_data.partners_out_plus()
+            pre_targ_df = stringify_root_ids(
+                pre_targ_df, stringify_cols=[c.root_id_col]
+            )
+
+            post_targ_df = nrn_data.partners_in_plus()
+            post_targ_df = stringify_root_ids(
+                post_targ_df, stringify_cols=[c.root_id_col]
+            )
+
+            n_syn_pre = pre_targ_df[c.num_syn_col].sum()
+            n_syn_post = post_targ_df[c.num_syn_col].sum()
+
+            for col in nrn_data.config.syn_pt_position_split:
+                stringify_list(col, pre_targ_df)
+                stringify_list(col, post_targ_df)
+
+
+            if logger is not None:
+                logger.info(
+                    f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {len(pre_targ_df)} , syn_out: {len(post_targ_df)}"
+                )
+            if nrn_data.nucleus_id is not None and nrn_data.soma_table is not None:
+                if np.issubdtype(type(nrn_data.nucleus_id), np.integer):
+                    nuc_id_text = f"  (nucleus id: {nrn_data.nucleus_id})"
+                else:
+                    nuc_id_text = f" (Multiple nucleus ids in segment: {', '.join([str(x) for x in nrn_data.nucleus_id])})"
             else:
-                nuc_id_text = f" (Multiple nucleus ids in segment: {', '.join([str(x) for x in nrn_data.nucleus_id])})"
-        else:
-            nuc_id_text = ""
-        if ct_table_value:
-            ct_text = f"table {ct_table_value}"
-        else:
-            ct_text = "no cell type table"
+                nuc_id_text = ""
+            if ct_table_value:
+                ct_text = f"table {ct_table_value}"
+            else:
+                ct_text = "no cell type table"
 
-        if live_query:
-            message_text = f"Current connectivity for root id {root_id}{nuc_id_text} and {ct_text}"
-        else:
-            message_text = f"Connectivity for root id {root_id}{nuc_id_text} and {ct_text} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
+            if live_query:
+                message_text = f"Current connectivity for root id {root_id}{nuc_id_text} and {ct_text}"
+            else:
+                message_text = f"Connectivity for root id {root_id}{nuc_id_text} and {ct_text} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
 
-        if c.show_depth_plots:
-            vplot = make_violin_plot(nrn_data, None)
-        else:
-            vplot = make_violin_plot(None)
-        syn_res = nrn_data.synapse_data_resolution
-        del nrn_data
-        del client
+            if c.show_depth_plots:
+                vplot = make_violin_plot(nrn_data, None)
+            else:
+                vplot = make_violin_plot(None)
+            syn_res = nrn_data.synapse_data_resolution
+            del nrn_data
+            del client
 
-        return (
-            html.Div(message_text),
-            "success",
-            "",
-            pre_targ_df.to_dict("records"),
-            post_targ_df.to_dict("records"),
-            f"Output (n = {n_syn_pre})",
-            f"Input (n = {n_syn_post})",
-            1,
-            info_cache,
-            vplot,
-            syn_res,
-        )
-        # except Exception as e:
-        #     return (
-        #         html.Div(str(e)),
-        #         "danger",
-        #         "",
-        #         [],
-        #         [],
-        #         "Output",
-        #         "Input",
-        #         1,
-        #         EMPTY_INFO_CACHE,
-        #         make_violin_plot(None),
-        #         None,
-        #     )
+            return (
+                html.Div(message_text),
+                "success",
+                "",
+                pre_targ_df.to_dict("records"),
+                post_targ_df.to_dict("records"),
+                f"Output (n = {n_syn_pre})",
+                f"Input (n = {n_syn_post})",
+                1,
+                info_cache,
+                vplot,
+                syn_res,
+            )
+        except Exception as e:
+            return (
+                html.Div(str(e)),
+                "danger",
+                "",
+                [],
+                [],
+                "Output",
+                "Input",
+                1,
+                EMPTY_INFO_CACHE,
+                make_violin_plot(None),
+                None,
+            )
 
     @app.callback(
         Output('scatter-plot', 'children'),

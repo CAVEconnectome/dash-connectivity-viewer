@@ -129,6 +129,7 @@ class NeuronData(object):
                 self.soma_table,
                 self.config,
                 self.timestamp,
+                self.is_live,
             )
             if new_root_id is None:
                 raise Exception("Nucleus ID not found in soma table")
@@ -333,7 +334,6 @@ class NeuronData(object):
         return df
 
     def _get_own_soma_loc(self):
-        print("self is live", self.is_live)
         own_soma_df = get_specific_soma(
             self.soma_table,
             self.root_id,

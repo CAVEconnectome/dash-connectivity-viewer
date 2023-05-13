@@ -127,7 +127,7 @@ def _query_table_join(
         )
 
 
-def get_specific_soma(soma_table, root_id, client, timestamp, is_live=True):
+def get_specific_soma(soma_table, root_id, client, timestamp, is_live):
     soma_df = query_table_any(
         soma_table, "pt_root_id", [root_id], client, timestamp, is_live=is_live
     )
@@ -176,7 +176,7 @@ def pre_synapse_df(
     client,
     timestamp,
     config,
-    is_live=True,
+    is_live,
 ):
     return _synapse_df(
         "pre",
@@ -190,7 +190,7 @@ def pre_synapse_df(
     )
 
 
-def post_synapse_df(synapse_table, root_id, client, timestamp, config, is_live=True):
+def post_synapse_df(synapse_table, root_id, client, timestamp, config, is_live):
     return _synapse_df(
         "post",
         synapse_table,
