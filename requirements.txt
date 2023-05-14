@@ -1,4 +1,4 @@
-nglui>=2
+nglui>=2.14.1
 pandas<2
 numpy
 seaborn
