@@ -198,7 +198,7 @@ def register_callbacks(app, config):
             return [], str(e), "", EMPTY_INFO_CACHE, "danger", c.data_resolution
 
         if cell_type_table is None:
-            return [], "No Cell Type Table Selected", "", info_cache, "info", c.data_resolution
+            return [], "No Table Selected", "", info_cache, "info", c.data_resolution
 
         if len(anno_id) == 0:
             anno_id = None
@@ -234,10 +234,11 @@ def register_callbacks(app, config):
                 id_query_type=anno_type_lookup[id_type],
                 column_query=annotation_filter,
                 timestamp=timestamp,
+                is_live=live_query,
             )
             df = tv.table_data()
             if live_query:
-                output_report = f"Current state of cell type table {cell_type_table}"
+                output_report = f"Current state of table {cell_type_table}"
             else:
                 output_report = f"Table {cell_type_table} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
             output_color = "success"

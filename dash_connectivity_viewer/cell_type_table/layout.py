@@ -53,7 +53,7 @@ def page_layout(state: State = {}):
                                 **create_component_kwargs(
                                     state,
                                     id_inner="cell-type-table-menu",
-                                    placeholder="Select a Cell Type Table",
+                                    placeholder="Select a Table",
                                     options=[],
                                     value=None,
                                 ),
@@ -373,7 +373,7 @@ def page_layout(state: State = {}):
     title_row = dbc.Row(
         [
             dbc.Col(
-                html.H3("Cell Type Table Lookup"),
+                html.H3("Table Viewer"),
                 width={"size": 6, "offset": 1},
             ),
         ],

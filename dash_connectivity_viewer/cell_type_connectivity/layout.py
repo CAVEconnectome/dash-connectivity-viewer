@@ -108,7 +108,7 @@ def make_input_row(state):
                 [
                     dbc.Col(
                         [
-                            html.Div("Cell Type Table:"),
+                            html.Div("Table:"),
                             dcc.Dropdown(
                                 **create_component_kwargs(
                                     state,
