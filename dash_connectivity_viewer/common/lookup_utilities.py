@@ -22,8 +22,6 @@ def get_all_schema_tables(
     tables = client.materialize.get_tables()
     populate_metadata_cache(tables, client)
     schema_tables = []
-    # exe = ThreadPoolExecutor(max_workers=10)
-    # is_val_source = {t: exe.submit(table_is_value_source, t, client) for t in tables if t not in config.omit_cell_type_tables}
     is_val_source = {t: table_is_value_source(t, client) for t in tables if t not in config.omit_cell_type_tables}
     schema_tables = [k for k, v in is_val_source.items() if v]
     return [{"label": t, "value": t} for t in sorted(schema_tables)]
@@ -35,6 +33,8 @@ def get_type_tables(datastack, config):
     if named_options is None:
         return tables
     else:
+        if len(named_options) == 0:
+            named_option_dict = dict()
         named_option_dict = {r["value"]: r["label"] for r in named_options[::-1]}
 
     new_tables = []
