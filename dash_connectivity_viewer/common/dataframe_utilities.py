@@ -73,6 +73,7 @@ def _query_table_single(
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
             allow_missing_lookups=True,
+            allow_invalid_root_ids=True,
             metadata=False,
             **filter_kwargs,
         )
@@ -112,6 +113,7 @@ def _query_table_join(
             desired_resolution=DESIRED_RESOLUTION,
             suffixes={table: "", ref_table: "_ref"},
             allow_missing_lookups=True,
+            allow_invalid_root_ids=True,
             metadata=False,
             **filter_kwargs,
         ).rename(columns={"idx": "id"})
