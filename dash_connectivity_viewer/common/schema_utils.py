@@ -17,7 +17,7 @@ def split_pt_position(pt_position):
 _schema_cache = TTLCache(maxsize=128, ttl=86_400)
 def _schema_key(schema_name, client, **kwargs):
     allow_types = kwargs.get('allow_types', ALLOW_COLUMN_TYPES)
-    key = keys.hashkey(schema_name, str(allow_types))
+    key = keys.hashkey(schema_name, str(allow_types), client.datastack_name)
     return key
 
 @cached(cache=_schema_cache, key=_schema_key)
@@ -84,7 +84,7 @@ def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES, merge_schema=True
 
 _metadata_cache = TTLCache(maxsize=128, ttl=86_400)
 def _metadata_key(tn, client, **kwargs):
-    key = keys.hashkey(tn)
+    key = keys.hashkey(tn, client.datastack_name)
     return key
 
 @cached(cache=_metadata_cache, key=_metadata_key)
@@ -98,7 +98,7 @@ def table_metadata(table_name, client, meta=None):
 
 _table_list_cache = TTLCache(maxsize=64, ttl=86_400)
 def _table_list_key(tables, client):
-    key = keys.hashkey('_'.join(tables))
+    key = keys.hashkey('_'.join(tables), client.datastack_name)
     return key
 
 @cached(cache=_table_list_cache, key=_table_list_key)
