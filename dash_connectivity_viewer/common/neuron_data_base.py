@@ -86,12 +86,9 @@ class NeuronData(object):
         self._synapse_table = synapse_table
         self._synapse_table_properties = _synapse_properties(synapse_table, config)
 
-        if config.soma_table is None:
-            soma_table = self._client.info.get_datastack_info().get("soma_table")
-        else:
-            soma_table = config.soma_table
+        
+        self._soma_table = self._client.info.get_datastack_info().get("soma_table")
 
-        self._soma_table = soma_table
         self.config = config
 
         self._timestamp = timestamp
@@ -111,12 +108,12 @@ class NeuronData(object):
         self._partner_soma_table = None
         self._partner_root_ids = None
         if config.debug:
-            print("\nNew datastack: ", self.client.datastack_name, 'soma_table:', soma_table, '\n')
+            print("\nNew datastack: ", self.client.datastack_name, 'soma_table:', self._soma_table, '\n')
         self.check_root_id()
-        if soma_table is not None:
+        if self._soma_table is not None:
             self._property_tables.update(
                 _soma_property_entry(
-                    soma_table,
+                    self._soma_table,
                     config,
                 )
             )
