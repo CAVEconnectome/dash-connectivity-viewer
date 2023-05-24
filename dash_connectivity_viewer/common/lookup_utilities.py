@@ -1,10 +1,8 @@
 import flask
 from .schema_utils import get_table_info, populate_metadata_cache
-# from caveclient.tools.caching import CachedClient as CAVEclient
-from caveclient import CAVEclient
+from caveclient.tools.caching import CachedClient as CAVEclient
 from .dataframe_utilities import query_table_any
 import numpy as np
-# from concurrent.futures import ThreadPoolExecutor
 
 def table_is_value_source(table, client):
     if table is None:

@@ -20,7 +20,7 @@ def _schema_key(schema_name, client, **kwargs):
     key = keys.hashkey(schema_name, str(allow_types), client.datastack_name)
     return key
 
-# @cached(cache=_schema_cache, key=_schema_key)
+@cached(cache=_schema_cache, key=_schema_key)
 def get_col_info(schema_name, client, spatial_point='BoundSpatialPoint', allow_types=ALLOW_COLUMN_TYPES, omit_fields=[]):
     schema = client.schema.schema_definition(schema_name)
     sp_name = f"#/definitions/{spatial_point}"
@@ -48,7 +48,7 @@ def _table_key(table_name, client, **kwargs):
     key = keys.hashkey(table_name, merge_schema, str(allow_types))
     return key
 
-# @cached(cache=_table_cache, key=_table_key)
+@cached(cache=_table_cache, key=_table_key)
 def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES, merge_schema=True):
     """Get the point column and additional columns from a table
 
@@ -87,7 +87,7 @@ def _metadata_key(tn, client, **kwargs):
     key = keys.hashkey(tn, client.datastack_name)
     return key
 
-# @cached(cache=_metadata_cache, key=_metadata_key)
+@cached(cache=_metadata_cache, key=_metadata_key)
 def table_metadata(table_name, client, meta=None):
     "Caches getting table metadata"
     if table_name is None:
@@ -103,7 +103,7 @@ def _table_list_key(tables, client):
     key = keys.hashkey('_'.join(tables), client.datastack_name)
     return key
 
-# @cached(cache=_table_list_cache, key=_table_list_key)
+@cached(cache=_table_list_cache, key=_table_list_key)
 def populate_metadata_cache(tables, client):
     all_meta = client.materialize.get_tables_metadata()
     for tn, meta in zip(tables, all_meta):
