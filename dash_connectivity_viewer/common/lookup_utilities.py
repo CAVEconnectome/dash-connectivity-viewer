@@ -27,8 +27,11 @@ def get_all_schema_tables(
     return [{"label": t, "value": t} for t in sorted(schema_tables)]
 
 def get_type_tables(datastack, config):
-    tables = get_all_schema_tables(datastack, config)
 
+    tables = get_all_schema_tables(datastack, config)
+    if config.debug:
+        print('config', config.default_datastack, 'datastack': datastack)
+        print('tables', tables)
     named_options = config.cell_type_dropdown_options
     if named_options is None:
         return tables

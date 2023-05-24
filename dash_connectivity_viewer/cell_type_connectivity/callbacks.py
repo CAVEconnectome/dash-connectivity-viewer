@@ -209,6 +209,9 @@ def register_callbacks(app, config):
     )
     def define_table_columns(_, datastack, cell_type_table):
         client = make_client(datastack, c.server_address)
+        if c.debug:
+            print('config', c.default_datastack, 'fxn', datastack, 'client', client.datastack_name)
+            
         if cell_type_table == "" or cell_type_table is None:
             return [{"name": i, "id": i} for i in c.table_columns], []
 
@@ -309,6 +312,9 @@ def register_callbacks(app, config):
             client = make_client(datastack_name, c.server_address)
             info_cache = client.info.info_cache[datastack_name]
             info_cache["global_server"] = client.server_address
+
+            if c.debug:
+                print('update_data. config', c.default_datastack, 'client', client.datastack_name)
         except Exception as e:
             return (
                 html.Div(str(e)),
@@ -444,8 +450,6 @@ def register_callbacks(app, config):
         except Exception as e:
             if c.debug:
                 print(e)
-                import pdb
-                pdb.set_trace()
             return (
                 html.Div(str(e)),
                 "danger",
