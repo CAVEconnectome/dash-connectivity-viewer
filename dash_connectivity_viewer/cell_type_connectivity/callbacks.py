@@ -1,6 +1,7 @@
 import datetime
 import pandas as pd
 from functools import partial
+import flask
 
 from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, State
@@ -209,12 +210,12 @@ def register_callbacks(app, config):
     )
     def define_table_columns(_, datastack, cell_type_table):
         client = make_client(datastack, c.server_address)
-        if c.debug:
-            print('config', c.default_datastack, 'fxn', datastack, 'client', client.datastack_name)
-            
+
         if cell_type_table == "" or cell_type_table is None:
             return [{"name": i, "id": i} for i in c.table_columns], []
 
+        if c.debug:
+            print('cell_type_table', cell_type_table, 'client', client.datastack_name)
         _, val_cols = get_table_info(cell_type_table, client, allow_types=ALLOW_COLUMN_TYPES_DISCRETE)
 
         table_cons = c.table_columns + val_cols
@@ -314,7 +315,7 @@ def register_callbacks(app, config):
             info_cache["global_server"] = client.server_address
 
             if c.debug:
-                print('update_data. config', c.default_datastack, 'client', client.datastack_name)
+                print('update_data: config', c.default_datastack, 'client', client.datastack_name)
         except Exception as e:
             return (
                 html.Div(str(e)),

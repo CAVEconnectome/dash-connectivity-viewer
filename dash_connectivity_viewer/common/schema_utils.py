@@ -1,4 +1,5 @@
 from cachetools import cached, TTLCache, keys
+from flask import current_app
 SPLIT_SUFFIXES = ["x", "y", "z"]
 
 
@@ -17,7 +18,7 @@ def split_pt_position(pt_position):
 _schema_cache = TTLCache(maxsize=128, ttl=86_400)
 def _schema_key(schema_name, client, **kwargs):
     allow_types = kwargs.get('allow_types', ALLOW_COLUMN_TYPES)
-    key = keys.hashkey(schema_name, str(allow_types), client.datastack_name)
+    key = keys.hashkey(schema_name, str(allow_types), client.datastack_name, current_app.name)
     return key
 
 @cached(cache=_schema_cache, key=_schema_key)
@@ -45,7 +46,7 @@ _table_cache = TTLCache(maxsize=128, ttl=86_400)
 def _table_key(table_name, client, **kwargs):
     merge_schema = kwargs.get('merge_schema', True)
     allow_types = kwargs.get('allow_types', ALLOW_COLUMN_TYPES)
-    key = keys.hashkey(table_name, merge_schema, str(allow_types))
+    key = keys.hashkey(table_name, merge_schema, str(allow_types), client.datastack_name, current_app.name)
     return key
 
 @cached(cache=_table_cache, key=_table_key)
@@ -84,7 +85,7 @@ def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES, merge_schema=True
 
 _metadata_cache = TTLCache(maxsize=128, ttl=86_400)
 def _metadata_key(tn, client, **kwargs):
-    key = keys.hashkey(tn, client.datastack_name)
+    key = keys.hashkey(tn, client.datastack_name, current_app.name)
     return key
 
 @cached(cache=_metadata_cache, key=_metadata_key)
@@ -98,7 +99,7 @@ def table_metadata(table_name, client, meta=None):
 
 _table_list_cache = TTLCache(maxsize=64, ttl=86_400)
 def _table_list_key(tables, client):
-    key = keys.hashkey('_'.join(tables), client.datastack_name)
+    key = keys.hashkey('_'.join(tables), client.datastack_name, current_app.name)
     return key
 
 @cached(cache=_table_list_cache, key=_table_list_key)
