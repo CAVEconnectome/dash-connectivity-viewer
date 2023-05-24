@@ -117,7 +117,9 @@ class NeuronData(object):
                     config,
                 )
             )
-
+        if config.debug:
+            print(f"\n{self._property_tables}\n")
+ 
     @property
     def root_id(self):
         if self._root_id is None:

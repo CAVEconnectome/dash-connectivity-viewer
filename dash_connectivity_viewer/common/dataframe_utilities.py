@@ -12,10 +12,12 @@ DESIRED_RESOLUTION = [1, 1, 1]
 def query_table_any(
     table, root_id_column, root_ids, client, timestamp, extra_query={}, is_live=True
 ):
+    print(f"query_table_any: table:{table} root_ids:{root_ids[0:5]} datastack:{client.datastack_name} is_live:{is_live}") 
     if root_ids is not None:
         root_ids = np.array(root_ids)
         root_ids = root_ids[root_ids != 0]
     ref_table = table_metadata(table, client).get("reference_table")
+    print(f"query_table_any: ref_table:{ref_table}")
     if ref_table is not None:
         return _query_table_join(
             table,

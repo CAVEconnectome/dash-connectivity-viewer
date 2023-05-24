@@ -381,15 +381,21 @@ def register_callbacks(app, config):
                 is_live=live_query,
                 n_threads=2,
             )
+            if c.debug:
+                print(f'\nMade NeuronData object with nuc table: {nrn_data._soma_table}\n')
 
             root_id = nrn_data.root_id
             info_cache["root_id"] = str(root_id)
 
+            if c.debug:
+                print(f'\n Starting partners out')
             pre_targ_df = nrn_data.partners_out_plus()
             pre_targ_df = stringify_root_ids(
                 pre_targ_df, stringify_cols=[c.root_id_col]
             )
 
+            if c.debug:
+                print(f'\n Starting partners in')
             post_targ_df = nrn_data.partners_in_plus()
             post_targ_df = stringify_root_ids(
                 post_targ_df, stringify_cols=[c.root_id_col]
