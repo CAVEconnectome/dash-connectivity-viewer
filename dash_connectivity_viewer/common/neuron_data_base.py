@@ -58,7 +58,6 @@ class NeuronData(object):
         object_id,
         client,
         config,
-        property_tables={},
         timestamp=None,
         n_threads=None,
         id_type="root",
@@ -79,7 +78,7 @@ class NeuronData(object):
             pool_maxsize=config.pool_maxsize,
         )
 
-        self._property_tables = property_tables
+        self._property_tables = {}
 
         if config.synapse_table is None:
             synapse_table = self._client.info.get_datastack_info().get("synapse_table")
@@ -108,7 +107,7 @@ class NeuronData(object):
         self._partner_soma_table = None
         self._partner_root_ids = None
         if config.debug:
-            print("\nNew datastack: ", self.client.datastack_name, 'soma_table:', self._soma_table, '\n')
+            print("\nNew datastack: ", self._client.datastack_name, 'soma_table:', self._soma_table, '\n')
         self.check_root_id()
         if self._soma_table is not None:
             self._property_tables.update(
@@ -118,7 +117,8 @@ class NeuronData(object):
                 )
             )
         if config.debug:
-            print(f"\n{self._property_tables}\n")
+            print("\Confirm datastack: ", self._client.datastack_name, 'soma_table:', self._soma_table, '\n')
+            print(f"Property tables: \n{self._property_tables}\n")
  
     @property
     def root_id(self):
