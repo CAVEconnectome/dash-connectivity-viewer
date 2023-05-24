@@ -443,7 +443,9 @@ def register_callbacks(app, config):
             )
         except Exception as e:
             if c.debug:
-                raise e
+                print(e)
+                import pdb
+                pdb.set_trace()
             return (
                 html.Div(str(e)),
                 "danger",
