@@ -45,6 +45,8 @@ class CommonConfig(object):
         self.nucleus_id_column = config.get("nucleus_id_column", "id")
         self.nucleus_filter = config.get('nucleus_filter', {})
 
+        self.debug = config.get("debug", False)
+
         # Used to look up number of neurons per root id
         self.soma_table = self.nucleus_table
         self.soma_id_column = self.nucleus_id_column
