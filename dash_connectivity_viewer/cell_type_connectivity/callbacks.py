@@ -213,6 +213,7 @@ def register_callbacks(app, config):
             return [{"name": i, "id": i} for i in c.table_columns], []
 
         _, val_cols = get_table_info(cell_type_table, client, allow_types=ALLOW_COLUMN_TYPES_DISCRETE)
+
         table_cons = c.table_columns + val_cols
         return (
             [{"name": i, "id": i} for i in table_cons],
@@ -441,6 +442,8 @@ def register_callbacks(app, config):
                 syn_res,
             )
         except Exception as e:
+            if c.debug:
+                raise e
             return (
                 html.Div(str(e)),
                 "danger",
