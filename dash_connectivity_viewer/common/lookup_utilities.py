@@ -1,6 +1,7 @@
 import flask
 from .schema_utils import get_table_info, populate_metadata_cache
-from caveclient.tools.caching import CachedClient as CAVEclient
+# from caveclient.tools.caching import CachedClient as CAVEclient
+from caveclient import CAVEclient
 from .dataframe_utilities import query_table_any
 import numpy as np
 # from concurrent.futures import ThreadPoolExecutor
@@ -28,9 +29,6 @@ def get_all_schema_tables(
 
 def get_type_tables(datastack, config):
     tables = get_all_schema_tables(datastack, config)
-    if config.debug:
-        print('config', config.default_datastack, 'datastack', datastack)
-        print('tables', tables)
     named_options = config.cell_type_dropdown_options
     if named_options is None:
         return tables
