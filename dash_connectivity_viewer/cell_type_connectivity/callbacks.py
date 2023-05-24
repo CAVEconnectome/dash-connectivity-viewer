@@ -447,7 +447,7 @@ def register_callbacks(app, config):
             )
         except Exception as e:
             if c.debug:
-                print(f"Failed on datastack {f}!")
+                print(f"Failed on datastack {datastack_name}!")
                 print(
                     '\n',
                     info_cache,
