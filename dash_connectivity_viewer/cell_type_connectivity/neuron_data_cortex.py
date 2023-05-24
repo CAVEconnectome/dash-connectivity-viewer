@@ -31,6 +31,7 @@ class NeuronDataCortex(NeuronData):
         self.value_table = value_table
         self._value_data = None
         self._value_columns = None
+        self._app_name = None
     
     @property
     def aligned_volume(self):

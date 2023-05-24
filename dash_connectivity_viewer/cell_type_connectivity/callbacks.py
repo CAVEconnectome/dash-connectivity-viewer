@@ -313,9 +313,6 @@ def register_callbacks(app, config):
             client = make_client(datastack_name, c.server_address)
             info_cache = client.info.info_cache[datastack_name]
             info_cache["global_server"] = client.server_address
-
-            if c.debug:
-                print('update_data: config', c.default_datastack, 'client', client.datastack_name)
         except Exception as e:
             return (
                 html.Div(str(e)),
@@ -450,7 +447,12 @@ def register_callbacks(app, config):
             )
         except Exception as e:
             if c.debug:
-                print(e)
+                print(f"Failed on datastack {f}!")
+                print(
+                    '\n',
+                    info_cache,
+                    '\n',
+                )
             return (
                 html.Div(str(e)),
                 "danger",
