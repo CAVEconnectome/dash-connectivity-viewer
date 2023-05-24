@@ -12,7 +12,7 @@ DESIRED_RESOLUTION = [1, 1, 1]
 def query_table_any(
     table, root_id_column, root_ids, client, timestamp, extra_query={}, is_live=True
 ):
-    print(f"query_table_any: table:{table} root_ids:{root_ids[0:5]} datastack:{client.datastack_name} is_live:{is_live}") 
+    print(f"query_table_any: table:{table} root_ids:{root_ids} datastack:{client.datastack_name} is_live:{is_live}") 
     if root_ids is not None:
         root_ids = np.array(root_ids)
         root_ids = root_ids[root_ids != 0]
