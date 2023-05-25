@@ -266,9 +266,10 @@ def rehydrate_dataframe(rows, columns=[]):
 def _expand_column(df, column, len_column="num_syn"):
     def _expand_column(row):
         return [row[column]] * row[len_column]
-
-    return np.concatenate(list(df.apply(_expand_column, axis=1)))
-
+    if len(df) > 0:
+        return np.concatenate(list(df.apply(_expand_column, axis=1)))
+    else:
+        return np.array([])
 
 def _slam_column(df, column):
     if len(df) > 0:
