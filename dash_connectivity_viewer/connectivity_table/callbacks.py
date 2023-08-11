@@ -159,7 +159,7 @@ def register_callbacks(app, config):
         if live_query and not c.disallow_live_query:
             timestamp = datetime.datetime.utcnow()
         else:
-            timestamp = None
+            timestamp = client.materialize.get_timestamp()
             timestamp_ngl = client.materialize.get_timestamp()
             info_cache["ngl_timestamp"] = timestamp_ngl.timestamp()
 
@@ -204,7 +204,7 @@ def register_callbacks(app, config):
             n_syn_post = post_targ_df[c.num_syn_col].sum()
 
             info_cache["root_id"] = str(root_id)
-
+        
         except Exception as e:
             return (
                 [],
@@ -224,12 +224,17 @@ def register_callbacks(app, config):
                 f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {n_syn_post} , syn_out: {n_syn_pre}"
             )
 
-        if timestamp is not None:
-            output_message = f"Current connectivity for root id {root_id}"
-            output_status = "success"
+        if nrn_data.old_root_id is not None:
+            change_root_id_text = f" Warning: {nrn_data.old_root_id} is not valid at timestamp queried! Showing data for the most overlapping valid root id. —"
+            output_status = "warning"
         else:
-            output_message = f"Connectivity for root id {root_id} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
+            change_root_id_text = ""        
             output_status = "success"
+
+        if timestamp is not None:
+            output_message = f"{change_root_id_text}Current connectivity for root id {root_id}."
+        else:
+            output_message = f"{change_root_id_text}Connectivity for root id {root_id} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})."
 
         return (
             pre_targ_df.to_dict("records"),
