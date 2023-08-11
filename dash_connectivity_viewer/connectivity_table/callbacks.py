@@ -225,16 +225,16 @@ def register_callbacks(app, config):
             )
 
         if nrn_data.old_root_id is not None:
-            change_root_id_text = f" (Root ID updated from {nrn_data.old_root_id} to match timestamp)"
+            change_root_id_text = f" Warning: {nrn_data.old_root_id} is not valid at timestamp queried! Showing data for the most overlapping valid root id. —"
             output_status = "warning"
         else:
             change_root_id_text = ""        
             output_status = "success"
 
         if timestamp is not None:
-            output_message = f"Current connectivity for root id {root_id}.{change_root_id_text}"
+            output_message = f"{change_root_id_text}Current connectivity for root id {root_id}."
         else:
-            output_message = f"Connectivity for root id {root_id} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version}).{change_root_id_text}"
+            output_message = f"{change_root_id_text}Connectivity for root id {root_id} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})."
 
         return (
             pre_targ_df.to_dict("records"),
