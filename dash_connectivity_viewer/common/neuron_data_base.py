@@ -143,7 +143,7 @@ class NeuronData(object):
             pass
         else:
             self.old_root_id = self.root_id
-            self.root_id = self.client.chunkedgraph.suggest_latest_roots(
+            self._root_id = self.client.chunkedgraph.suggest_latest_roots(
                 self.root_id,
                 timestamp=self._timestamp,
             )

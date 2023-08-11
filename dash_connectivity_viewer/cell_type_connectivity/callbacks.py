@@ -422,9 +422,11 @@ def register_callbacks(app, config):
                 ct_text = "no cell type table"
 
             if nrn_data.old_root_id is not None:
-                change_root_id_text = f" (Root ID updated from {nrn_data.old_root_id} to {nrn_data.root_id} to match timestamp)"
+                change_root_id_text = f" (Root ID updated from {nrn_data.old_root_id} to match timestamp)"
+                output_status='warning'
             else:
                 change_root_id_text = ""
+                output_status='success'
 
             if live_query:
                 message_text = f"Current connectivity for root id {root_id}{nuc_id_text} and {ct_text}.{change_root_id_text}"
@@ -441,7 +443,7 @@ def register_callbacks(app, config):
 
             return (
                 html.Div(message_text),
-                "success",
+                output_status,
                 "",
                 pre_targ_df.to_dict("records"),
                 post_targ_df.to_dict("records"),
