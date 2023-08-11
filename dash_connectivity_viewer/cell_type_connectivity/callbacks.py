@@ -1,14 +1,11 @@
 import datetime
-import pandas as pd
+import numpy as np
 from functools import partial
-import flask
 
 from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, State
-import dash_bootstrap_components as dbc
 
 from .config import TypedConnectivityConfig
-from ..common import table_lookup as tbl
 from ..common.link_utilities import (
     generate_statebuilder,
     generate_statebuilder_pre,
@@ -29,7 +26,6 @@ from ..common.schema_utils import get_table_info
 from ..common.dataframe_utilities import (
     stringify_root_ids, stringify_list, rehydrate_dataframe, rebuild_synapse_dataframe
 )
-from ..cell_type_table.config import CellTypeConfig
 from .neuron_data_cortex import NeuronDataCortex as NeuronData
 from .neuron_data_cortex import ALLOW_COLUMN_TYPES_DISCRETE
 from .cortex_panels import *
@@ -425,10 +421,15 @@ def register_callbacks(app, config):
             else:
                 ct_text = "no cell type table"
 
-            if live_query:
-                message_text = f"Current connectivity for root id {root_id}{nuc_id_text} and {ct_text}"
+            if nrn_data.old_root_id is not None:
+                change_root_id_text = f" (Root ID updated from {nrn_data.old_root_id} to {nrn_data.root_id} to match timestamp)"
             else:
-                message_text = f"Connectivity for root id {root_id}{nuc_id_text} and {ct_text} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
+                change_root_id_text = ""
+
+            if live_query:
+                message_text = f"Current connectivity for root id {root_id}{nuc_id_text} and {ct_text}.{change_root_id_text}"
+            else:
+                message_text = f"Connectivity for root id {root_id}{nuc_id_text} and {ct_text} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version}){change_root_id_text}"
 
             if c.show_depth_plots:
                 vplot = make_violin_plot(nrn_data, None)

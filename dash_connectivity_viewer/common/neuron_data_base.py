@@ -91,6 +91,7 @@ class NeuronData(object):
         self.config = config
 
         self._timestamp = timestamp
+        self.old_root_id = None
 
         self.is_live = is_live
 
@@ -141,7 +142,12 @@ class NeuronData(object):
         if self.client.chunkedgraph.is_latest_roots([self.root_id])[0]:
             pass
         else:
-            raise Exception(f"Root id is not valid at this timestamp.")
+            self.old_root_id = self.root_id
+            self.root_id = self.client.chunkedgraph.suggest_latest_roots(
+                self.root_id,
+                timestamp=self._timestamp,
+            )
+        pass
 
     @property
     def nucleus_id(self):

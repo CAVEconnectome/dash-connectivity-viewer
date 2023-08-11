@@ -224,11 +224,16 @@ def register_callbacks(app, config):
                 f"Data update for {root_id} | time:{time.time() - t0:.2f} s, syn_in: {n_syn_post} , syn_out: {n_syn_pre}"
             )
 
+        if nrn_data.old_root_id is not None:
+            change_root_id_text = f" (Root ID updated from {nrn_data.old_root_id} to {nrn_data.root_id} to match timestamp)"
+        else:
+            change_root_id_text = ""        
+
         if timestamp is not None:
-            output_message = f"Current connectivity for root id {root_id}"
+            output_message = f"Current connectivity for root id {root_id}.{change_root_id_text}"
             output_status = "success"
         else:
-            output_message = f"Connectivity for root id {root_id} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
+            output_message = f"Connectivity for root id {root_id} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version}).{change_root_id_text}"
             output_status = "success"
 
         return (
