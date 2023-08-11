@@ -159,7 +159,7 @@ def register_callbacks(app, config):
         if live_query and not c.disallow_live_query:
             timestamp = datetime.datetime.utcnow()
         else:
-            timestamp = None
+            timestamp = client.materialize.get_timestamp()
             timestamp_ngl = client.materialize.get_timestamp()
             info_cache["ngl_timestamp"] = timestamp_ngl.timestamp()
 
@@ -204,7 +204,7 @@ def register_callbacks(app, config):
             n_syn_post = post_targ_df[c.num_syn_col].sum()
 
             info_cache["root_id"] = str(root_id)
-
+        
         except Exception as e:
             return (
                 [],
