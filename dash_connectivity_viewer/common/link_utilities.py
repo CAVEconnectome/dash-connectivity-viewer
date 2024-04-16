@@ -11,6 +11,17 @@ from .dataframe_utilities import rehydrate_dataframe
 EMPTY_INFO_CACHE = {"aligned_volume": {}, "cell_type_column": None}
 MAX_URL_LENGTH = 1_750_000
 DEFAULT_NGL = "https://neuromancer-seung-import.appspot.com/"
+DEFAULT_SPELUNKER = "https://spelunker.cave-explorer.org/"
+
+
+def get_viewer_site_from_target(viewer_site, target_site):
+    if target_site == "seunglab":
+        if viewer_site:
+            return viewer_site
+        else:
+            return DEFAULT_NGL
+    elif target_site == "mainline":
+        return DEFAULT_SPELUNKER
 
 
 def image_source(info_cache):
@@ -18,10 +29,12 @@ def image_source(info_cache):
         return None
     return info_cache["aligned_volume"].get("image_source", "")
 
+
 def aligned_volume(info_cache):
     if info_cache is None:
         return None
-    return info_cache.get('aligned_volume', {}).get('name')
+    return info_cache.get("aligned_volume", {}).get("name")
+
 
 def seg_source(info_cache):
     if info_cache is None:
@@ -64,10 +77,12 @@ def voxel_resolution_from_info(info_cache):
     except:
         return None
 
+
 def target_site(info_cache):
     if info_cache is None:
         return None
     return info_cache.get("target_site", None)
+
 
 def statebuilder_kwargs(info_cache):
     return dict(
@@ -86,7 +101,7 @@ def generate_statebuilder(
     preselect_all=True,
     anno_column="post_pt_root_id",
     anno_layer="syns",
-    data_resolution=[1,1,1],
+    data_resolution=[1, 1, 1],
 ):
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
@@ -139,9 +154,11 @@ def generate_statebuilder(
 
 
 def generate_statebuilder_pre(
-    info_cache, config, preselect=False, data_resolution=[1,1,1],
+    info_cache,
+    config,
+    preselect=False,
+    data_resolution=[1, 1, 1],
 ):
-
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
         contrast_controls=True,
@@ -175,7 +192,7 @@ def generate_statebuilder_pre(
     return sb
 
 
-def generate_statebuilder_post(info_cache, config, data_resolution=[1,1,1]):
+def generate_statebuilder_post(info_cache, config, data_resolution=[1, 1, 1]):
     img = statebuilder.ImageLayerConfig(
         image_source(info_cache),
         contrast_controls=True,
@@ -216,7 +233,7 @@ def generate_statebuider_syn_grouped(
     config,
     fixed_id_color="#FFFFFF",
     preselect=False,
-    data_resolution=[1,1,1],
+    data_resolution=[1, 1, 1],
 ):
     points = statebuilder.PointMapper(
         point_column=config.syn_pt_position,
@@ -271,14 +288,13 @@ def generate_url_cell_types(
     info_cache,
     config,
     pt_column,
-    cell_type_column='cell_type',
+    cell_type_column="cell_type",
     group_annotations=False,
     multipoint=False,
     fill_null=None,
     return_as="url",
-    data_resolution=[1,1,1],
+    data_resolution=[1, 1, 1],
 ):
-    
     if len(selected_rows) > 0 or selected_rows is None:
         df = df.iloc[selected_rows].reset_index(drop=True)
 
@@ -321,20 +337,22 @@ def generate_url_cell_types(
                         multipoint=multipoint,
                         split_positions=True,
                         mapping_set=ct,
-                    )
+                    ),
                 )
             )
-        sb = statebuilder.StateBuilder([img, seg] + annos, **statebuilder_kwargs(info_cache))
+        sb = statebuilder.StateBuilder(
+            [img, seg] + annos, **statebuilder_kwargs(info_cache)
+        )
         return sb.render_state(
             {ct: df.query(f"{cell_type_column}==@ct") for ct in cell_types},
             return_as=return_as,
         )
     else:
         if cell_type_column is not None:
-            if len(cell_type_column)==0:
-                cell_type_column=None
+            if len(cell_type_column) == 0:
+                cell_type_column = None
         anno = statebuilder.AnnotationLayerConfig(
-            'Annotations',
+            "Annotations",
             linked_segmentation_layer=seg.name,
             mapping_rules=statebuilder.PointMapper(
                 bound_pt_position(pt_column),
@@ -346,7 +364,9 @@ def generate_url_cell_types(
             ),
             data_resolution=data_resolution,
         )
-        sb = statebuilder.StateBuilder([img, seg, anno], **statebuilder_kwargs(info_cache))
+        sb = statebuilder.StateBuilder(
+            [img, seg, anno], **statebuilder_kwargs(info_cache)
+        )
         return sb.render_state(
             df,
             return_as=return_as,
@@ -385,7 +405,7 @@ def generate_statebuilder_syn_cell_types(
     group_annotations=True,
     multipoint=False,
     fill_null=None,
-    data_resolution=[1,1,1],
+    data_resolution=[1, 1, 1],
     include_no_type=True,
 ):
     df = rehydrate_dataframe(rows, config.syn_pt_position_split)
@@ -430,13 +450,15 @@ def generate_statebuilder_syn_cell_types(
             data_resolution=data_resolution,
         )
         annos.append(anno)
-            # statebuilder.StateBuilder(
-                # [anno],
-                # **statebuilder_kwargs(info_cache),
-            # )
+        # statebuilder.StateBuilder(
+        # [anno],
+        # **statebuilder_kwargs(info_cache),
+        # )
         # )
         # dfs.append(df.query(f"{cell_type_column} == @ct"))
-    sb = statebuilder.StateBuilder([img, seg] + annos, **statebuilder_kwargs(info_cache))
+    sb = statebuilder.StateBuilder(
+        [img, seg] + annos, **statebuilder_kwargs(info_cache)
+    )
     # csb = statebuilder.ChainedStateBuilder(sbs)
     df_dict = {ct: df.query(f'{cell_type_column}=="{ct}"') for ct in cell_types}
     return sb, df_dict

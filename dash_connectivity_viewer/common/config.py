@@ -1,10 +1,12 @@
 import copy
+
 ###########################################
 ### Default data and request parameters ###
 ###########################################
 from .schema_utils import bound_pt_position, split_pt_position, bound_pt_root_id
 
-DATA_RESOLUTION = [1,1,1]
+DATA_RESOLUTION = [1, 1, 1]
+
 
 def parse_environ_vector(input, num_type):
     return [num_type(x) for x in input.split(",")]
@@ -20,8 +22,8 @@ class CommonConfig(object):
         if self.server_address is None:
             raise ValueError("Must set server address parameter!")
 
-        self.viewer_site = config.get('viewer_site', None)
-        self.target_site = config.get('target_site', None)
+        self.viewer_site = config.get("viewer_site", None)
+        self.target_site = config.get("target_site", None)
 
         self.disallow_live_query = config.get("disallow_live_query", False)
         self.image_black = config.get("image_black", 0)
@@ -46,7 +48,7 @@ class CommonConfig(object):
         # If None, the info service is used
         self.nucleus_table = config.get("nucleus_table", None)
         self.nucleus_id_column = config.get("nucleus_id_column", "id")
-        self.nucleus_filter = config.get('nucleus_filter', {})
+        self.nucleus_filter = config.get("nucleus_filter", {})
 
         self.debug = config.get("debug", False)
 

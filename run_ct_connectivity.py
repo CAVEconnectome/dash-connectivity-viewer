@@ -72,6 +72,9 @@ fanc_config = {
 minnie_public_config = minnie_config.copy()
 minnie_public_config["datastack"] = "minnie65_public"
 minnie_public_config["disallow_live_query"] = True
+minnie_public_config["viewer_site"] = "https://spelunker.cave-explorer.org"
+minnie_public_config["target_site"] = "mainline"
+minnie_public_config["debug"] = True
 
 if __name__ == "__main__":
     app = create_app(config=minnie_public_config)

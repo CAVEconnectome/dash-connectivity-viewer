@@ -16,6 +16,7 @@ from ..common.link_utilities import (
     MAX_URL_LENGTH,
     make_url_robust,
     aligned_volume,
+    get_viewer_site_from_target,
 )
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 from ..common.lookup_utilities import (
@@ -229,7 +230,7 @@ def register_callbacks(app, config):
         client = make_client(datastack, c.server_address)
 
         if cell_type_table == "" or cell_type_table is None:
-            return [{"name": i, "id": i} for i in c.table_columns], []
+            return [{"name": i, "id": i} for i in c.table_columns], [], {}
 
         if c.debug:
             print("cell_type_table", cell_type_table, "client", client.datastack_name)
@@ -334,9 +335,6 @@ def register_callbacks(app, config):
             client = make_client(datastack_name, c.server_address)
             info_cache = client.info.info_cache[datastack_name]
             info_cache["global_server"] = client.server_address
-            if c.viewer_site is not None and c.target_site is not None:
-                info_cache["viewer_site"] = c.viewer_site
-                info_cache["target_site"] = c.target_site
 
         except Exception as e:
             return (
@@ -547,6 +545,7 @@ def register_callbacks(app, config):
         Input("data-table", "derived_virtual_selected_rows"),
         Input("client-info-json", "data"),
         Input("synapse-table-resolution-json", "data"),
+        Input("ngl-target-site", "value"),
     )
     def update_link(
         tab_value,
@@ -554,7 +553,10 @@ def register_callbacks(app, config):
         selected_rows,
         info_cache,
         synapse_data_resolution,
+        target_site,
     ):
+        if c.debug:
+            print(f"Target site: {target_site}")
         large_state_text = (
             "Table Too Large - Please Filter or Use Whole Cell Neuroglancer Links"
         )
@@ -565,6 +567,13 @@ def register_callbacks(app, config):
         if info_cache is None:
             return "", "No datastack set", True, ""
 
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
+        if c.debug:
+            print("generating link")
+            print(info_cache)
         if rows is None or len(rows) == 0:
             rows = {}
             sb = generate_statebuilder(info_cache, c)
@@ -630,11 +639,24 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
+        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def generate_all_input_link(
-        _1, _2, curr, rows, info_cache, datastack, data_resolution
+        _1,
+        _2,
+        curr,
+        rows,
+        info_cache,
+        datastack,
+        data_resolution,
+        target_site,
     ):
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
+
         if not allowed_action_trigger(callback_context, ["all-input-link-button"]):
             return "  ", "Generate Link", False
         return (
@@ -667,6 +689,7 @@ def register_callbacks(app, config):
         Input("synapse-table-resolution-json", "data"),
         Input("group-by", "value"),
         Input("no-type-annotation", "value"),
+        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def generate_cell_typed_input_link(
@@ -678,7 +701,13 @@ def register_callbacks(app, config):
         data_resolution,
         value_column,
         include_no_type,
+        target_site,
     ):
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
+
         if value_column is None or value_column == "":
             return "  ", "No Annotation Column Set", True
         if not allowed_action_trigger(
@@ -723,9 +752,17 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
+        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
-    def generate_all_output_link(_1, _2, rows, info_cache, datastack, data_resolution):
+    def generate_all_output_link(
+        _1, _2, rows, info_cache, datastack, data_resolution, target_site
+    ):
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
+
         if not allowed_action_trigger(callback_context, ["all-output-link-button"]):
             return "", "Generate Link", False
         return (
@@ -756,6 +793,7 @@ def register_callbacks(app, config):
         Input("synapse-table-resolution-json", "data"),
         Input("group-by", "value"),
         Input("no-type-annotation", "value"),
+        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def generate_cell_typed_output_link(
@@ -767,7 +805,13 @@ def register_callbacks(app, config):
         data_resolution,
         value_column,
         include_no_type,
+        target_site,
     ):
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
+
         if value_column is None or value_column == "":
             return "  ", "No Annotation Column Set", True
 
