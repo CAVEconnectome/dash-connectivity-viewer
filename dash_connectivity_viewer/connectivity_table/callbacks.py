@@ -11,9 +11,12 @@ from ..common.link_utilities import (
     EMPTY_INFO_CACHE,
     MAX_URL_LENGTH,
     make_url_robust,
+    get_viewer_site_from_target,
 )
 from ..common.dataframe_utilities import (
-    stringify_root_ids, stringify_list, repopulate_list
+    stringify_root_ids,
+    stringify_list,
+    repopulate_list,
 )
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 from ..common.lookup_utilities import make_client
@@ -58,11 +61,14 @@ def register_callbacks(app, config):
         return []
 
     @app.callback(
-        Output("header-bar", 'children'),
+        Output("header-bar", "children"),
         InputDatastack,
     )
     def set_header(datastack):
-        return html.H3(f"Connectivity Info — {datastack}", className="bg-primary text-white p-2 mb-2 text-center")
+        return html.H3(
+            f"Connectivity Info — {datastack}",
+            className="bg-primary text-white p-2 mb-2 text-center",
+        )
 
     @app.callback(
         Output("data-table", "columns"),
@@ -204,7 +210,7 @@ def register_callbacks(app, config):
             n_syn_post = post_targ_df[c.num_syn_col].sum()
 
             info_cache["root_id"] = str(root_id)
-        
+
         except Exception as e:
             return (
                 [],
@@ -228,11 +234,13 @@ def register_callbacks(app, config):
             change_root_id_text = f" Warning: {nrn_data.old_root_id} is not valid at timestamp queried! Showing data for the most overlapping valid root id. —"
             output_status = "warning"
         else:
-            change_root_id_text = ""        
+            change_root_id_text = ""
             output_status = "success"
 
         if timestamp is not None:
-            output_message = f"{change_root_id_text}Current connectivity for root id {root_id}."
+            output_message = (
+                f"{change_root_id_text}Current connectivity for root id {root_id}."
+            )
         else:
             output_message = f"{change_root_id_text}Connectivity for root id {root_id} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})."
 
@@ -277,6 +285,7 @@ def register_callbacks(app, config):
         Input("data-table", "derived_virtual_selected_rows"),
         Input("client-info-json", "data"),
         Input("synapse-table-resolution-json", "data"),
+        Input("ngl-target-site", "value"),
     )
     def update_link(
         tab_value,
@@ -284,13 +293,20 @@ def register_callbacks(app, config):
         selected_rows,
         info_cache,
         data_resolution,
+        target_site,
     ):
         large_state_text = "State Too Large - Please Filter"
+
         def small_state_text(n):
             return f"Neuroglancer: ({n} partners)"
 
         if info_cache is None:
             return "", "No datastack set", True, ""
+
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
 
         if rows is None or len(rows) == 0:
             rows = {}
@@ -349,9 +365,12 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
+        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
-    def generate_all_input_link(_1, _2, rows, info_cache, datastack, data_resolution):
+    def generate_all_input_link(
+        _1, _2, rows, info_cache, datastack, data_resolution, target_site
+    ):
         ctx = callback_context
         if not ctx.triggered:
             return ""
@@ -362,6 +381,11 @@ def register_callbacks(app, config):
             or trigger_src == "source-table-json"
         ):
             return ""
+
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
 
         if rows is None or len(rows) == 0:
             return html.Div("No inputs to show")
@@ -394,9 +418,12 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
+        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
-    def generate_all_output_link(_1, _2, rows, info_cache, datastack, data_resolution):
+    def generate_all_output_link(
+        _1, _2, rows, info_cache, datastack, data_resolution, target_site
+    ):
         ctx = callback_context
         if not ctx.triggered:
             return ""
@@ -407,6 +434,11 @@ def register_callbacks(app, config):
             or trigger_src == "target-table-json"
         ):
             return ""
+
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
 
         if rows is None or len(rows) == 0:
             return html.Div("No outputs to show")

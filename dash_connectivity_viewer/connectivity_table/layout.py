@@ -14,16 +14,15 @@ url_bar_and_content_div = html.Div(
 
 def page_layout(state: State = None):
     state = state or {}
-    
+
     header_row = dbc.Row(
         [
             dbc.Col(
-                html.Div(id='header-bar'),
+                html.Div(id="header-bar"),
                 width={"size": 12},
             ),
         ],
     )
-
 
     input_row = [
         dbc.Row(
@@ -231,6 +230,24 @@ def page_layout(state: State = None):
                         disabled=False,
                     ),
                 ],
+            ),
+            dbc.Col(
+                html.Div(
+                    [
+                        dcc.Dropdown(
+                            options={
+                                "seunglab": "Seung-lab Neuroglancer (classic)",
+                                "mainline": "Spelunker (experimental)",
+                            },
+                            value="seunglab",
+                            id="ngl-target-site",
+                            clearable=False,
+                        ),
+                    ],
+                    style={"font-size": "13px"},
+                ),
+                align="top",
+                width={"size": 2, "offset": 1},
             ),
             dbc.Col(
                 dbc.Button(

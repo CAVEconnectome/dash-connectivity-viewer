@@ -13,6 +13,7 @@ from ..common.link_utilities import (
     generate_url_cell_types,
     EMPTY_INFO_CACHE,
     MAX_URL_LENGTH,
+    get_viewer_site_from_target,
 )
 from ..common.lookup_utilities import (
     get_type_tables,
@@ -92,11 +93,14 @@ def register_callbacks(app, config):
             return datastack
 
     @app.callback(
-        Output("header-bar", 'children'),
+        Output("header-bar", "children"),
         InputDatastack,
     )
     def set_header(datastack):
-        return html.H3(f"Table Info — {datastack}", className="bg-primary text-white p-2 mb-2 text-center")
+        return html.H3(
+            f"Table Info — {datastack}",
+            className="bg-primary text-white p-2 mb-2 text-center",
+        )
 
     @app.callback(
         OutputCellTypeMenuOptions,
@@ -131,7 +135,6 @@ def register_callbacks(app, config):
         _, cols = get_table_info(table_name, client, merge_schema=False)
         return [{"label": i, "value": i} for i in cols]
 
-
     @app.callback(
         Output("group-by", "options"),
         Input("submit-button", "n_clicks"),
@@ -143,7 +146,9 @@ def register_callbacks(app, config):
             return {}
         else:
             client = make_client(datastack, c.server_address)
-            _, cols = get_table_info(cell_type_table, client, allow_types=['boolean', 'integer', 'string'])
+            _, cols = get_table_info(
+                cell_type_table, client, allow_types=["boolean", "integer", "string"]
+            )
             return {k: k for k in cols}
 
     @app.callback(
@@ -223,7 +228,7 @@ def register_callbacks(app, config):
         annotation_filter = {}
         if value_search is not None or value_search_field is not None:
             if len(value_search_field) > 0 and len(value_search) > 0:
-                annotation_filter = {value_search_field: value_search.split(',')}
+                annotation_filter = {value_search_field: value_search.split(",")}
 
         try:
             tv = TableViewer(
@@ -277,6 +282,7 @@ def register_callbacks(app, config):
         Input("pt-column", "data"),
         Input("do-group", "value"),
         Input("group-by", "value"),
+        Input("ngl-target-site", "value"),
     )
     def update_link(
         rows,
@@ -286,12 +292,18 @@ def register_callbacks(app, config):
         pt_column,
         do_group,
         group_column,
+        target_site,
     ):
         def state_text(n):
             return f"Neuroglancer: ({n} rows)"
 
         if info_cache is None:
             return "", "No datastack set", True, ""
+
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
 
         if pt_column is None:
             return "", "No clear point field in table", True, ""
@@ -354,9 +366,21 @@ def register_callbacks(app, config):
         Input("pt-column", "data"),
         Input("do-group", "value"),
         Input("group-by", "value"),
+        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
-    def update_whole_table_link(_1, _2, rows, info_cache, datastack, data_resolution, pt_column, do_group, group_column):
+    def update_whole_table_link(
+        _1,
+        _2,
+        rows,
+        info_cache,
+        datastack,
+        data_resolution,
+        pt_column,
+        do_group,
+        group_column,
+        target_site,
+    ):
         ctx = callback_context
         if not ctx.triggered:
             return ""
@@ -387,6 +411,11 @@ def register_callbacks(app, config):
         else:
             if len(group_column) == 0:
                 do_group = False
+
+        info_cache["target_site"] = target_site
+        info_cache["viewer_site"] = get_viewer_site_from_target(
+            info_cache.get("viewer_site"), target_site
+        )
 
         df = pd.DataFrame(rows)
         if len(df) > c.max_server_dataframe_length:
@@ -425,13 +454,13 @@ def register_callbacks(app, config):
                 pt_column,
                 group_annotations=do_group,
                 cell_type_column=group_column,
-                data_resolution= data_resolution,
+                data_resolution=data_resolution,
             )
 
         if sampled:
             link_text = f"Neuroglancer Link (State very large — Random {c.max_server_dataframe_length} shown)"
         else:
-            link_text = f"Neuroglancer Link"
+            link_text = "Neuroglancer Link"
 
         return (
             html.A(link_text, href=url, target="_blank", style={"font-size": "20px"}),

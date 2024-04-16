@@ -36,7 +36,7 @@ def page_layout(state: State = {}):
     header_row = dbc.Row(
         [
             dbc.Col(
-                html.Div(id='header-bar'),
+                html.Div(id="header-bar"),
                 width={"size": 12},
             ),
         ],
@@ -168,7 +168,6 @@ def page_layout(state: State = {}):
                 [
                     dbc.Col(
                         [
-                            
                             html.Div("Value Search (optional):"),
                             dbc.Input(
                                 **create_component_kwargs(
@@ -200,7 +199,7 @@ def page_layout(state: State = {}):
                         ],
                         width={"size": 1},
                         align="end",
-                    )
+                    ),
                 ],
                 justify="state",
             ),
@@ -287,6 +286,24 @@ def page_layout(state: State = {}):
                 width=1,
             ),
             dbc.Col(
+                html.Div(
+                    [
+                        dcc.Dropdown(
+                            options={
+                                "seunglab": "Seung-lab Neuroglancer (classic)",
+                                "mainline": "Spelunker (experimental)",
+                            },
+                            value="seunglab",
+                            id="ngl-target-site",
+                            clearable=False,
+                        ),
+                    ],
+                    style={"font-size": "13px"},
+                ),
+                align="top",
+                width={"size": 2, "offset": 1},
+            ),
+            dbc.Col(
                 html.A(
                     "Instructions for filtering the table",
                     href="https://dash.plotly.com/datatable/filtering",
@@ -294,7 +311,7 @@ def page_layout(state: State = {}):
                     target="_blank",
                 ),
                 align="center",
-                width={"size": 2, "offset": 3},
+                width={"size": 2, "offset": 1},
             ),
         ],
         justify="start",
@@ -321,10 +338,12 @@ def page_layout(state: State = {}):
                                 dbc.Spinner(
                                     dbc.Row(
                                         html.Div(
-                                            "", id="whole-table-link", className="card-text"
+                                            "",
+                                            id="whole-table-link",
+                                            className="card-text",
                                         ),
-                                        justify='center',
-                                        align='center',
+                                        justify="center",
+                                        align="center",
                                     ),
                                     size="sm",
                                 ),
@@ -337,7 +356,7 @@ def page_layout(state: State = {}):
                 dbc.Card(
                     dbc.CardBody(
                         [
-                            html.H4('Annotation Grouping', className='card-title'),
+                            html.H4("Annotation Grouping", className="card-title"),
                             dbc.Checklist(
                                 options=[
                                     {"label": "Group annotations", "value": 1},
@@ -348,14 +367,14 @@ def page_layout(state: State = {}):
                             ),
                             dcc.Dropdown(
                                 options={},
-                                value='cell_type',
-                                id='group-by',
+                                value="cell_type",
+                                id="group-by",
                                 searchable=False,
                             ),
                         ]
                     )
                 )
-            )
+            ),
         ],
     )
 
@@ -391,9 +410,9 @@ def page_layout(state: State = {}):
             html.Div(datastack_comp, style={"display": "none"}),
             dcc.Store(id="client-info-json"),
             dcc.Store(id="table-resolution-json"),
-            dcc.Store(id='data-resolution-json'),
-            dcc.Store(id='pt-column'),
-            dcc.Store(id='value-columns'),
+            dcc.Store(id="data-resolution-json"),
+            dcc.Store(id="pt-column"),
+            dcc.Store(id="value-columns"),
         ]
     )
     return layout

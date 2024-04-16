@@ -13,6 +13,7 @@ minnie_config = {
 minnie_public_config = minnie_config.copy()
 minnie_public_config["datastack"] = "minnie65_public"
 minnie_public_config["disallow_live_query"] = True
+minnie_public_config["target_site"] = "mainline"
 
 
 v1dd_config = {
