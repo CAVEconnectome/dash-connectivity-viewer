@@ -236,6 +236,7 @@ def make_data_table_content():
         )
     )
 
+
 def make_input_link_tab():
     return [
         dbc.Card(
@@ -250,14 +251,15 @@ def make_input_link_tab():
                                     id="all-input-link-button",
                                     color="secondary",
                                     className="d-grid gap-2 col-6 mx-auto",
-                                    style={"align-items":"center", "justify-content":"center"}
+                                    style={
+                                        "align-items": "center",
+                                        "justify-content": "center",
+                                    },
                                 ),
                             ]
                         ),
                         dbc.Spinner(
-                            html.Div(
-                                "", id="all-input-link", className="card-text"
-                            ),
+                            html.Div("", id="all-input-link", className="card-text"),
                             size="sm",
                         ),
                     ]
@@ -295,6 +297,7 @@ def make_input_link_tab():
         ),
     ]
 
+
 def make_output_link_tab():
     return [
         dbc.Card(
@@ -309,14 +312,15 @@ def make_output_link_tab():
                                     id="all-output-link-button",
                                     color="secondary",
                                     className="d-grid gap-2 col-6 mx-auto",
-                                    style={"align-items":"center", "justify-content":"center"},
+                                    style={
+                                        "align-items": "center",
+                                        "justify-content": "center",
+                                    },
                                 ),
                             ]
                         ),
                         dbc.Spinner(
-                            html.Div(
-                                "", id="all-output-link", className="card-text"
-                            ),
+                            html.Div("", id="all-output-link", className="card-text"),
                             size="sm",
                         ),
                     ]
@@ -353,13 +357,14 @@ def make_output_link_tab():
         ),
     ]
 
+
 def page_layout(state: State = None):
     state = state or {}
 
     header_text = dbc.Row(
         [
             dbc.Col(
-                html.Div(id='header-bar'),
+                html.Div(id="header-bar"),
                 width={"size": 12},
             ),
         ],
@@ -380,7 +385,6 @@ def page_layout(state: State = None):
             make_data_table_content(),
         ]
     )
-
 
     input_tab = make_input_link_tab()
     output_tab = make_output_link_tab()
@@ -419,7 +423,7 @@ def page_layout(state: State = None):
                                                 value=[],
                                                 switch=True,
                                                 style={"font-size": "16px"},
-                                                id='no-type-annotation',
+                                                id="no-type-annotation",
                                             ),
                                         ],
                                         width={"size": 2},
@@ -431,7 +435,7 @@ def page_layout(state: State = None):
                                             id="group-by",
                                             searchable=True,
                                         ),
-                                        width={'size': 8},
+                                        width={"size": 8},
                                     ),
                                 ],
                             ),
@@ -460,16 +464,24 @@ def page_layout(state: State = None):
                             ),
                             dbc.Card(
                                 dbc.CardBody(
-                                    html.Div("", id="scatter-plot", className="text-center h-100 v-100"),
+                                    html.Div(
+                                        "",
+                                        id="scatter-plot",
+                                        className="text-center h-100 v-100",
+                                    ),
                                 )
                             ),
                             dbc.Card(
                                 dbc.CardBody(
-                                    html.Div("", id="bar-plot", className="text-center v-100 h-100"),
+                                    html.Div(
+                                        "",
+                                        id="bar-plot",
+                                        className="text-center v-100 h-100",
+                                    ),
                                 )
                             ),
                         ],
-                    className="h-100",
+                        className="h-100",
                     ),
                 )
             ],
@@ -485,20 +497,20 @@ def page_layout(state: State = None):
                                         [
                                             html.Div(
                                                 "Color by value:",
-                                                style={'align-content': 'right'},
+                                                style={"align-content": "right"},
                                             ),
                                         ],
-                                        style={'align-content': 'right'},
-                                        width={"size": 1, 'offset':1},
+                                        style={"align-content": "right"},
+                                        width={"size": 1, "offset": 1},
                                     ),
                                     dbc.Col(
                                         dcc.Dropdown(
                                             options={"cell_type": "cell_type"},
                                             value="cell_type",
                                             id="plot-color-value",
-                                        ),  
+                                        ),
                                         style={"align-content": "left"},
-                                        width={'size': 9},
+                                        width={"size": 9},
                                     ),
                                 ],
                             ),
@@ -517,10 +529,10 @@ def page_layout(state: State = None):
                     [
                         dbc.Tab(html.Div(), label="Table Only"),
                         dbc.Tab(plot_data, label="Plots"),
-                        dbc.Tab(cell_links, label="Neuroglancer Links")
+                        dbc.Tab(cell_links, label="Neuroglancer Links"),
                     ],
                 ),
-                width={'size': 10, 'offset': 1},
+                width={"size": 10, "offset": 1},
             )
         ]
     )
@@ -544,6 +556,7 @@ def page_layout(state: State = None):
             dcc.Store("client-info-json"),
             dcc.Store("synapse-table-resolution-json"),
             dcc.Store("value-columns"),
+            dcc.Store("unique-table-values"),
             html.Div(
                 dcc.Input(
                     **create_component_kwargs(

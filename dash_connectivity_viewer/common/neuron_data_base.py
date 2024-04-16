@@ -5,13 +5,14 @@ from dfbridge import DataframeBridge
 from dash_connectivity_viewer.common.lookup_utilities import (
     get_nucleus_id_from_root_id,
     get_root_id_from_nuc_id,
-    make_client
+    make_client,
 )
 
 from .dataframe_utilities import *
 from .link_utilities import voxel_resolution_from_info
 from multiprocessing import cpu_count
 from ..common.schema_utils import split_pt_position
+
 
 def _soma_property_entry(soma_table, c):
     return {
@@ -63,7 +64,6 @@ class NeuronData(object):
         id_type="root",
         is_live=True,
     ):
-
         if id_type == "root":
             self._root_id = object_id
             self._nucleus_id = None
@@ -85,7 +85,6 @@ class NeuronData(object):
         self._synapse_table = synapse_table
         self._synapse_table_properties = _synapse_properties(synapse_table, config)
 
-        
         self._soma_table = self._client.info.get_datastack_info().get("soma_table")
 
         self.config = config
@@ -97,7 +96,7 @@ class NeuronData(object):
 
         self._pre_syn_df = None
         self._post_syn_df = None
-        self._synapse_data_resolution = np.array([1,1,1])
+        self._synapse_data_resolution = np.array([1, 1, 1])
 
         self._viewer_resolution = voxel_resolution_from_info(client.info.info_cache)
 
@@ -108,7 +107,13 @@ class NeuronData(object):
         self._partner_soma_table = None
         self._partner_root_ids = None
         if config.debug:
-            print("\nNew datastack: ", self._client.datastack_name, 'soma_table:', self._soma_table, '\n')
+            print(
+                "\nNew datastack: ",
+                self._client.datastack_name,
+                "soma_table:",
+                self._soma_table,
+                "\n",
+            )
         self.check_root_id()
         if self._soma_table is not None:
             self._property_tables.update(
@@ -118,9 +123,15 @@ class NeuronData(object):
                 )
             )
         if config.debug:
-            print("\Confirm datastack: ", self._client.datastack_name, 'soma_table:', self._soma_table, '\n')
+            print(
+                "Confirm datastack: ",
+                self._client.datastack_name,
+                "soma_table:",
+                self._soma_table,
+                "\n",
+            )
             print(f"Property tables: \n{self._property_tables}\n")
- 
+
     @property
     def root_id(self):
         if self._root_id is None:
@@ -139,7 +150,9 @@ class NeuronData(object):
         return self._root_id
 
     def check_root_id(self):
-        if self.client.chunkedgraph.is_latest_roots([self.root_id])[0]:
+        if self.client.chunkedgraph.is_latest_roots(
+            [self.root_id], timestamp=self.timestamp
+        )[0]:
             pass
         else:
             self.old_root_id = self.root_id
@@ -160,6 +173,7 @@ class NeuronData(object):
                 self.soma_table,
                 self.config,
                 self.timestamp,
+                self.is_live,
             )
         return self._nucleus_id
 
@@ -231,7 +245,7 @@ class NeuronData(object):
                 )
             )
         )
-        return root_ids[root_ids!=0]
+        return root_ids[root_ids != 0]
 
     def partners_out(self, properties=True):
         return self._targ_table("pre", properties)

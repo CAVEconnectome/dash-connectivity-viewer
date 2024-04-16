@@ -64,12 +64,17 @@ def voxel_resolution_from_info(info_cache):
     except:
         return None
 
+def target_site(info_cache):
+    if info_cache is None:
+        return None
+    return info_cache.get("target_site", None)
 
 def statebuilder_kwargs(info_cache):
     return dict(
         url_prefix=viewer_site(info_cache),
         state_server=state_server(info_cache),
         resolution=voxel_resolution_from_info(info_cache),
+        target_site=target_site(info_cache),
     )
 
 

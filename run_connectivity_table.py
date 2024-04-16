@@ -9,6 +9,15 @@ minnie_config = {
     "image_white": 0.7,
 }
 
+minnie_public_config = {
+    "datastack": "minnie65_public",
+    "server_address": "https://global.daf-apis.com",
+    "syn_position_column": "ctr_pt",
+    "image_black": 0.35,
+    "image_white": 0.7,
+    "disallow_live_query": True,
+}
+
 v1dd_config = {
     "datastack": "v1dd",
     "syn_position_column": "ctr_pt",
@@ -30,5 +39,5 @@ fanc_config = {
 }
 
 if __name__ == "__main__":
-    app = create_app(config=v1dd_config)
+    app = create_app(config=minnie_public_config)
     app.run_server(port=8050, debug=True)

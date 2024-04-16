@@ -3,6 +3,9 @@ from .schema_utils import get_table_info, populate_metadata_cache
 from caveclient.tools.caching import CachedClient as CAVEclient
 from .dataframe_utilities import query_table_any
 import numpy as np
+from cachetools import cached, TTLCache
+from cachetools.keys import hashkey
+
 
 def table_is_value_source(table, client):
     if table is None:
@@ -13,6 +16,7 @@ def table_is_value_source(table, client):
     else:
         return False
 
+
 def get_all_schema_tables(
     datastack,
     config,
@@ -21,9 +25,14 @@ def get_all_schema_tables(
     tables = client.materialize.get_tables()
     populate_metadata_cache(tables, client)
     schema_tables = []
-    is_val_source = {t: table_is_value_source(t, client) for t in tables if t not in config.omit_cell_type_tables}
+    is_val_source = {
+        t: table_is_value_source(t, client)
+        for t in tables
+        if t not in config.omit_cell_type_tables
+    }
     schema_tables = [k for k, v in is_val_source.items() if v]
     return [{"label": t, "value": t} for t in sorted(schema_tables)]
+
 
 def get_type_tables(datastack, config):
     tables = get_all_schema_tables(datastack, config)
@@ -63,7 +72,9 @@ def make_client(datastack, server_address, **kwargs):
         auth_token = flask.g.get("auth_token", None)
     except:
         auth_token = None
-    client = CAVEclient(datastack, server_address=server_address, auth_token=auth_token, **kwargs)
+    client = CAVEclient(
+        datastack, server_address=server_address, auth_token=auth_token, **kwargs
+    )
     return client
 
 
@@ -96,13 +107,13 @@ def get_root_id_from_nuc_id(
         [description]
     """
     df = query_table_any(
-            nucleus_table,
-            config.soma_pt_root_id,
-            None,
-            client,
-            timestamp=timestamp,
-            extra_query={config.nucleus_id_column: [nuc_id]},
-            is_live=is_live,
+        nucleus_table,
+        config.soma_pt_root_id,
+        None,
+        client,
+        timestamp=timestamp,
+        extra_query={config.nucleus_id_column: [nuc_id]},
+        is_live=is_live,
     )
     if len(df) == 0:
         return None
@@ -136,3 +147,20 @@ def get_nucleus_id_from_root_id(
         return df[config.nucleus_id_column].values[0]
     else:
         return df[config.nucleus_id_column].values
+
+
+table_option_cache = TTLCache(maxsize=128, ttl=3600)
+
+
+def table_hash(table_name, client):
+    return hashkey(
+        table_name, client.datastack_name, str(client.materialize.get_timestamp())
+    )
+
+
+@cached(cache=table_option_cache, key=table_hash)
+def get_unique_table_values(
+    table_name,
+    client,
+) -> dict:
+    return client.materialize.get_unique_string_values(table_name)

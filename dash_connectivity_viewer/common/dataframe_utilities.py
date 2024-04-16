@@ -266,10 +266,12 @@ def rehydrate_dataframe(rows, columns=[]):
 def _expand_column(df, column, len_column="num_syn"):
     def _expand_column(row):
         return [row[column]] * row[len_column]
+
     if len(df) > 0:
         return np.concatenate(list(df.apply(_expand_column, axis=1)))
     else:
         return np.array([])
+
 
 def _slam_column(df, column):
     if len(df) > 0:
@@ -291,7 +293,6 @@ def rebuild_synapse_dataframe(rows, config, aligned_volume, value_cols=[]):
         if col != "":
             data_dict[col] = _expand_column(dfnn, col)
     df_rh = pd.DataFrame(data_dict).replace("nan", None)
-
     extract_depth(
         df_rh,
         config.synapse_depth_column,

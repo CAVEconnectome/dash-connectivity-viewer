@@ -24,7 +24,10 @@ from ..common.lookup_utilities import (
 )
 from ..common.schema_utils import get_table_info
 from ..common.dataframe_utilities import (
-    stringify_root_ids, stringify_list, rehydrate_dataframe, rebuild_synapse_dataframe
+    stringify_root_ids,
+    stringify_list,
+    rehydrate_dataframe,
+    rebuild_synapse_dataframe,
 )
 from .neuron_data_cortex import NeuronDataCortex as NeuronData
 from .neuron_data_cortex import ALLOW_COLUMN_TYPES_DISCRETE
@@ -58,7 +61,7 @@ StateAnnoType = State({"id_inner": "id-type", "type": _COMPONENT_ID_TYPE}, "valu
 StateLiveQuery = State(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
 )
-StateLinkGroupValue = State('group-by', 'value')
+StateLinkGroupValue = State("group-by", "value")
 
 OutputLiveQueryToggle = Output(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE},
@@ -67,8 +70,6 @@ OutputLiveQueryToggle = Output(
 OutputLiveQueryValue = Output(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
 )
-
-
 
 
 def allowed_action_trigger(ctx, allowed_buttons):
@@ -111,15 +112,21 @@ def make_violin_plot(ndat, height=350):
 
     violin = violin_fig(ndat, height=height)
     contents = [
-        html.H5("Input/Output Depth", className='card-title'),
+        html.H5("Input/Output Depth", className="card-title"),
         dcc.Graph(
-            figure=violin, style={"margin-left": "5rem", "margin-right": "5rem", "width": "auto", "height": "25rem"}
+            figure=violin,
+            style={
+                "margin-left": "5rem",
+                "margin-right": "5rem",
+                "width": "auto",
+                "height": "25rem",
+            },
         ),
     ]
     return contents
 
 
-def make_ct_plots(rows, config, aligned_volume, color_column):
+def make_ct_plots(rows, config, aligned_volume, color_column, table_values):
     if rows is None:
         return html.Div(""), html.Div("")
     if len(rows) == 0:
@@ -131,54 +138,65 @@ def make_ct_plots(rows, config, aligned_volume, color_column):
         aligned_volume,
         value_cols=[color_column],
     )
+    if color_column in table_values:
+        df[color_column] = df[color_column].astype(
+            pd.CategoricalDtype(
+                categories=sorted(table_values[color_column])
+                + [config.null_cell_type_label],
+                ordered=True,
+            )
+        )
 
     if color_column == "":
         color_column = None
 
     if config.show_depth_plots:
-        scatter_contents = make_scatter_div(df.copy(), config, color_column, width=450, height=350)
+        scatter_contents = make_scatter_div(
+            df.copy(), config, color_column, width=450, height=350
+        )
     else:
         scatter_contents = html.Div("")
-    bar_contents = make_bar_div(df.copy(), config, color_column, width = 450, height=350)
+    bar_contents = make_bar_div(df.copy(), config, color_column, width=450, height=350)
 
     return scatter_contents, bar_contents
 
 
 def make_scatter_div(
-    df, config, color_column, width=450, height=350,
+    df,
+    config,
+    color_column,
+    width=450,
+    height=350,
 ):
     scatter_fig = scatter_fig_df(df, config, color_column, width, height)
     contents = [
-        html.H5("Synapse/Target Soma Depth", className='card-title'),
+        html.H5("Synapse/Target Soma Depth", className="card-title"),
         dcc.Graph(
-            figure=scatter_fig, style={"height": "100%",  "width": "auto"},
+            figure=scatter_fig,
+            style={"height": "100%", "width": "auto"},
         ),
     ]
     return contents
+
 
 def make_bar_div(df, config, color_column, width=450, height=350):
     if color_column is None:
         contents = [
             html.H4(
                 "Select value column for bar chart",
-                style=
-                    {
-                        'text-align': 'center', 'vertical-align': 'middle'
-                    },
-                ),
+                style={"text-align": "center", "vertical-align": "middle"},
+            ),
         ]
     else:
         bar_fig = bar_fig_df(df, config, color_column)
         contents = [
-            html.H5("Target Distribution", style={'text-align': 'center'}),
-            dcc.Graph(
-                figure=bar_fig, style={"width": "auto", "height": "100%"}
-            )
+            html.H5("Target Distribution", style={"text-align": "center"}),
+            dcc.Graph(figure=bar_fig, style={"width": "auto", "height": "100%"}),
         ]
     return contents
 
-def register_callbacks(app, config):
 
+def register_callbacks(app, config):
     c = TypedConnectivityConfig(config)
 
     @app.callback(
@@ -190,16 +208,19 @@ def register_callbacks(app, config):
         return []
 
     @app.callback(
-        Output("header-bar", 'children'),
+        Output("header-bar", "children"),
         InputDatastack,
     )
     def set_header(datastack):
-        return html.H3(f"Typed Connectivity Viewer — {datastack}", className="bg-primary text-white p-2 mb-2 text-center")
-
+        return html.H3(
+            f"Typed Connectivity Viewer — {datastack}",
+            className="bg-primary text-white p-2 mb-2 text-center",
+        )
 
     @app.callback(
         Output("data-table", "columns"),
         Output("group-by", "options"),
+        Output("unique-table-values", "data"),
         Input("submit-button", "n_clicks"),
         InputDatastack,
         StateCellTypeTable,
@@ -211,30 +232,34 @@ def register_callbacks(app, config):
             return [{"name": i, "id": i} for i in c.table_columns], []
 
         if c.debug:
-            print('cell_type_table', cell_type_table, 'client', client.datastack_name)
-        _, val_cols = get_table_info(cell_type_table, client, allow_types=ALLOW_COLUMN_TYPES_DISCRETE)
+            print("cell_type_table", cell_type_table, "client", client.datastack_name)
+        _, val_cols = get_table_info(
+            cell_type_table, client, allow_types=ALLOW_COLUMN_TYPES_DISCRETE
+        )
 
         table_cons = c.table_columns + val_cols
+        table_values = client.materialize.get_unique_string_values(cell_type_table)
         return (
             [{"name": i, "id": i} for i in table_cons],
             [{"label": k, "value": k} for k in val_cols],
+            table_values,
         )
 
     @app.callback(
-        Output('plot-color-value', 'options'),
-        Output('plot-color-value', 'value'),
-        Input('group-by', 'options'),
-        Input('plot-color-value', 'value'),
+        Output("plot-color-value", "options"),
+        Output("plot-color-value", "value"),
+        Input("group-by", "options"),
+        Input("plot-color-value", "value"),
     )
     def update_plot_options(new_options, old_value):
-        DEFAULT_VALUE = 'cell_type'
-        option_labels = [v['label'] for v in new_options]
+        DEFAULT_VALUE = "cell_type"
+        option_labels = [v["label"] for v in new_options]
         if old_value in option_labels:
             new_value = old_value
         elif DEFAULT_VALUE in new_options:
             new_value = DEFAULT_VALUE
         else:
-            new_value = ''
+            new_value = ""
         return new_options, new_value
 
     @app.callback(
@@ -309,6 +334,10 @@ def register_callbacks(app, config):
             client = make_client(datastack_name, c.server_address)
             info_cache = client.info.info_cache[datastack_name]
             info_cache["global_server"] = client.server_address
+            if c.viewer_site is not None and c.target_site is not None:
+                info_cache["viewer_site"] = c.viewer_site
+                info_cache["target_site"] = c.target_site
+
         except Exception as e:
             return (
                 html.Div(str(e)),
@@ -336,7 +365,7 @@ def register_callbacks(app, config):
         if live_query:
             timestamp = datetime.datetime.utcnow()
             timestamp_ngl = None
-            info_cache['ngl_timestamp'] = None
+            info_cache["ngl_timestamp"] = None
         else:
             timestamp = client.materialize.get_timestamp()
             timestamp_ngl = timestamp
@@ -365,7 +394,7 @@ def register_callbacks(app, config):
                 object_id_type = "nucleus"
             else:
                 raise ValueError('id_type must be either "root_id" or "nucleus_id"')
-        
+
         try:
             nrn_data = NeuronData(
                 object_id=object_id,
@@ -378,20 +407,22 @@ def register_callbacks(app, config):
                 n_threads=2,
             )
             if c.debug:
-                print(f'\nMade NeuronData object with nuc table: {nrn_data._soma_table}\n')
+                print(
+                    f"\nMade NeuronData object with nuc table: {nrn_data._soma_table}\n"
+                )
 
             root_id = nrn_data.root_id
             info_cache["root_id"] = str(root_id)
 
             if c.debug:
-                print(f'\n Starting partners out')
+                print(f"\n Starting partners out")
             pre_targ_df = nrn_data.partners_out_plus()
             pre_targ_df = stringify_root_ids(
                 pre_targ_df, stringify_cols=[c.root_id_col]
             )
 
             if c.debug:
-                print(f'\n Starting partners in')
+                print(f"\n Starting partners in")
             post_targ_df = nrn_data.partners_in_plus()
             post_targ_df = stringify_root_ids(
                 post_targ_df, stringify_cols=[c.root_id_col]
@@ -403,7 +434,6 @@ def register_callbacks(app, config):
             for col in nrn_data.config.syn_pt_position_split:
                 stringify_list(col, pre_targ_df)
                 stringify_list(col, post_targ_df)
-
 
             if logger is not None:
                 logger.info(
@@ -423,10 +453,10 @@ def register_callbacks(app, config):
 
             if nrn_data.old_root_id is not None:
                 change_root_id_text = f" Warning: {nrn_data.old_root_id} is not valid at timestamp queried! Showing data for the most overlapping valid root id. — "
-                output_status='warning'
+                output_status = "warning"
             else:
                 change_root_id_text = ""
-                output_status='success'
+                output_status = "success"
 
             if live_query:
                 message_text = f"{change_root_id_text}Current connectivity for root id {root_id}{nuc_id_text} and {ct_text}."
@@ -458,9 +488,9 @@ def register_callbacks(app, config):
             if c.debug:
                 print(f"Failed on datastack {datastack_name}!")
                 print(
-                    '\n',
+                    "\n",
                     info_cache,
-                    '\n',
+                    "\n",
                 )
             return (
                 html.Div(str(e)),
@@ -477,18 +507,16 @@ def register_callbacks(app, config):
             )
 
     @app.callback(
-        Output('scatter-plot', 'children'),
-        Output('bar-plot', 'children'),
+        Output("scatter-plot", "children"),
+        Output("bar-plot", "children"),
         Input("target-table-json", "data"),
-        Input("plot-color-value", 'value'),
+        Input("plot-color-value", "value"),
         Input("client-info-json", "data"),
+        Input("unique-table-values", "data"),
     )
-    def update_scatter_bar_plots(rows, color_column, info_cache):
+    def update_scatter_bar_plots(rows, color_column, info_cache, table_values):
         return make_ct_plots(
-            rows,
-            c,
-            aligned_volume(info_cache),
-            color_column,
+            rows, c, aligned_volume(info_cache), color_column, table_values
         )
 
     @app.callback(
@@ -637,12 +665,19 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
-        Input('group-by', 'value'),
-        Input('no-type-annotation', 'value'),
+        Input("group-by", "value"),
+        Input("no-type-annotation", "value"),
         prevent_initial_call=True,
     )
     def generate_cell_typed_input_link(
-        _1, _2, rows, info_cache, datastack, data_resolution, value_column, include_no_type,
+        _1,
+        _2,
+        rows,
+        info_cache,
+        datastack,
+        data_resolution,
+        value_column,
+        include_no_type,
     ):
         if value_column is None or value_column == "":
             return "  ", "No Annotation Column Set", True
@@ -719,16 +754,23 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
-        Input('group-by', 'value'),
-        Input('no-type-annotation', 'value'),
+        Input("group-by", "value"),
+        Input("no-type-annotation", "value"),
         prevent_initial_call=True,
     )
     def generate_cell_typed_output_link(
-        _1, _2, rows, info_cache, datastack, data_resolution, value_column, include_no_type,
+        _1,
+        _2,
+        rows,
+        info_cache,
+        datastack,
+        data_resolution,
+        value_column,
+        include_no_type,
     ):
         if value_column is None or value_column == "":
             return "  ", "No Annotation Column Set", True
-        
+
         if not allowed_action_trigger(
             callback_context, ["cell-typed-output-link-button"]
         ):

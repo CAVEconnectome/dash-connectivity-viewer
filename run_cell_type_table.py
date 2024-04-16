@@ -10,6 +10,11 @@ minnie_config = {
     "image_white": 0.7,
 }
 
+minnie_public_config = minnie_config.copy()
+minnie_public_config["datastack"] = "minnie65_public"
+minnie_public_config["disallow_live_query"] = True
+
+
 v1dd_config = {
     "datastack": "v1dd",
     "server_address": "https://globalv1.em.brain.allentech.org",
@@ -34,7 +39,8 @@ fanc_config = {
 }
 
 if __name__ == "__main__":
-    app = create_app(config=minnie_config)
+    app = create_app(config=minnie_public_config)
     app.run_server(
         port=8050,
-        )
+        debug=True,
+    )

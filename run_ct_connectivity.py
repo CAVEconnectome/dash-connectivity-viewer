@@ -29,8 +29,8 @@ minnie_config = {
     "default_cell_type_option": "aibs_soma_nuc_metamodel_preds_v117",
     "image_black": 0.35,
     "image_white": 0.7,
-    'height_bounds': [0, 950],
-    'layer_bounds': [106, 276, 411, 535, 768],
+    "height_bounds": [0, 950],
+    "layer_bounds": [106, 276, 411, 535, 768],
 }
 
 v1dd_config = {
@@ -50,8 +50,8 @@ v1dd_config = {
     "omit_cell_type_tables": ["nucleus_detection_v0"],
     "image_black": 0.35,
     "image_white": 0.7,
-    'height_bounds': [-20, 900],
-    'layer_bounds': [100, 270, 400, 550, 750],
+    "height_bounds": [-20, 900],
+    "layer_bounds": [100, 270, 400, 550, 750],
 }
 
 flywire_config = {
@@ -69,9 +69,13 @@ fanc_config = {
     "ct_conn_show_depth_plots": False,
 }
 
+minnie_public_config = minnie_config.copy()
+minnie_public_config["datastack"] = "minnie65_public"
+minnie_public_config["disallow_live_query"] = True
+
 if __name__ == "__main__":
-    app = create_app(config=minnie_config)
+    app = create_app(config=minnie_public_config)
     app.run_server(
         port=8050,
-        # debug=True,
+        debug=True,
     )

@@ -3,20 +3,21 @@ import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 
+
 def _violin_plot(syn_df, x_col, y_col, name, side, color, xaxis, yaxis):
     return go.Violin(
         x=syn_df[x_col],
         y=syn_df[y_col],
         side=side,
         scalegroup="syn",
-        spanmode='hard',
+        spanmode="hard",
         name=name,
         points=False,
         line_color=f"rgb{color}",
         fillcolor=f"rgb{color}",
         xaxis=xaxis,
         yaxis=yaxis,
-        hoverinfo='text',
+        hoverinfo="text",
         hovertext=f"{len(syn_df)} Syn.",
         # bandwidth=0.2,
     )
@@ -55,13 +56,17 @@ def pre_violin_plot(
         yaxis=yaxis,
     )
 
+
 from itertools import cycle
+
+
 def _colorscheme(n):
     if n <= 10:
         clrs = cycle(colors.qualitative.G10)
     else:
         clrs = cycle(colors.qualitative.Dark24)
     return [next(clrs) for i in range(n)]
+
 
 def synapse_soma_scatterplot(
     targ_df,
@@ -70,35 +75,43 @@ def synapse_soma_scatterplot(
     xaxis=None,
     yaxis=None,
 ):
-
     if color_column is None or color_column == "":
-        fake_cell_type_column = 'DummyColumn_'
+        fake_cell_type_column = "DummyColumn_"
         while fake_cell_type_column in targ_df.columns:
-            fake_cell_type_column += 'a'
+            fake_cell_type_column += "a"
         color_column = fake_cell_type_column
         targ_df[color_column] = config.null_cell_type_label
         ctypes = [config.null_cell_type_label]
     else:
-        if targ_df[color_column].dtype == 'float64':
+        if targ_df[color_column].dtype == "float64":
             targ_df[color_column] = targ_df[color_column].astype(pd.Int64Dtype())
             ctypes = sorted(list(np.unique(targ_df[color_column].dropna()).astype(str)))
-            targ_df[color_column] = targ_df[color_column].astype(str).replace(
-                {'<NA>': config.null_cell_type_label}
+            targ_df[color_column] = (
+                targ_df[color_column]
+                .astype(str)
+                .replace({"<NA>": config.null_cell_type_label})
             )
         else:
-            ctypes = sorted(list(np.unique(targ_df[color_column].dropna()).astype(str)))
-            targ_df[color_column] = targ_df[color_column].fillna(config.null_cell_type_label).astype(str)
-        ctypes = ctypes+[config.null_cell_type_label]
-
-    
-    if len(ctypes)>1:
-        cmap = _colorscheme(len(ctypes)-1) + ['#333333']
+            try:
+                ctypes = targ_df[color_column].dtype.categories
+                print("from category")
+            except:
+                ctypes = sorted(
+                    list(np.unique(targ_df[color_column].dropna()).astype(str))
+                )
+                print("from values")
+            print(ctypes)
+            targ_df[color_column] = (
+                targ_df[color_column].fillna(config.null_cell_type_label).astype(str)
+            )
+    if len(ctypes) > 1:
+        cmap = _colorscheme(len(ctypes) - 1) + ["#333333"]
     else:
-        cmap = ['#333333']
+        cmap = ["#333333"]
 
     alpha_default = {config.null_cell_type_label: 0.2}
     panels = []
-    alpha= config.vis.e_opacity
+    alpha = config.vis.e_opacity
     for ct, clr in zip(ctypes, cmap):
         targ_df_r = targ_df.query(f"{color_column}=='{ct}'")
         panel = go.Scattergl(
@@ -120,14 +133,20 @@ def synapse_soma_scatterplot(
 
     return panels
 
+
 def bar_plot_df(
     targ_df,
     config,
     color_value,
 ):
+    targ_df = targ_df.replace({config.null_cell_type_label: None}).dropna(
+        subset=color_value
+    )
 
-    targ_df = targ_df.replace({config.null_cell_type_label: None}).dropna(subset=color_value)
-    xtypes = sorted(list(np.unique(targ_df[color_value])))
+    try:
+        xtypes = targ_df[color_value].dtype.categories
+    except:
+        xtypes = sorted(list(np.unique(targ_df[color_value])))
     clrs = _colorscheme(len(xtypes))
     cnts = targ_df.value_counts(color_value).loc[xtypes]
 
