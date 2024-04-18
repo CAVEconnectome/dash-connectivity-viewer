@@ -5,6 +5,50 @@ from .dataframe_utilities import query_table_any
 import numpy as np
 from cachetools import cached, TTLCache
 from cachetools.keys import hashkey
+from datetime import datetime
+import pytz
+
+
+def get_versions(client, n_years=1):
+    version_metadata = client.materialize.get_versions_metadata()
+    now = datetime.now(tz=pytz.UTC)
+    keep_versions = {}
+    latest_version = 0
+    for vmeta in version_metadata:
+        delta_days = (vmeta["expires_on"] - now).days
+        if delta_days >= n_years * 365:
+            keep_versions[f"v{vmeta['version']}"] = vmeta["version"]
+        if vmeta["version"] > latest_version:
+            latest_version = vmeta["version"]
+    keep_versions["latest"] = latest_version
+    return keep_versions
+
+
+def get_version_options(client, disallow_live_query):
+    mat_versions = get_versions(client)
+    version_options = []
+    if not disallow_live_query:
+        version_options.append(
+            {
+                "label": "Live Query",
+                "value": "live",
+            }
+        )
+    latest_version = mat_versions.pop("latest")
+    version_options.append(
+        {"label": f"Latest (v{latest_version})", "value": latest_version}
+    )
+
+    long_lived = sorted(mat_versions.keys())[::-1]
+    for k in long_lived:
+        if mat_versions[k] != latest_version:
+            version_options.append({"label": k, "value": mat_versions[k]})
+
+    if not disallow_live_query:
+        default_value = "live"
+    else:
+        default_value = latest_version
+    return version_options, default_value
 
 
 def table_is_value_source(table, client):
@@ -17,11 +61,10 @@ def table_is_value_source(table, client):
         return False
 
 
-def get_all_schema_tables(
-    datastack,
-    config,
-):
-    client = make_client(datastack, config.server_address)
+def get_all_schema_tables(datastack, config, mat_version=None):
+    client = make_client(
+        datastack, config.server_address, materialize_version=mat_version
+    )
     tables = client.materialize.get_tables()
     populate_metadata_cache(tables, client)
     schema_tables = []
@@ -34,8 +77,10 @@ def get_all_schema_tables(
     return [{"label": t, "value": t} for t in sorted(schema_tables)]
 
 
-def get_type_tables(datastack, config):
-    tables = get_all_schema_tables(datastack, config)
+def get_type_tables(datastack, config, mat_version=None):
+    if mat_version == "" or mat_version == "live":
+        mat_version = None
+    tables = get_all_schema_tables(datastack, config, mat_version)
     named_options = config.cell_type_dropdown_options
     if named_options is None:
         return tables
@@ -55,7 +100,7 @@ def get_type_tables(datastack, config):
     return new_tables
 
 
-def make_client(datastack, server_address, **kwargs):
+def make_client(datastack, server_address, materialize_version=None, **kwargs):
     """Build a framework client with appropriate auth token
 
     Parameters
@@ -75,6 +120,8 @@ def make_client(datastack, server_address, **kwargs):
     client = CAVEclient(
         datastack, server_address=server_address, auth_token=auth_token, **kwargs
     )
+    if materialize_version:
+        client.materialize.version = materialize_version
     return client
 
 
@@ -115,6 +162,7 @@ def get_root_id_from_nuc_id(
         extra_query={config.nucleus_id_column: [nuc_id]},
         is_live=is_live,
     )
+
     if len(df) == 0:
         return None
     else:

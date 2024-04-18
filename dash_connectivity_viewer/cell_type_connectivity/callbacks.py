@@ -1,4 +1,5 @@
 import datetime
+import pytz
 import numpy as np
 from functools import partial
 
@@ -22,6 +23,7 @@ from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 from ..common.lookup_utilities import (
     get_type_tables,
     make_client,
+    get_version_options,
 )
 from ..common.schema_utils import get_table_info
 from ..common.dataframe_utilities import (
@@ -56,6 +58,19 @@ OutputCellTypeMenuOptions = Output(
 OutputCellTypeValue = Output(
     {"id_inner": "cell-type-table-dropdown", "type": _COMPONENT_ID_TYPE},
     "value",
+)
+
+InputMaterializationVersion = Input(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "value"
+)
+StateMaterializationVersion = State(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "value"
+)
+OutputMaterializeOptions = Output(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "options"
+)
+OutputMaterializeValue = Output(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "value"
 )
 
 StateAnnoType = State({"id_inner": "id-type", "type": _COMPONENT_ID_TYPE}, "value")
@@ -219,6 +234,21 @@ def register_callbacks(app, config):
         )
 
     @app.callback(
+        OutputMaterializeOptions,
+        OutputMaterializeValue,
+        InputDatastack,
+    )
+    def get_materialization_versions(
+        datastack_name,
+    ):
+        # Produce ordered list of materialization versions to choose from
+        client = make_client(datastack_name, c.server_address)
+        version_options, default_value = get_version_options(
+            client, c.disallow_live_query
+        )
+        return version_options, default_value
+
+    @app.callback(
         Output("data-table", "columns"),
         Output("group-by", "options"),
         Output("unique-table-values", "data"),
@@ -245,6 +275,13 @@ def register_callbacks(app, config):
             [{"label": k, "value": k} for k in val_cols],
             table_values,
         )
+
+    @app.callback(
+        OutputCellTypeValue,
+        InputMaterializationVersion,
+    )
+    def clear_cell_type_dropdown(mat_version):
+        return ""
 
     @app.callback(
         Output("plot-color-value", "options"),
@@ -277,36 +314,26 @@ def register_callbacks(app, config):
             return datastack
 
     @app.callback(
-        OutputLiveQueryToggle,
-        OutputLiveQueryValue,
-        InputDatastack,
-        StateLiveQuery,
-    )
-    def disable_live_query(_, lq):
-        options_active = [{"label": "Live Query", "value": 1}]
-        options_disabled = [{"label": "Live Query", "value": 1, "disabled": True}]
-        if c.disallow_live_query:
-            return options_disabled, ""
-        else:
-            return options_active, lq
-
-    @app.callback(
         OutputCellTypeMenuOptions,
         InputDatastack,
+        InputMaterializationVersion,
     )
-    def set_cell_type_dropdown(datastack):
-        return get_type_tables(datastack, c)
+    def set_cell_type_dropdown(datastack, mat_version):
+        if c.debug:
+            print("Triggered cell type dropdown options")
+        type_tables = get_type_tables(datastack, c, mat_version)
+        return type_tables
 
-    @app.callback(
-        OutputCellTypeValue,
-        InputDatastack,
-        StateCellTypeTable,
-    )
-    def default_cell_type_option(_, curr_value):
-        if curr_value != "":
-            return curr_value
-        else:
-            return c.default_cell_type_option
+    # @app.callback(
+    #     OutputCellTypeValue,
+    #     InputDatastack,
+    #     StateCellTypeTable,
+    # )
+    # def default_cell_type_option(_, curr_value):
+    #     if curr_value != "":
+    #         return curr_value
+    #     else:
+    #         return c.default_cell_type_option
 
     @app.callback(
         Output("message-text", "children"),
@@ -325,14 +352,25 @@ def register_callbacks(app, config):
         StateRootID,
         StateAnnoType,
         StateCellTypeTable,
-        StateLiveQuery,
+        StateMaterializationVersion,
     )
-    def update_data(_1, datastack_name, anno_id, id_type, ct_table_value, query_toggle):
+    def update_data(_1, datastack_name, anno_id, id_type, ct_table_value, mat_version):
         if logger is not None:
             t0 = time.time()
+        if c.debug:
+            print("Mat version:", mat_version)
+
+        if mat_version == "live" or "":
+            version = None
+        else:
+            version = mat_version
 
         try:
-            client = make_client(datastack_name, c.server_address)
+            client = make_client(
+                datastack_name, c.server_address, materialize_version=version
+            )
+            if version is None:
+                version = client.materialize.version
             info_cache = client.info.info_cache[datastack_name]
             info_cache["global_server"] = client.server_address
 
@@ -355,17 +393,17 @@ def register_callbacks(app, config):
             ct_table_value = None
         info_cache["cell_type_column"] = ct_table_value
 
-        if len(query_toggle) == 1 and not c.disallow_live_query:
+        if mat_version == "live":
             live_query = True
         else:
             live_query = False
 
         if live_query:
-            timestamp = datetime.datetime.utcnow()
+            timestamp = datetime.datetime.now(tz=pytz.UTC)
             timestamp_ngl = None
             info_cache["ngl_timestamp"] = None
         else:
-            timestamp = client.materialize.get_timestamp()
+            timestamp = client.materialize.get_timestamp(version=version)
             timestamp_ngl = timestamp
             info_cache["ngl_timestamp"] = timestamp.timestamp()
 
@@ -379,7 +417,7 @@ def register_callbacks(app, config):
                 "Output",
                 "Input",
                 1,
-                EMPTY_INFO_CACHE,
+                info_cache,
                 make_violin_plot(None),
                 None,
             )
@@ -546,6 +584,7 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         Input("synapse-table-resolution-json", "data"),
         Input("ngl-target-site", "value"),
+        InputDatastack,
     )
     def update_link(
         tab_value,
@@ -554,6 +593,7 @@ def register_callbacks(app, config):
         info_cache,
         synapse_data_resolution,
         target_site,
+        datastack_name,
     ):
         if c.debug:
             print(f"Target site: {target_site}")
@@ -565,7 +605,8 @@ def register_callbacks(app, config):
             return f"Neuroglancer: ({n} partners)"
 
         if info_cache is None:
-            return "", "No datastack set", True, ""
+            client = make_client(datastack_name, c.server_address)
+            info_cache = client.info.info_cache[datastack_name]
 
         info_cache["target_site"] = target_site
         info_cache["viewer_site"] = get_viewer_site_from_target(

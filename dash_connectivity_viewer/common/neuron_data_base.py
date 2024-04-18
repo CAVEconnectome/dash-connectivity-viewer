@@ -73,6 +73,7 @@ class NeuronData(object):
 
         self._client = make_client(
             datastack=client.datastack_name,
+            materialize_version=client.materialize.version,
             server_address=client.server_address,
             pool_block=True,
             pool_maxsize=config.pool_maxsize,
@@ -135,6 +136,15 @@ class NeuronData(object):
     @property
     def root_id(self):
         if self._root_id is None:
+            if self.config.debug:
+                print(
+                    "Get root id: ",
+                    self._nucleus_id,
+                    self.client.materialize.version,
+                    self.soma_table,
+                    self.timestamp,
+                    self.is_live,
+                )
             new_root_id = get_root_id_from_nuc_id(
                 self._nucleus_id,
                 self.client,
@@ -150,6 +160,8 @@ class NeuronData(object):
         return self._root_id
 
     def check_root_id(self):
+        if self.config.debug:
+            print("Check root id: ", self.timestamp, self.root_id)
         if self.client.chunkedgraph.is_latest_roots(
             [self.root_id], timestamp=self.timestamp
         )[0]:
@@ -158,7 +170,7 @@ class NeuronData(object):
             self.old_root_id = self.root_id
             self._root_id = self.client.chunkedgraph.suggest_latest_roots(
                 self.root_id,
-                timestamp=self._timestamp,
+                timestamp=self.timestamp,
             )
         pass
 

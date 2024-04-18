@@ -10,12 +10,20 @@ DESIRED_RESOLUTION = [1, 1, 1]
 
 
 def query_table_any(
-    table, root_id_column, root_ids, client, timestamp, extra_query={}, is_live=True
+    table,
+    root_id_column,
+    root_ids,
+    client,
+    timestamp,
+    extra_query={},
+    is_live=True,
 ):
     if root_ids is not None:
         root_ids = np.array(root_ids)
         root_ids = root_ids[root_ids != 0]
-    ref_table = table_metadata(table, client).get("reference_table")
+    meta = table_metadata(table, client)
+    ref_table = meta.get("reference_table")
+    print(f"Table metadata for table {table}:", meta)
     if ref_table is not None:
         return _query_table_join(
             table,
@@ -84,6 +92,7 @@ def _query_table_single(
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
             metadata=False,
+            timestamp=timestamp,
             **filter_kwargs,
         )
 

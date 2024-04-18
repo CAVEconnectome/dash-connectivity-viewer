@@ -55,26 +55,40 @@ def make_input_row(state):
                     ),
                     dbc.Col(
                         [
-                            dbc.Checklist(
+                            "Materialization:",
+                            dcc.Dropdown(
                                 **create_component_kwargs(
                                     state,
-                                    id_inner="live-query-toggle",
-                                    options=[
-                                        {
-                                            "label": "Live Query",
-                                            "value": 1,
-                                        },
-                                    ],
-                                    value=[
-                                        1,
-                                    ],
-                                    switch=True,
+                                    id_inner="mat-version",
+                                    options=[{"label": "Latest", "value": ""}],
+                                    value="",
                                     style={
-                                        "bottom-margin": "10px",
-                                        "font-size": "16px",
+                                        "margin-left": "12px",
+                                        "font-size": "12px",
                                     },
+                                    clearable=False,
                                 )
                             ),
+                            # dbc.Checklist(
+                            #     **create_component_kwargs(
+                            #         state,
+                            #         id_inner="live-query-toggle",
+                            #         options=[
+                            #             {
+                            #                 "label": "Live Query",
+                            #                 "value": 1,
+                            #             },
+                            #         ],
+                            #         value=[
+                            #             1,
+                            #         ],
+                            #         switch=True,
+                            #         style={
+                            #             "bottom-margin": "10px",
+                            #             "font-size": "16px",
+                            #         },
+                            #     )
+                            # ),
                         ],
                         width={"size": 1, "offset": 1},
                         align="center",
