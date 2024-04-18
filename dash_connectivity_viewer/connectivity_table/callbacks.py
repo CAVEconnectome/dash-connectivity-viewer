@@ -1,4 +1,6 @@
 from dash import html
+import numpy as np
+import pytz
 from ..common.neuron_data_base import NeuronData
 from dash.dependencies import Input, Output, State
 from dash import callback_context
@@ -19,7 +21,7 @@ from ..common.dataframe_utilities import (
     repopulate_list,
 )
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
-from ..common.lookup_utilities import make_client
+from ..common.lookup_utilities import make_client, get_version_options
 from .config import ConnectivityConfig
 
 import datetime
@@ -40,12 +42,18 @@ StateLiveQuery = State(
     {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
 )
 
-OutputLiveQueryToggle = Output(
-    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE},
-    "options",
+
+InputMaterializationVersion = Input(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "value"
 )
-OutputLiveQueryValue = Output(
-    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
+StateMaterializationVersion = State(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "value"
+)
+OutputMaterializeOptions = Output(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "options"
+)
+OutputMaterializeValue = Output(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "value"
 )
 
 
@@ -78,6 +86,21 @@ def register_callbacks(app, config):
         return [{"name": i, "id": i} for i in c.table_columns]
 
     @app.callback(
+        OutputMaterializeOptions,
+        OutputMaterializeValue,
+        InputDatastack,
+    )
+    def get_materialization_versions(
+        datastack_name,
+    ):
+        # Produce ordered list of materialization versions to choose from
+        client = make_client(datastack_name, c.server_address)
+        version_options, default_value = get_version_options(
+            client, c.disallow_live_query
+        )
+        return version_options, default_value
+
+    @app.callback(
         OutputDatastack,
         InputDatastack,
     )
@@ -89,20 +112,6 @@ def register_callbacks(app, config):
             return c.default_datastack
         else:
             return datastack
-
-    @app.callback(
-        OutputLiveQueryToggle,
-        OutputLiveQueryValue,
-        InputDatastack,
-        StateLiveQuery,
-    )
-    def disable_live_query(_, lq):
-        options_active = [{"label": "Live Query", "value": 1}]
-        options_disabled = [{"label": "Live Query", "value": 1, "disabled": True}]
-        if c.disallow_live_query:
-            return options_disabled, ""
-        else:
-            return options_active, lq
 
     @app.callback(
         Output("target-table-json", "data"),
@@ -119,14 +128,23 @@ def register_callbacks(app, config):
         InputDatastack,
         StateAnnoID,
         StateAnnoType,
-        StateLiveQuery,
+        StateMaterializationVersion,
     )
-    def update_data(_, datastack_name, anno_id, id_type, live_query_toggle):
+    def update_data(_, datastack_name, anno_id, id_type, mat_version):
         if logger is not None:
             t0 = time.time()
 
+        if mat_version == "live" or "":
+            version = None
+        else:
+            version = mat_version
+
         try:
-            client = make_client(datastack_name, c.server_address)
+            client = make_client(
+                datastack_name, c.server_address, materialize_version=version
+            )
+            if version is None:
+                version = client.materialize.version
             info_cache = client.info.info_cache[datastack_name]
             info_cache["global_server"] = client.server_address
         except Exception as e:
@@ -161,9 +179,12 @@ def register_callbacks(app, config):
             anno_id = None
             id_type = "anno_id"
 
-        live_query = len(live_query_toggle) == 1
-        if live_query and not c.disallow_live_query:
-            timestamp = datetime.datetime.utcnow()
+        live_query = mat_version == "live"
+
+        if live_query:
+            timestamp = datetime.datetime.now(tz=pytz.UTC)
+            timestamp_ngl = None
+            info_cache["ngl_timestamp"] = None
         else:
             timestamp = client.materialize.get_timestamp()
             timestamp_ngl = client.materialize.get_timestamp()
@@ -183,12 +204,13 @@ def register_callbacks(app, config):
 
         try:
             nrn_data = NeuronData(
-                object_id,
-                client,
+                object_id=object_id,
+                client=client,
                 config=c,
                 timestamp=timestamp,
                 id_type=object_id_type,
                 n_threads=1,
+                is_live=live_query,
             )
 
             root_id = nrn_data.root_id
@@ -218,7 +240,7 @@ def register_callbacks(app, config):
                 "Output",
                 "Input",
                 1,
-                EMPTY_INFO_CACHE,
+                info_cache,
                 "",
                 str(e),
                 "danger",
@@ -237,12 +259,18 @@ def register_callbacks(app, config):
             change_root_id_text = ""
             output_status = "success"
 
-        if timestamp is not None:
-            output_message = (
-                f"{change_root_id_text}Current connectivity for root id {root_id}."
-            )
+        if nrn_data.nucleus_id is not None and nrn_data.soma_table is not None:
+            if np.issubdtype(type(nrn_data.nucleus_id), np.integer):
+                nuc_id_text = f"  (nucleus id: {nrn_data.nucleus_id})"
+            else:
+                nuc_id_text = f" (Multiple nucleus ids in segment: {', '.join([str(x) for x in nrn_data.nucleus_id])})"
         else:
-            output_message = f"{change_root_id_text}Connectivity for root id {root_id} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})."
+            nuc_id_text = ""
+
+        if live_query:
+            output_message = f"{change_root_id_text}Current connectivity for root id {root_id}{nuc_id_text}."
+        else:
+            output_message = f"{change_root_id_text}Connectivity for root id {root_id}{nuc_id_text} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})."
 
         return (
             pre_targ_df.to_dict("records"),
