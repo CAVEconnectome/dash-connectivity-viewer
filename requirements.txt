@@ -7,7 +7,7 @@ dash>=2
 dash_bootstrap_components>=1
 cachetools
 requests
-caveclient>=5.7.0
+caveclient>=5.20.0
 dfbridge>=0.0.2
 plotly>=5
 loguru

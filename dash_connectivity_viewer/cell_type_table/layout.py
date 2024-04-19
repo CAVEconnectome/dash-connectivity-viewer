@@ -1,4 +1,3 @@
-from typing import DefaultDict
 from dash import html
 from dash import dash_table
 from dash import dcc

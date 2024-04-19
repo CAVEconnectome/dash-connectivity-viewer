@@ -128,17 +128,17 @@ class TypedConnectivityConfig(CommonConfig):
 
         self.show_plots = config.get("ct_conn_show_plots", True)
         self.show_depth_plots = config.get("ct_conn_show_depth_plots", True)
-        self.null_cell_type_label = config.get('null_cell_type_label', "No Type")
+        self.null_cell_type_label = config.get("null_cell_type_label", "No Type")
 
         # self.layer_bnds = np.load(f"{data_path}/layer_bounds_v1.npy")
         # self.height_bnds = np.load(f"{data_path}/height_bounds_v1.npy")
-        self.height_bnds = config.get('height_bounds', [])
+        self.height_bnds = config.get("height_bounds", [])
         if self.height_bnds is not None:
             self.height_bnds = np.array(self.height_bnds)
-        self.layer_bnds = config.get('layer_bounds', [])
+        self.layer_bnds = config.get("layer_bounds", [])
         if self.layer_bnds is not None:
             self.layer_bnds = np.array(self.layer_bnds)
-        self.layer_labels = config.get('layer_labels', [])
+        self.layer_labels = config.get("layer_labels", [])
 
         if self.layer_bnds is not None and self.height_bnds is not None:
             ticklocs = np.concatenate(
@@ -149,7 +149,6 @@ class TypedConnectivityConfig(CommonConfig):
 
         if self.layer_labels is None:
             self.layer_labels = self.layer_bnds.astype(str)
-
 
         dendrite_color = config.get("ct_conn_dendrite_color", (0.894, 0.102, 0.110))
         axon_color = config.get("ct_conn_axon_color", (0.227, 0.459, 0.718))
@@ -169,4 +168,3 @@ class TypedConnectivityConfig(CommonConfig):
             tick_locs=ticklocs,
             tick_labels=["L1", "L2/3", "L4", "L5", "L6", "WM", ""],
         )
-

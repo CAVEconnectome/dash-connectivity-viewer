@@ -69,26 +69,6 @@ def make_input_row(state):
                                     clearable=False,
                                 )
                             ),
-                            # dbc.Checklist(
-                            #     **create_component_kwargs(
-                            #         state,
-                            #         id_inner="live-query-toggle",
-                            #         options=[
-                            #             {
-                            #                 "label": "Live Query",
-                            #                 "value": 1,
-                            #             },
-                            #         ],
-                            #         value=[
-                            #             1,
-                            #         ],
-                            #         switch=True,
-                            #         style={
-                            #             "bottom-margin": "10px",
-                            #             "font-size": "16px",
-                            #         },
-                            #     )
-                            # ),
                         ],
                         width={"size": 1, "offset": 1},
                         align="center",

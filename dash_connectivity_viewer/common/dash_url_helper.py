@@ -7,7 +7,7 @@ from urllib.parse import urlparse, parse_qsl, urlencode, quote
 import dash
 from dash.dependencies import Input, Output, ALL
 
-_COMPONENT_ID_TYPE = 'url_helper'
+_COMPONENT_ID_TYPE = "url_helper"
 
 """
 definition: {id_inner: {property: your_value}}
@@ -16,14 +16,16 @@ NOTE here we use id_inner, NOT the real id (which is a dict)
 State = Dict[str, Dict[str, Any]]
 
 
-def create_component_kwargs(state: State, id_inner: str, **raw_kwargs) -> Dict[str, Any]:
+def create_component_kwargs(
+    state: State, id_inner: str, **raw_kwargs
+) -> Dict[str, Any]:
     # noinspection PyDictCreation
     kwargs = {**raw_kwargs}
 
     # create "id"
-    kwargs['id'] = {
-        'type': _COMPONENT_ID_TYPE,
-        'id_inner': id_inner,
+    kwargs["id"] = {
+        "type": _COMPONENT_ID_TYPE,
+        "id_inner": id_inner,
     }
 
     # apply default value
@@ -34,7 +36,7 @@ def create_component_kwargs(state: State, id_inner: str, **raw_kwargs) -> Dict[s
     return kwargs
 
 
-_ID_PARAM_SEP = '::'
+_ID_PARAM_SEP = "::"
 
 
 def _parse_url_to_state(href: str) -> State:
@@ -46,7 +48,7 @@ def _parse_url_to_state(href: str) -> State:
         if _ID_PARAM_SEP in key:
             id, param = key.split(_ID_PARAM_SEP)
         else:
-            id, param = key, 'value'
+            id, param = key, "value"
         try:
             state.setdefault(id, {})[param] = ast.literal_eval(value)
         except SyntaxError:
@@ -56,7 +58,7 @@ def _parse_url_to_state(href: str) -> State:
 
 
 def _param_string(id_inner: str, property: str) -> str:
-    return id_inner if property == 'value' else id_inner + _ID_PARAM_SEP + property
+    return id_inner if property == "value" else id_inner + _ID_PARAM_SEP + property
 
 
 _RE_SINGLE_QUOTED = re.compile("^'|'$")
@@ -74,8 +76,8 @@ def setup(app: dash.Dash, page_layout: Callable[[State], Any]):
     """
 
     @app.callback(
-        Output('page-layout', 'children'),
-        inputs=[Input('url', 'href')],
+        Output("page-layout", "children"),
+        inputs=[Input("url", "href")],
     )
     def page_load(href: str):
         if not href:
@@ -85,9 +87,9 @@ def setup(app: dash.Dash, page_layout: Callable[[State], Any]):
         return page_layout(state)
 
     @app.callback(
-        Output('url', 'search'),
+        Output("url", "search"),
         # NOTE currently only support property="value"...
-        Input({'type': _COMPONENT_ID_TYPE, 'id_inner': ALL}, 'value'),
+        Input({"type": _COMPONENT_ID_TYPE, "id_inner": ALL}, "value"),
     )
     def update_url_state(values):
         """Updates URL from component values."""
@@ -97,12 +99,12 @@ def setup(app: dash.Dash, page_layout: Callable[[State], Any]):
         # https://dash.plotly.com/pattern-matching-callbacks
         inputs = dash.callback_context.inputs_list[0]
         for input in inputs:
-            id = input['id']
+            id = input["id"]
             assert isinstance(id, Dict)
-            assert id['type'] == _COMPONENT_ID_TYPE
-            id_inner = id['id_inner']
-            state[_param_string(id_inner, input['property'])] = _myrepr(input['value'])
+            assert id["type"] == _COMPONENT_ID_TYPE
+            id_inner = id["id_inner"]
+            state[_param_string(id_inner, input["property"])] = _myrepr(input["value"])
 
         params = urlencode(state, safe="%/:?~#+!$,;'@()*[]\"", quote_via=quote)
 
-        return f'?{params}'
+        return f"?{params}"

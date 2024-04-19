@@ -5,7 +5,9 @@ from ..common.neuron_data_base import NeuronData
 from ..common.transform_utils import extract_depth, compute_depth_y
 from ..common.config import RegisterTable
 
-ALLOW_COLUMN_TYPES_DISCRETE = ['integer', 'boolean', 'string']
+ALLOW_COLUMN_TYPES_DISCRETE = ["integer", "boolean", "string"]
+
+
 class NeuronDataCortex(NeuronData):
     def __init__(
         self,
@@ -32,13 +34,15 @@ class NeuronDataCortex(NeuronData):
         self._value_data = None
         self._value_columns = None
         self._app_name = None
-    
+
     @property
     def aligned_volume(self):
-        return self.client.info.get_datastack_info()['aligned_volume']['name']
+        return self.client.info.get_datastack_info()["aligned_volume"]["name"]
 
     def create_table_viewer(self, root_ids):
-        pt, vals = get_table_info(self.value_table, self.client, allow_types=ALLOW_COLUMN_TYPES_DISCRETE)
+        pt, vals = get_table_info(
+            self.value_table, self.client, allow_types=ALLOW_COLUMN_TYPES_DISCRETE
+        )
         cfg = RegisterTable(pt, vals, self.config)
         return TableViewer(
             self.value_table,
@@ -88,7 +92,7 @@ class NeuronDataCortex(NeuronData):
             return df.merge(
                 val_df,
                 on=self.config.root_id_col,
-                how='left',
+                how="left",
             )
 
     def partners_in_plus(self):
@@ -134,6 +138,4 @@ class NeuronDataCortex(NeuronData):
                 )
 
     def soma_depth(self):
-        return compute_depth_y(
-            self.soma_location(), self.aligned_volume
-        )
+        return compute_depth_y(self.soma_location(), self.aligned_volume)

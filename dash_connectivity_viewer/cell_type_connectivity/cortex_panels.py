@@ -5,12 +5,13 @@ from .cortex_plots import *
 bg_color = "White"
 plotly_template = "plotly_white"
 
+
 def bar_fig_df(df, config, color_column, width=450, height=350):
     bar = bar_plot_df(df, config, color_column)
 
     fig = go.Figure()
     fig.add_trace(bar)
-        
+
     fig.update_layout(
         autosize=True,
         height=height,
@@ -25,7 +26,6 @@ def bar_fig_df(df, config, color_column, width=450, height=350):
 
 
 def violin_fig(ndat, height=350, width=200):
-
     fig = go.Figure()
 
     violin_post = post_violin_plot(ndat)
@@ -52,6 +52,7 @@ def violin_fig(ndat, height=350, width=200):
         gridwidth=2,
     )
     return fig
+
 
 def scatter_fig_df(df, config, color_column, width=350, height=350):
     fig = go.Figure()
@@ -92,7 +93,6 @@ def scatter_fig_df(df, config, color_column, width=350, height=350):
 
 
 def scatter_fig(ndat, color_column, width=350, height=350):
-
     fig = go.Figure()
     scatter = synapse_soma_scatterplot(
         ndat,
