@@ -2,6 +2,7 @@ import datetime
 import pytz
 import numpy as np
 from functools import partial
+import traceback
 
 from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, State
@@ -364,6 +365,7 @@ def register_callbacks(app, config):
             info_cache["global_server"] = client.server_address
 
         except Exception as e:
+            print(traceback.format_exc())
             return (
                 html.Div(str(e)),
                 "danger",
@@ -517,6 +519,7 @@ def register_callbacks(app, config):
                     info_cache,
                     "\n",
                 )
+                print(traceback.format_exc())
             return (
                 html.Div(str(e)),
                 "danger",
