@@ -324,17 +324,6 @@ def register_callbacks(app, config):
         type_tables = get_type_tables(datastack, c, mat_version)
         return type_tables
 
-    # @app.callback(
-    #     OutputCellTypeValue,
-    #     InputDatastack,
-    #     StateCellTypeTable,
-    # )
-    # def default_cell_type_option(_, curr_value):
-    #     if curr_value != "":
-    #         return curr_value
-    #     else:
-    #         return c.default_cell_type_option
-
     @app.callback(
         Output("message-text", "children"),
         Output("message-text", "color"),

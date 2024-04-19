@@ -95,7 +95,7 @@ def get_table_info(tn, client, allow_types=ALLOW_COLUMN_TYPES, merge_schema=True
         return None, []
     meta = table_metadata(tn, client)
     ref_table = meta.get("reference_table")
-    if ref_table is None or merge_schema is False:
+    if ref_table is None or ref_table == "" or merge_schema is False:
         schema = meta["schema"]
         extra_cols = []
     else:

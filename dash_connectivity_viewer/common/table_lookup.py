@@ -32,11 +32,12 @@ class TableViewer(object):
         column_query={},
         is_live=True,
     ):
-
         self._client = make_client(
             datastack=client.datastack_name,
             server_address=client.server_address,
         )
+        self._client.materialize.version = client.materialize.version
+
         pt, add_cols = get_table_info(table_name, self._client)
         config = RegisterTable(pt, add_cols, config)
         self.config = config

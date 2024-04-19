@@ -3,6 +3,8 @@ import datetime
 from dash import callback_context
 from dash import dcc
 from dash import html
+import pytz
+import pandas as pd
 from .config import CellTypeConfig, RegisterTable
 
 from dash.dependencies import Input, Output, State
@@ -18,6 +20,7 @@ from ..common.link_utilities import (
 from ..common.lookup_utilities import (
     get_type_tables,
     make_client,
+    get_version_options,
 )
 from ..common.schema_utils import get_table_info
 from ..common.table_lookup import TableViewer
@@ -40,23 +43,31 @@ StateCellTypeMenu = State(
 StateCellType = State({"id_inner": "cell-type", "type": _COMPONENT_ID_TYPE}, "value")
 StateAnnoID = State({"id_inner": "anno-id", "type": _COMPONENT_ID_TYPE}, "value")
 StateCategoryID = State({"id_inner": "id-type", "type": _COMPONENT_ID_TYPE}, "value")
-StateLiveQuery = State(
-    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
-)
 StateValueSearch = State(
     {"id_inner": "value-column-search", "type": _COMPONENT_ID_TYPE}, "value"
 )
 
-OutputLiveQueryToggle = Output(
-    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE},
-    "options",
-)
-OutputLiveQueryValue = Output(
-    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
-)
 OutputValueSearch = Output(
     {"id_inner": "value-column-search", "type": _COMPONENT_ID_TYPE}, "options"
 )
+OutputCellTypeValue = Output(
+    {"id_inner": "cell-type-table-menu", "type": _COMPONENT_ID_TYPE},
+    "value",
+)
+
+InputMaterializationVersion = Input(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "value"
+)
+StateMaterializationVersion = State(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "value"
+)
+OutputMaterializeOptions = Output(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "options"
+)
+OutputMaterializeValue = Output(
+    {"id_inner": "mat-version", "type": _COMPONENT_ID_TYPE}, "value"
+)
+
 
 ######################################
 # register_callbacks must be defined #
@@ -103,49 +114,73 @@ def register_callbacks(app, config):
         )
 
     @app.callback(
-        OutputCellTypeMenuOptions,
-        InputDatastack,
+        OutputCellTypeValue,
+        InputMaterializationVersion,
     )
-    def cell_type_dropdown(datastack):
-        return get_type_tables(datastack, c)
+    def clear_cell_type_dropdown(mat_version):
+        return ""
 
     @app.callback(
-        OutputLiveQueryToggle,
-        OutputLiveQueryValue,
+        OutputCellTypeMenuOptions,
         InputDatastack,
-        StateLiveQuery,
+        InputMaterializationVersion,
     )
-    def disable_live_query(_, lq):
-        options_active = [{"label": "Live Query", "value": 1}]
-        options_disabled = [{"label": "Live Query", "value": 1, "disabled": True}]
-        if c.disallow_live_query:
-            return options_disabled, ""
-        else:
-            return options_active, lq
+    def cell_type_dropdown(datastack, mat_version):
+        if c.debug:
+            print("triggered new options")
+        return get_type_tables(datastack, c, mat_version)
 
     @app.callback(
         OutputValueSearch,
         InputDatastack,
         InputCellTypeMenu,
+        StateMaterializationVersion,
     )
-    def update_value_search_list(datastack, table_name):
-        if table_name is None:
+    def update_value_search_list(datastack, table_name, mat_version):
+        if table_name is None or table_name == "":
             return []
-        client = make_client(datastack, c.server_address)
+        if mat_version == "live" or mat_version == "":
+            version = None
+        else:
+            version = mat_version
+        client = make_client(datastack, c.server_address, materialize_version=version)
         _, cols = get_table_info(table_name, client, merge_schema=False)
         return [{"label": i, "value": i} for i in cols]
+
+    @app.callback(
+        OutputMaterializeOptions,
+        OutputMaterializeValue,
+        InputDatastack,
+    )
+    def get_materialization_versions(
+        datastack_name,
+    ):
+        # Produce ordered list of materialization versions to choose from
+        client = make_client(datastack_name, c.server_address)
+        version_options, default_value = get_version_options(
+            client, c.disallow_live_query
+        )
+        return version_options, default_value
 
     @app.callback(
         Output("group-by", "options"),
         Input("submit-button", "n_clicks"),
         StateCellTypeMenu,
         InputDatastack,
+        StateMaterializationVersion,
     )
-    def update_groupby_list(_, cell_type_table, datastack):
+    def update_groupby_list(_, cell_type_table, datastack, mat_version):
         if cell_type_table == "" or cell_type_table is None:
             return {}
         else:
-            client = make_client(datastack, c.server_address)
+            if mat_version == "live" or mat_version == "":
+                version = None
+            else:
+                version = mat_version
+            client = make_client(
+                datastack, c.server_address, materialize_version=version
+            )
+
             _, cols = get_table_info(
                 cell_type_table, client, allow_types=["boolean", "integer", "string"]
             )
@@ -158,9 +193,14 @@ def register_callbacks(app, config):
         Input("submit-button", "n_clicks"),
         InputDatastack,
         StateCellTypeMenu,
+        StateMaterializationVersion,
     )
-    def define_table_columns(_, datastack, cell_type_table):
-        client = make_client(datastack, c.server_address)
+    def define_table_columns(_, datastack, cell_type_table, mat_version):
+        if mat_version == "live" or mat_version == "":
+            version = None
+        else:
+            version = mat_version
+        client = make_client(datastack, c.server_address, materialize_version=version)
         pt, cols = get_table_info(cell_type_table, client)
         reg_con = RegisterTable(pt, cols, c)
         return (
@@ -182,8 +222,8 @@ def register_callbacks(app, config):
         StateAnnoID,
         StateCategoryID,
         StateCellType,
-        StateLiveQuery,
         StateValueSearch,
+        StateMaterializationVersion,
     )
     def update_table(
         clicks,
@@ -192,13 +232,23 @@ def register_callbacks(app, config):
         anno_id,
         id_type,
         value_search,
-        live_query_toggle,
         value_search_field,
+        mat_version,
     ):
+        if mat_version == "live" or mat_version == "":
+            version = None
+        else:
+            version = mat_version
+
         try:
-            client = make_client(datastack, c.server_address)
+            client = make_client(
+                datastack, c.server_address, materialize_version=version
+            )
+            if version is None:
+                version = client.materialize.version
             info_cache = client.info.get_datastack_info()
             info_cache["global_server"] = client.server_address
+
         except Exception as e:
             return [], str(e), "", EMPTY_INFO_CACHE, "danger", c.data_resolution
 
@@ -210,12 +260,14 @@ def register_callbacks(app, config):
         else:
             anno_id = [int(x) for x in anno_id.split(",")]
 
-        live_query = len(live_query_toggle) == 1
+        live_query = mat_version == "live"
 
-        if live_query and not c.disallow_live_query:
-            timestamp = datetime.datetime.utcnow()
+        if live_query:
+            timestamp = datetime.datetime.now(tz=pytz.UTC)
+            timestamp_ngl = None
+            info_cache["ngl_timestamp"] = None
         else:
-            timestamp = None
+            timestamp = client.materialize.get_timestamp()
             timestamp_ngl = client.materialize.get_timestamp()
             info_cache["ngl_timestamp"] = timestamp_ngl.timestamp()
 
@@ -366,7 +418,7 @@ def register_callbacks(app, config):
         Input("pt-column", "data"),
         Input("do-group", "value"),
         Input("group-by", "value"),
-        Input("ngl-target-site", "value"),
+        State("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def update_whole_table_link(

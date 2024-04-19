@@ -64,21 +64,18 @@ def page_layout(state: State = {}):
                     ),
                     dbc.Col(
                         [
-                            dbc.Checklist(
+                            "Materialization:",
+                            dcc.Dropdown(
                                 **create_component_kwargs(
                                     state,
-                                    id_inner="live-query-toggle",
-                                    options=[
-                                        {"label": "Live Query", "value": 1},
-                                    ],
-                                    value=[
-                                        1,
-                                    ],
-                                    switch=True,
+                                    id_inner="mat-version",
+                                    options=[{"label": "Latest", "value": ""}],
+                                    value="",
                                     style={
-                                        "bottom-margin": "10px",
-                                        "font-size": "16px",
+                                        "margin-left": "12px",
+                                        "font-size": "12px",
                                     },
+                                    clearable=False,
                                 )
                             ),
                         ],

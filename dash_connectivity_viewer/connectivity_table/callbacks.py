@@ -38,9 +38,6 @@ InputDatastack = Input({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "v
 OutputDatastack = Output({"id_inner": "datastack", "type": _COMPONENT_ID_TYPE}, "value")
 StateAnnoID = State({"id_inner": "anno-id", "type": _COMPONENT_ID_TYPE}, "value")
 StateAnnoType = State({"id_inner": "cell-id-type", "type": _COMPONENT_ID_TYPE}, "value")
-StateLiveQuery = State(
-    {"id_inner": "live-query-toggle", "type": _COMPONENT_ID_TYPE}, "value"
-)
 
 
 InputMaterializationVersion = Input(
@@ -134,7 +131,7 @@ def register_callbacks(app, config):
         if logger is not None:
             t0 = time.time()
 
-        if mat_version == "live" or "":
+        if mat_version == "live" or mat_version == "":
             version = None
         else:
             version = mat_version
