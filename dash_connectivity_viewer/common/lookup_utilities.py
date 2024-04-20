@@ -77,6 +77,11 @@ def get_all_schema_tables(datastack, config, mat_version=None):
     return [{"label": t, "value": t} for t in sorted(schema_tables)]
 
 
+def type_table_cache(datastack, config, mat_version):
+    return hashkey(datastack, mat_version)
+
+
+@cached(cache=TTLCache(maxsize=128, ttl=3600), key=type_table_cache)
 def get_type_tables(datastack, config, mat_version=None):
     if mat_version == "" or mat_version == "live":
         mat_version = None
