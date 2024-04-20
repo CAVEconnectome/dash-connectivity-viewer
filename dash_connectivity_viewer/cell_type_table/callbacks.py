@@ -418,7 +418,7 @@ def register_callbacks(app, config):
         Input("pt-column", "data"),
         Input("do-group", "value"),
         Input("group-by", "value"),
-        State("ngl-target-site", "value"),
+        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def update_whole_table_link(
@@ -444,6 +444,7 @@ def register_callbacks(app, config):
             "pt-column",
             "do-group",
             "group-by",
+            "ngl-target-site",
         ]:
             return "", "Generate Link", False
 
