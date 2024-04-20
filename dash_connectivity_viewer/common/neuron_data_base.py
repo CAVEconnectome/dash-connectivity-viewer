@@ -86,7 +86,10 @@ class NeuronData(object):
         self._synapse_table = synapse_table
         self._synapse_table_properties = _synapse_properties(synapse_table, config)
 
-        self._soma_table = self._client.info.get_datastack_info().get("soma_table")
+        if config.soma_table:
+            self._soma_table = config.soma_table
+        else:
+            self._soma_table = self._client.info.get_datastack_info().get("soma_table")
 
         self.config = config
 

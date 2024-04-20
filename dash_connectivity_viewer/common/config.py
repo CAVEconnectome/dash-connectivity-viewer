@@ -74,7 +74,7 @@ class CommonConfig(object):
         self.soma_pt_position = bound_pt_position(self.soma_pt_prefix)
         self.soma_pt_root_id = bound_pt_root_id(self.soma_pt_prefix)
 
-        self.soma_ct_col = config.get("soma_cell_type_column", "cell_type")
+        self.soma_ct_col = config.get("soma_cell_type_column")
         self.soma_table_cell_category = config.get("soma_table_cell_type")
         if self.soma_ct_col and self.soma_table_cell_category:
             self.soma_table_query = (
