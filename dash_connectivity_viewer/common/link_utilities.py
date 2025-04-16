@@ -11,15 +11,16 @@ from .dataframe_utilities import rehydrate_dataframe
 EMPTY_INFO_CACHE = {"aligned_volume": {}, "cell_type_column": None}
 MAX_URL_LENGTH = 1_750_000
 DEFAULT_NGL = "https://neuromancer-seung-import.appspot.com/"
+DEFAULT_SEUNGLAB = "https://neuroglancer.neuvue.io/"
 DEFAULT_SPELUNKER = "https://spelunker.cave-explorer.org/"
 
 
 def get_viewer_site_from_target(viewer_site, target_site):
     if target_site == "seunglab":
-        if viewer_site:
-            return viewer_site
-        else:
-            return DEFAULT_NGL
+        # if viewer_site:
+        # return viewer_site
+        # else:
+        return DEFAULT_SEUNGLAB
     elif target_site == "mainline":
         return DEFAULT_SPELUNKER
 
