@@ -1,0 +1,879 @@
+:root {
+  /* Foundational tokens. The spirit is Tufte-inspired: high data-ink ratio,
+     restrained chrome, typography first. Palette is intentionally low-
+     saturation so categorical encodings don't fight the data. */
+
+  /* Surfaces */
+  --bg: #fff;
+  --surface: #fafafa;        /* sidebar bg, filters row */
+  --surface-2: #f6f6f6;      /* form bg, action-bar bg */
+
+  /* Text + accent */
+  --fg: #1a1a1a;
+  --muted: #666;
+  --accent: #2962ff;
+  --accent-strong: #1a47cc;
+  --accent-bg: #e3edff;
+
+  /* Lines */
+  --line: #d8d8d8;
+  --line-soft: #ececec;      /* lighter row separators inside dense tables */
+
+  /* Semantic colors */
+  --error: #c62828;
+  --warn: #8a6d1c;
+  --warn-bg: #fff4d6;
+  --ok: #2e7d32;
+  --ok-bg: #e8f3e8;
+
+  /* Soma-dot semantic encoding (orphan / single / multi). Hoisted from
+     hex literals so the encoding can be styled consistently elsewhere. */
+  --soma-orphan: #cccccc;
+  --soma-single: #4caf50;
+  --soma-multi:  #e53935;
+
+  /* Categorical palette — 10 distinct hues at restrained saturation.
+     Used for the column-band headers (synapse / cell_type / soma / table /
+     spatial) and as the Plotly colorway for hue=categorical channels. */
+  --cat-1:  #6c8ebf;
+  --cat-2:  #9d7cb3;
+  --cat-3:  #66a36c;
+  --cat-4:  #c6906c;
+  --cat-5:  #b06a78;
+  --cat-6:  #7e9aa0;
+  --cat-7:  #b09b3f;
+  --cat-8:  #8870a0;
+  --cat-9:  #5b8a83;
+  --cat-10: #a87878;
+
+  /* Subtle row-band tints derived from the categorical palette — light
+     enough to use as group-header backgrounds without dominating the data. */
+  --cat-1-bg:  #eef3f7;
+  --cat-2-bg:  #f3eef7;
+  --cat-3-bg:  #eef5ee;
+  --cat-4-bg:  #f7f1ec;
+  --cat-5-bg:  #f5ecee;
+  --cat-6-bg:  #eef2f3;
+
+  /* Sequential palette — 10 stops, perceptually-uniform-ish, for continuous
+     hue / colorscale work. Plotly resolves built-in scales by name; this
+     exists so the SPA can also generate gradients in HTML/SVG when needed. */
+  --seq-0: #fde725;
+  --seq-1: #c2df23;
+  --seq-2: #86d549;
+  --seq-3: #52c569;
+  --seq-4: #2bb07f;
+  --seq-5: #1f9a8a;
+  --seq-6: #25858e;
+  --seq-7: #2d708e;
+  --seq-8: #38598c;
+  --seq-9: #443a83;
+
+  /* Border-radius scale — collapse the previous 2/3/4/14px scatter into
+     four named steps. */
+  --r-sm: 2px;
+  --r-md: 4px;
+  --r-lg: 8px;
+  --r-pill: 999px;
+
+  /* Font weights */
+  --fw-body: 400;
+  --fw-label: 500;
+  --fw-title: 600;
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+body, html, #root { margin: 0; padding: 0; height: 100%; }
+
+.workspace {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  height: 100vh;
+  transition: grid-template-columns 120ms ease;
+}
+
+/* Collapsed mode: shrink the sidebar to a thin vertical strip with just an
+   expand affordance. Lets the workbench claim the freed width without
+   sacrificing access to datastack / nav controls. Persisted to localStorage.
+   The 36px width gives enough hit-target for the toggle button without
+   feeling chunky. */
+.workspace.sidebar-collapsed {
+  grid-template-columns: 36px minmax(0, 1fr);
+}
+
+.sidebar {
+  border-right: 1px solid var(--line);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.workspace.sidebar-collapsed .sidebar {
+  padding: 8px 4px;
+  align-items: center;
+}
+
+.sidebar h1 {
+  font-size: 16px;
+  font-weight: var(--fw-title);
+  margin: 0 0 8px;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-toggle {
+  background: transparent;
+  border: 1px solid transparent;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--muted);
+  border-radius: var(--r-md);
+}
+.sidebar-toggle:hover { color: var(--accent); border-color: var(--line); background: var(--bg); }
+/* Wider hit target when the sidebar is collapsed — the button is the only
+   way back, so it should be easy to land on. */
+.workspace.sidebar-collapsed .sidebar-toggle {
+  width: 28px;
+  height: 32px;
+}
+
+.sidebar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sidebar select, .sidebar input {
+  font-size: 13px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+
+.sidebar .info { font-size: 12px; color: var(--muted); }
+.sidebar .info p { margin: 4px 0; }
+
+.sidebar .nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.banner {
+  background: var(--accent-bg);
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.main {
+  padding: 16px 24px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.breadcrumb {
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.breadcrumb a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+/* Root/Cell ID inputs always editable; the decoration picker collapses to a
+   chip showing the active count. The chip click toggles a fieldset below. */
+.root-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.root-form-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Decoration-count chip. Closed = compact pill with count + collapsed chevron;
+   open = same pill with the picker fieldset rendered below the form row. */
+.decorations-chip {
+  align-self: flex-end;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.decorations-chip:hover {
+  background: var(--surface);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.decorations-chip.open {
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  border-color: var(--accent);
+}
+.decorations-chip .chevron { font-size: 10px; }
+
+.root-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.decorations-picker {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 4px 8px 6px;
+  margin: 0;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.decorations-picker legend {
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+.decorations-picker .decoration-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.decorations-picker .decoration-row select {
+  flex: 1;
+}
+
+.summary {
+  margin: 8px 0 16px;
+  padding: 8px 12px;
+  background: var(--accent-bg);
+  border-radius: var(--r-md);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+/* SWR revalidation status. `pending` = some decoration cells may still flip
+   in-place when the background refresh lands. `done` = data is final. */
+.reval-badge {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 1px 8px;
+  font-size: 11px;
+  border-radius: var(--r-pill);
+  vertical-align: middle;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+.reval-badge.pending {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border: 1px solid #f0d784;
+}
+.reval-badge.done {
+  color: var(--ok);
+  background: var(--ok-bg);
+  border: 1px solid #c5dec5;
+}
+.reval-badge .spin {
+  display: inline-block;
+  animation: dcv-spin 1.4s linear infinite;
+}
+@keyframes dcv-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Two-pane workbench: analytics rail (plots + summary metrics) on the left,
+   data tables on the right. Both columns scroll their own overflow so the
+   user can browse the partners table without losing the plots from view, and
+   vice-versa. Outer .main retains a single scroll for short pages where the
+   content fits in viewport height. */
+.workbench {
+  display: grid;
+  /* `minmax(0, 1fr)` lets the second column shrink below its content width;
+     without it, a wide partner table would push the whole grid past the
+     viewport edge instead of scrolling within its pane. */
+  grid-template-columns: minmax(380px, 440px) minmax(0, 1fr);
+  gap: 16px;
+  flex: 1;        /* claim remaining height of .main so panes can scroll independently */
+  min-height: 0;  /* let the grid children's overflow:auto actually take effect */
+}
+
+.analytics-rail,
+.tables-pane {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;  /* breathing room before the scrollbar */
+}
+
+/* Below ~960px the two-pane grid degrades to a single stacked column —
+   plots above tables — to keep the form, plots, and tables all reachable
+   without horizontal squeeze. */
+@media (max-width: 960px) {
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+  .analytics-rail,
+  .tables-pane {
+    overflow: visible;  /* let the page scroll naturally on narrow screens */
+  }
+}
+
+.plots {
+  display: grid;
+  grid-template-columns: 1fr;  /* single column inside the rail; auto-fits to rail width */
+  gap: 16px;
+  margin: 0 0 16px;
+}
+
+.plot-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  padding: 8px;
+  min-height: 280px;
+}
+
+/* In-panel header: title left, column picker right. Used by column-bound
+   plots so each plot's binding has its own UI rather than the old global
+   Visualize strip. */
+.plot-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.plot-panel-title {
+  font-size: 12px;
+  font-weight: var(--fw-label);
+  color: var(--muted);
+}
+
+.plot-panel-header select {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  max-width: 60%;
+}
+
+/* Dynamic plot panel: header has a strip of channel pickers (x / y / hue /
+   size) right of the title. Each picker is small + label-prefixed so the
+   user can scan the four bindings at a glance. */
+.plot-panel-header.dynamic {
+  flex-wrap: wrap;
+}
+
+.dynamic-pickers {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dynamic-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.dynamic-picker.disabled { opacity: 0.45; }
+.dynamic-picker-label {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-weight: var(--fw-label);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dynamic-picker select {
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  max-width: 130px;
+}
+
+/* Group an axis picker with its scope select; same row, no extra gap. */
+.dynamic-picker-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Per-axis scope select. Compact pill-shaped dropdown; quietly default to
+   "both" (no visual emphasis) and switch to an accent ring when the user
+   restricts to pre / post so it's obvious a row filter is active. */
+.dynamic-scope {
+  font-size: 10px;
+  padding: 1px 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dynamic-scope.active {
+  color: var(--accent-strong);
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.dynamic-close {
+  margin-left: 2px;
+  font-size: 11px;
+  padding: 1px 6px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+}
+.dynamic-close:hover {
+  color: var(--error);
+  border-color: var(--line);
+  background: var(--bg);
+}
+
+/* "+ Add plot" affordance at the bottom of the analytics rail. Sits as a
+   dashed pseudo-panel so it reads as "drop a new panel here" rather than as
+   a regular button. */
+.add-plot-row {
+  display: flex;
+  justify-content: center;
+}
+.add-plot-button {
+  width: 100%;
+  font-size: 12px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+}
+.add-plot-button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  border-style: solid;
+  background: var(--bg);
+}
+
+.plot-panel.loading, .plot-panel .loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-style: italic;
+  height: 280px;
+}
+
+.plot-panel.error {
+  color: var(--error);
+  padding: 16px;
+}
+
+.partner-tables {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+/* Tab bar at the top of the partners pane. Output / Input / Both. */
+.partners-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+
+.partners-tabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: -1px;  /* overlap the border-bottom of .partners-tabs */
+}
+
+.partners-tabs button:hover {
+  color: var(--accent);
+  border-color: transparent;
+}
+
+.partners-tabs button.active {
+  color: var(--fg);
+  background: var(--bg);
+  border-color: var(--line);
+  font-weight: var(--fw-title);
+}
+
+.partners-tabs button.active:hover {
+  color: var(--fg);
+  border-color: var(--line);
+}
+
+.actions .scope {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Plot-brush selection indicator. Lives between the tab bar and the action
+   bar so the user always knows whether something other than column filters
+   is gating the visible rows. */
+.brush-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  background: var(--accent-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--fg);
+}
+.brush-pill strong { font-weight: var(--fw-title); }
+.brush-pill-clear {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: var(--r-pill);
+}
+.brush-pill-clear:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.partners h2 { font-size: 14px; margin: 4px 0 8px; }
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  /* Subtle card framing so the action bar reads as a control surface
+     distinct from the table headers below. */
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.actions .page { color: var(--muted); margin-left: auto; font-size: 12px; }
+
+/* Horizontal-scroll wrapper around the partners table. Wide column sets
+   (cell_type + many decorations + spatial group) frequently exceed pane
+   width — this lets the table scroll horizontally without disturbing the
+   action bar / tabs above it. */
+.partners-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.partners table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.partners th, .partners td {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 4px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.partners th { background: #f0f0f0; font-weight: var(--fw-label); color: var(--muted); padding: 4px 8px; }
+
+.partners .group-row th {
+  background: #e8e8e8;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  text-align: center;
+  font-weight: var(--fw-label);
+  color: #444;
+  /* Anchor every group label to the top of the cell. Without this, expanded
+     groups whose row is taller (because a sibling collapsed cell needs ~65px
+     of vertical space for its rotated label) float their text mid-row,
+     which makes the labels jitter as different groups collapse / expand. */
+  vertical-align: top;
+}
+
+/* Collapsible group headers: clickable to toggle a thin "rail" mode where
+   all leaf columns under that group are replaced by a single placeholder
+   column. The collapsed header rotates its label to read top-to-bottom in
+   the narrow strip. */
+.partners .group-row th.collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+.partners .group-row th.collapsible:hover {
+  background: #dcdcdc;
+  color: var(--accent-strong);
+}
+.partners .group-row th.collapsed {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  padding: 4px 2px;
+  white-space: nowrap;
+  vertical-align: top;
+  min-width: 0;
+  /* Match the natural height of horizontal group headers ("synapse" /
+     "spatial") so collapsing a group doesn't grow the header row at all.
+     Combined with the JS-side label truncation (5 chars + ellipsis), even
+     long table names fit cleanly. The full name is still in the tooltip. */
+  height: 65px;
+  max-height: 65px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.partners th.collapsed-placeholder {
+  width: 18px;
+  min-width: 18px;
+  max-width: 18px;
+  padding: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* Per-row action columns (view-partner arrow + open-in-NGL). Live alongside
+   root_id in the intrinsic group so they sit immediately after the id and
+   don't fall under any collapsible group's machinery. */
+.partners .row-action-col {
+  width: 26px;
+  min-width: 26px;
+  max-width: 26px;
+  padding: 2px;
+  text-align: center;
+}
+.partners button.row-action {
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.partners button.row-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg);
+}
+
+/* Group-band tints. Each kind reads as a distinct family without dominating
+   the data; keys map onto the categorical palette tints. */
+.partners .group-row .group-table     { background: var(--cat-1-bg); color: #2e5b86; }
+.partners .group-row .group-cell_type { background: var(--cat-2-bg); color: #6a3a8a; }
+.partners .group-row .group-soma      { background: var(--cat-3-bg); color: #2e6b3a; }
+.partners .group-row .group-spatial   { background: var(--cat-6-bg); color: #2e6b6b; }
+
+.partners th button.sortable {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.partners th button.sortable:hover { color: var(--accent); border: 0; }
+
+.partners .filters-row th {
+  background: var(--surface);
+  padding: 2px 6px;
+  font-weight: normal;
+}
+
+.partners .filters-row input,
+.partners .filters-row select {
+  width: 100%;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  box-sizing: border-box;
+}
+
+.partners tr.selected td {
+  background: var(--accent-bg);
+}
+
+.columns-menu {
+  position: relative;
+}
+
+.columns-menu > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  font-size: 12px;
+}
+.columns-menu > summary::-webkit-details-marker { display: none; }
+.columns-menu > summary:hover { border-color: var(--accent); color: var(--accent); }
+
+.columns-menu-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 240px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 6px 0;
+}
+
+.columns-menu-actions {
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.columns-menu-actions button {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.columns-menu-group {
+  padding: 4px 0 6px;
+}
+
+.columns-menu-group-header {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: var(--fw-label);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+
+.columns-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+}
+.columns-menu-row:hover { background: var(--accent-bg); }
+.columns-menu-row input[type="checkbox"] { margin: 0; }
+
+.copyable-id {
+  cursor: copy;
+  border-bottom: 1px dotted transparent;
+  transition: border-color 80ms ease, color 80ms ease;
+}
+.copyable-id:hover { border-bottom-color: var(--accent); color: var(--accent); }
+.copyable-id:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+.copyable-id.copied { color: var(--ok); border-bottom-color: transparent; font-style: italic; }
+
+.soma-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  vertical-align: middle;
+}
+.soma-dot-orphan { background: var(--soma-orphan); }
+.soma-dot-single { background: var(--soma-single); }
+.soma-dot-multi  { background: var(--soma-multi); }
+
+button {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface);
+}
+
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.error { color: var(--error); }
+
+.tables-list { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; }
+.tables-list .kind { display: inline-block; width: 40px; color: var(--muted); }
+.tables-list .kind-view { color: var(--ok); }
+
+.hint { color: var(--muted); font-style: italic; font-size: 12px; }

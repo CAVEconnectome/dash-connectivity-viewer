@@ -1,0 +1,683 @@
+import { useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  type ColumnDef,
+  type ColumnFiltersState,
+  type RowSelectionState,
+  type SortingState,
+  type VisibilityState,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { useMakeLinkMutation } from "../api/queries";
+import type { ColumnGroup, PartnerRecord } from "../api/types";
+import { CopyableId, FilterInput, formatCell, inferKind, type ColumnKind } from "./tableColumns";
+
+interface Props {
+  ds: string;
+  rootId: string;
+  matVersion: number | "live";
+  direction: "in" | "out" | "both";
+  rows: PartnerRecord[];
+  columnGroups: ColumnGroup[];
+  decorationTables?: string[];
+  // Columns to hide unless the user has explicitly opted them back in via the
+  // Columns dropdown. The Both tab uses this for directional aggregation
+  // columns (e.g. `net_size_out`, `net_size_in`) — useful but verbose, so
+  // they're off by default and discoverable through the standard menu.
+  defaultHiddenColumns?: string[];
+  /** Plot-brush filter: rows whose `root_id` isn't in this set are hidden,
+   *  ANDed with column filters. `null` / empty disables. */
+  externalSelection?: string[] | null;
+  /** Called when the user clicks the "clear" affordance on the brush pill. */
+  onClearSelection?: () => void;
+}
+
+// Column key may be `<table>.<col>` (decoration table) or just `<col>` (intrinsic /
+// synapse / soma / cell_type). The bare name shown in the column header is the
+// segment after the first dot, or the whole key if there is no dot.
+function bareColumnName(key: string): string {
+  const i = key.indexOf(".");
+  return i >= 0 ? key.slice(i + 1) : key;
+}
+
+// Column visibility persistence. Two global localStorage keys:
+//   dcv:hidden_cols — columns the user has explicitly unchecked.
+//   dcv:shown_cols  — columns the user has explicitly re-shown after they
+//                     started default-hidden. Only meaningful when the
+//                     calling view passes a `defaultHiddenColumns` list.
+// Column keys are namespaced (per decoration table) so a single hidden-list
+// applies sensibly across datastacks — e.g. hiding
+// `proofreading_status_and_strategy.valid_id` once means it stays hidden
+// anywhere that table appears.
+const HIDDEN_COLUMNS_STORAGE_KEY = "dcv:hidden_cols";
+const SHOWN_COLUMNS_STORAGE_KEY = "dcv:shown_cols";
+const COLLAPSED_GROUPS_STORAGE_KEY = "dcv:collapsed_groups";
+
+function loadColumnSet(key: string): string[] {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveColumnSet(key: string, cols: string[]): void {
+  localStorage.setItem(key, JSON.stringify(cols));
+}
+
+function visibilityState(hidden: Iterable<string>): VisibilityState {
+  return Object.fromEntries([...hidden].map((k) => [k, false]));
+}
+
+const PAGE_SIZE = 50;
+
+// Cap the rotated label of a collapsed group at this many chars; longer names
+// get a trailing ellipsis. The full name stays in the tooltip. Tied to the
+// CSS `max-height: 65px` of the collapsed cell — at ~11px per rotated
+// character with the current font + letter-spacing, 5 chars fits in ~55px
+// of vertical row height with a few px of padding to spare.
+const COLLAPSED_LABEL_MAX_CHARS = 5;
+
+function truncateLabel(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+export function PartnersTable({ ds, rootId, matVersion, direction, rows, columnGroups, decorationTables, defaultHiddenColumns, externalSelection, onClearSelection }: Props) {
+  const navigate = useNavigate();
+  const makeLink = useMakeLinkMutation();
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set(loadColumnSet(HIDDEN_COLUMNS_STORAGE_KEY)));
+  const [shown, setShown] = useState<Set<string>>(() => new Set(loadColumnSet(SHOWN_COLUMNS_STORAGE_KEY)));
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    () => new Set(loadColumnSet(COLLAPSED_GROUPS_STORAGE_KEY)),
+  );
+
+  const toggleGroupCollapsed = (groupName: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupName)) next.delete(groupName);
+      else next.add(groupName);
+      saveColumnSet(COLLAPSED_GROUPS_STORAGE_KEY, [...next]);
+      return next;
+    });
+  };
+  const defaultHiddenSet = useMemo(
+    () => new Set(defaultHiddenColumns ?? []),
+    [defaultHiddenColumns],
+  );
+
+  // A column is hidden iff the user explicitly hid it, OR it's in the default-
+  // hidden list and the user hasn't explicitly shown it. This split lets a
+  // column start hidden by default but become visible after the user toggles
+  // it on — that "shown" decision then persists across sessions.
+  const effectiveHidden = useMemo(() => {
+    const h = new Set(hidden);
+    for (const col of defaultHiddenSet) {
+      if (!shown.has(col)) h.add(col);
+    }
+    return h;
+  }, [hidden, shown, defaultHiddenSet]);
+  const columnVisibility = useMemo(() => visibilityState(effectiveHidden), [effectiveHidden]);
+
+  const toggleColumnVisible = (columnKey: string) => {
+    const isDefaultHidden = defaultHiddenSet.has(columnKey);
+    const wasVisible = !effectiveHidden.has(columnKey);
+    if (wasVisible) {
+      // User wants to hide. Add to explicit-hidden; clear any explicit-shown.
+      setHidden((prev) => {
+        const next = new Set(prev);
+        next.add(columnKey);
+        saveColumnSet(HIDDEN_COLUMNS_STORAGE_KEY, [...next]);
+        return next;
+      });
+      if (isDefaultHidden) {
+        setShown((prev) => {
+          const next = new Set(prev);
+          next.delete(columnKey);
+          saveColumnSet(SHOWN_COLUMNS_STORAGE_KEY, [...next]);
+          return next;
+        });
+      }
+    } else {
+      // User wants to show. Remove from explicit-hidden; if the column is
+      // default-hidden, mark it as explicitly shown so the override survives
+      // a reload.
+      setHidden((prev) => {
+        const next = new Set(prev);
+        next.delete(columnKey);
+        saveColumnSet(HIDDEN_COLUMNS_STORAGE_KEY, [...next]);
+        return next;
+      });
+      if (isDefaultHidden) {
+        setShown((prev) => {
+          const next = new Set(prev);
+          next.add(columnKey);
+          saveColumnSet(SHOWN_COLUMNS_STORAGE_KEY, [...next]);
+          return next;
+        });
+      }
+    }
+  };
+
+  const showAllColumns = () => {
+    setHidden(new Set());
+    saveColumnSet(HIDDEN_COLUMNS_STORAGE_KEY, []);
+    if (defaultHiddenSet.size > 0) {
+      // "Show all" means literally all — including the default-hidden ones —
+      // so record explicit-shown overrides for each.
+      setShown((prev) => {
+        const next = new Set(prev);
+        for (const col of defaultHiddenSet) next.add(col);
+        saveColumnSet(SHOWN_COLUMNS_STORAGE_KEY, [...next]);
+        return next;
+      });
+    }
+  };
+
+  // Flat ordered list of column keys (preserving the group order from the
+  // backend; left-to-right is intrinsic → synapse → cell_type → soma → tables).
+  const columnNames = useMemo(
+    () => columnGroups.flatMap((g) => g.columns),
+    [columnGroups],
+  );
+
+  // Per-column kind drives which filter widget renders.
+  const columnKinds = useMemo(() => {
+    const kinds: Record<string, ColumnKind> = {};
+    for (const c of columnNames) kinds[c] = inferKind(c, rows);
+    return kinds;
+  }, [columnNames, rows]);
+
+  // For category columns, build the unique-value list once.
+  const categoryOptions = useMemo(() => {
+    const options: Record<string, string[]> = {};
+    for (const c of columnNames) {
+      if (columnKinds[c] !== "category") continue;
+      const values = new Set<string>();
+      for (const r of rows) {
+        const v = r[c];
+        if (v === null || v === undefined) values.add("(none)");
+        else values.add(String(v));
+      }
+      options[c] = [...values].sort();
+    }
+    return options;
+  }, [columnNames, columnKinds, rows]);
+
+  // Build per-leaf column definitions, one per key.
+  const leafColumnDefs = useMemo(() => {
+    const map: Record<string, ColumnDef<PartnerRecord>> = {};
+    for (const c of columnNames) {
+      const kind = columnKinds[c];
+      const display = bareColumnName(c);
+      const def: ColumnDef<PartnerRecord> = {
+        id: c,
+        accessorFn: (row) => row[c],
+        header: display === "num_soma" ? "soma" : display,
+        cell:
+          c === "num_soma"
+            ? (ctx) => <SomaIndicator count={ctx.getValue() as number | undefined | null} />
+            : c === "root_id" || c === "cell_id"
+              ? (ctx) => <CopyableId value={ctx.getValue()} />
+              : (ctx) => formatCell(ctx.getValue()),
+        sortingFn: kind === "number" ? "basic" : "alphanumeric",
+      };
+      if (kind === "category") {
+        def.filterFn = (row, _id, filterValue) => {
+          if (!filterValue) return true;
+          const v = row.getValue<unknown>(c);
+          const display = v === null || v === undefined ? "(none)" : String(v);
+          return display === filterValue;
+        };
+      } else if (kind === "number") {
+        def.filterFn = (row, _id, filterValue) => {
+          const range = filterValue as { min?: number; max?: number } | undefined;
+          if (!range) return true;
+          const v = row.getValue<number>(c);
+          if (typeof v !== "number") return false;
+          if (range.min !== undefined && v < range.min) return false;
+          if (range.max !== undefined && v > range.max) return false;
+          return true;
+        };
+      } else {
+        def.filterFn = (row, _id, filterValue) => {
+          if (!filterValue) return true;
+          const v = row.getValue<unknown>(c);
+          const haystack = v === null || v === undefined ? "" : String(v).toLowerCase();
+          return haystack.includes(String(filterValue).toLowerCase());
+        };
+      }
+      map[c] = def;
+    }
+    return map;
+  }, [columnNames, columnKinds]);
+
+  // Per-row action handlers, stable for the columns memo's dep list.
+  // `open` is shared with the action-bar buttons below — single source of truth
+  // for "go to Neuroglancer" navigation.
+  const open = useCallback(
+    async (template: string, partnerIds?: string[]) => {
+      const result = await makeLink.mutateAsync({
+        ds, rootId, matVersion, template,
+        selectedPartnerIds: partnerIds && partnerIds.length > 0 ? partnerIds : undefined,
+      });
+      window.open(result.url, "_blank");
+    },
+    [ds, matVersion, makeLink, rootId],
+  );
+
+  const goToPartner = useCallback(
+    (partnerRoot: string) => {
+      const params = new URLSearchParams({ ds, root: partnerRoot });
+      if (matVersion !== "live") params.set("mv", String(matVersion));
+      // Carry the active decoration set forward so the partner's view fetches
+      // with the same annotation context the user is currently looking at.
+      if (decorationTables && decorationTables.length > 0) {
+        params.set("dec", decorationTables.join(","));
+      }
+      // `from=` powers the breadcrumb back-link in Workspace.
+      params.set("from", `neuron:${rootId}`);
+      navigate(`/neuron?${params}`);
+    },
+    [ds, decorationTables, matVersion, navigate, rootId],
+  );
+
+  // Direction → link-template resolution lifted up here so the per-row NGL
+  // action button can use it; the action bar below uses the same lookup.
+  // For the unified Both view, single-row NGL opens both pre and post layers.
+  const linkTemplate =
+    direction === "out" ? "outputs" : direction === "in" ? "inputs" : "connectivity";
+  const directionLabel =
+    direction === "out" ? "output" : direction === "in" ? "input" : "all";
+
+  // Wrap leaf defs into group-defs so TanStack Table renders a two-row header
+  // (top = group name, bottom = bare column name). The intrinsic group has a
+  // single column (`root_id`) — keep its top header empty for visual quiet.
+  //
+  // Two narrow per-row action columns are appended to the intrinsic group:
+  // a "view this partner" arrow (cross-nav) and an "open in Neuroglancer"
+  // shortcut equivalent to selecting just that row and clicking
+  // "Open N selected in NGL" on the action bar. Putting them inside the
+  // intrinsic group means they sit immediately after `root_id` and never
+  // get caught up in column-collapse machinery.
+  //
+  // Collapsed groups: replace the group's leaf list with a single placeholder
+  // leaf so the group header still renders, but as a thin column. The group
+  // header is clickable to toggle; the placeholder leaf has no sort handle, no
+  // filter widget, and an empty body cell. Long group names are truncated in
+  // the rotated label so a 30-character table name doesn't blow the header
+  // row up to 400px tall — the full name still appears in the tooltip.
+  const columns = useMemo<ColumnDef<PartnerRecord>[]>(() => {
+    return columnGroups.map((g) => {
+      const collapsed = collapsedGroups.has(g.name);
+      let leafs: ColumnDef<PartnerRecord>[] = collapsed
+        ? [{
+            id: `__collapsed__:${g.name}`,
+            header: "",
+            cell: () => null,
+            accessorFn: () => null,
+            enableSorting: false,
+            enableColumnFilter: false,
+            meta: { collapsedPlaceholder: true },
+          }]
+        : g.columns
+            .map((c) => leafColumnDefs[c])
+            .filter((d): d is ColumnDef<PartnerRecord> => Boolean(d));
+      // Per-row action buttons attach to the intrinsic group, sitting between
+      // root_id and the synapse columns. Skipped when the (theoretical)
+      // intrinsic group is collapsed — same as any other group.
+      if (g.kind === "intrinsic" && !collapsed) {
+        leafs = [
+          ...leafs,
+          {
+            id: "__action_view__",
+            header: "",
+            cell: (ctx) => (
+              <button
+                className="row-action"
+                onClick={() => goToPartner(ctx.row.id)}
+                title="View this partner"
+                aria-label="View this partner"
+              >→</button>
+            ),
+            accessorFn: () => null,
+            enableSorting: false,
+            enableColumnFilter: false,
+            meta: { actionPlaceholder: true },
+          },
+          {
+            id: "__action_ngl__",
+            header: "",
+            cell: (ctx) => (
+              <button
+                className="row-action"
+                onClick={() => open(linkTemplate, [ctx.row.id])}
+                title="Open this row in Neuroglancer"
+                aria-label="Open this row in Neuroglancer"
+              >↗</button>
+            ),
+            accessorFn: () => null,
+            enableSorting: false,
+            enableColumnFilter: false,
+            meta: { actionPlaceholder: true },
+          },
+        ];
+      }
+      const headerText =
+        g.kind === "intrinsic"
+          ? ""
+          : collapsed
+            ? truncateLabel(g.name, COLLAPSED_LABEL_MAX_CHARS)
+            : g.name;
+      return {
+        id: `group:${g.name}`,
+        header: headerText,
+        meta: { kind: g.kind, groupName: g.name, collapsed },
+        columns: leafs,
+      };
+    });
+  }, [columnGroups, leafColumnDefs, collapsedGroups, goToPartner, open, linkTemplate]);
+
+  // External selection (from a plot brush) ANDs with column filters via
+  // TanStack's globalFilter. Empty / null disables; otherwise rows whose
+  // root_id isn't in the set are hidden, and pagination updates naturally.
+  const globalFilterValue = useMemo(
+    () => (externalSelection && externalSelection.length > 0 ? new Set(externalSelection) : null),
+    [externalSelection],
+  );
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: {
+      sorting,
+      columnFilters,
+      rowSelection,
+      columnVisibility,
+      globalFilter: globalFilterValue,
+    },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => row.root_id,
+    enableRowSelection: true,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    globalFilterFn: (row, _id, filterValue) => {
+      const set = filterValue as Set<string> | null;
+      if (!set) return true;
+      return set.has(row.id);
+    },
+    initialState: { pagination: { pageSize: PAGE_SIZE } },
+  });
+
+  const filteredRows = table.getFilteredRowModel().rows;
+  const selectedIds = Object.keys(rowSelection);
+
+  const filterIsActive = columnFilters.length > 0 && filteredRows.length !== rows.length;
+
+  // Both-tab action bar uses a single scope (selection > filter > all) so the
+  // three direction buttons can operate on the same set without stacking nine
+  // buttons on the page. The strictest non-empty scope wins.
+  const bothScope: { ids: string[] | undefined; label: string } = (() => {
+    if (direction !== "both") return { ids: undefined, label: "" };
+    if (selectedIds.length > 0) return { ids: selectedIds, label: `${selectedIds.length} selected` };
+    if (filterIsActive) return { ids: filteredRows.map((r) => r.id), label: `${filteredRows.length} filtered` };
+    return { ids: undefined, label: `all ${rows.length}` };
+  })();
+
+  const brushSize = externalSelection?.length ?? 0;
+
+  return (
+    <div className="partners">
+      {brushSize > 0 && (
+        <div className="brush-pill" role="status">
+          <span>
+            <strong>{brushSize}</strong> partner{brushSize === 1 ? "" : "s"} selected from a plot brush
+          </span>
+          {onClearSelection && (
+            <button
+              type="button"
+              className="brush-pill-clear"
+              onClick={onClearSelection}
+              title="Clear plot selection"
+            >
+              clear
+            </button>
+          )}
+        </div>
+      )}
+      <div className="actions">
+        {direction === "both" ? (
+          <>
+            <span className="scope">Open in NGL ({bothScope.label}):</span>
+            <button onClick={() => open("inputs", bothScope.ids)}>input syns</button>
+            <button onClick={() => open("outputs", bothScope.ids)}>output syns</button>
+            <button onClick={() => open("connectivity", bothScope.ids)}>both directions</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => open(linkTemplate)}>
+              Open all {directionLabel} synapses ({rows.length}) in NGL
+            </button>
+            {filterIsActive && (
+              <button
+                onClick={() => open(linkTemplate, filteredRows.map((r) => r.id))}
+              >
+                Open {filteredRows.length} filtered in NGL
+              </button>
+            )}
+            <button
+              onClick={() => open(linkTemplate, selectedIds)}
+              disabled={selectedIds.length === 0}
+            >
+              Open {selectedIds.length} selected in NGL
+            </button>
+          </>
+        )}
+        <span className="page">
+          {filteredRows.length === rows.length
+            ? `${rows.length} partners`
+            : `${filteredRows.length} of ${rows.length} partners`}
+        </span>
+        <button
+          onClick={() => table.previousPage()}
+          disabled={!table.getCanPreviousPage()}
+          title="Previous page"
+        >‹</button>
+        <span className="page">
+          {table.getState().pagination.pageIndex + 1} / {Math.max(1, table.getPageCount())}
+        </span>
+        <button
+          onClick={() => table.nextPage()}
+          disabled={!table.getCanNextPage()}
+          title="Next page"
+        >›</button>
+        {(columnFilters.length > 0 || sorting.length > 0) && (
+          <button
+            onClick={() => {
+              setColumnFilters([]);
+              setSorting([]);
+            }}
+          >
+            Reset
+          </button>
+        )}
+
+        <details className="columns-menu">
+          <summary>
+            Columns{effectiveHidden.size > 0 ? ` (${effectiveHidden.size} hidden)` : ""}
+          </summary>
+          <div className="columns-menu-popover">
+            <div className="columns-menu-actions">
+              <button type="button" onClick={showAllColumns} disabled={effectiveHidden.size === 0}>
+                show all
+              </button>
+            </div>
+            {columnGroups.map((g) => (
+              <div key={g.name} className="columns-menu-group">
+                <div className={`columns-menu-group-header group-${g.kind}`}>{g.name}</div>
+                {g.columns.map((col) => (
+                  <label key={col} className="columns-menu-row">
+                    <input
+                      type="checkbox"
+                      checked={!effectiveHidden.has(col)}
+                      onChange={() => toggleColumnVisible(col)}
+                    />
+                    {bareColumnName(col)}
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+        </details>
+      </div>
+      <div className="partners-scroll">
+      <table>
+        <thead>
+          {/* Top row: group headers, spanning their leaf columns. Click toggles
+              collapse for that group (intrinsic ignored — single empty header). */}
+          <tr className="group-row">
+            <th />
+            {table.getHeaderGroups()[0].headers.map((header) => {
+              const meta = header.column.columnDef.meta as
+                | { kind?: string; groupName?: string; collapsed?: boolean }
+                | undefined;
+              const collapsible = !!meta?.groupName && meta?.kind !== "intrinsic";
+              return (
+                <th
+                  key={header.id}
+                  colSpan={header.colSpan}
+                  className={`group-header group-${meta?.kind ?? ""}${meta?.collapsed ? " collapsed" : ""}${collapsible ? " collapsible" : ""}`}
+                  onClick={collapsible ? () => toggleGroupCollapsed(meta!.groupName!) : undefined}
+                  title={
+                    collapsible
+                      ? meta?.collapsed
+                        ? `${meta.groupName} — click to expand`
+                        : `${meta!.groupName} — click to collapse`
+                      : undefined
+                  }
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </th>
+              );
+            })}
+          </tr>
+          {/* Second row: leaf columns (sortable). */}
+          <tr>
+            <th>
+              <input
+                type="checkbox"
+                checked={table.getIsAllPageRowsSelected()}
+                ref={(el) => {
+                  if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected();
+                }}
+                onChange={table.getToggleAllPageRowsSelectedHandler()}
+              />
+            </th>
+            {table.getHeaderGroups()[1].headers.map((header) => {
+              const meta = header.column.columnDef.meta as { collapsedPlaceholder?: boolean; actionPlaceholder?: boolean } | undefined;
+              if (meta?.collapsedPlaceholder) {
+                return <th key={header.id} className="collapsed-placeholder" />;
+              }
+              if (meta?.actionPlaceholder) {
+                return <th key={header.id} className="row-action-col" />;
+              }
+              const sort = header.column.getIsSorted();
+              const indicator = sort === "asc" ? " ▲" : sort === "desc" ? " ▼" : "";
+              return (
+                <th key={header.id}>
+                  <button
+                    className="sortable"
+                    onClick={header.column.getToggleSortingHandler()}
+                    title="Click to sort"
+                  >
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {indicator}
+                  </button>
+                </th>
+              );
+            })}
+          </tr>
+          <tr className="filters-row">
+            <th></th>
+            {table.getHeaderGroups()[1].headers.map((header) => {
+              const meta = header.column.columnDef.meta as { collapsedPlaceholder?: boolean; actionPlaceholder?: boolean } | undefined;
+              if (meta?.collapsedPlaceholder) {
+                return <th key={`f-${header.id}`} className="collapsed-placeholder" />;
+              }
+              if (meta?.actionPlaceholder) {
+                return <th key={`f-${header.id}`} className="row-action-col" />;
+              }
+              return (
+              <th key={`f-${header.id}`}>
+                <FilterInput
+                  kind={columnKinds[header.id]}
+                  options={categoryOptions[header.id]}
+                  value={header.column.getFilterValue()}
+                  onChange={(v) => header.column.setFilterValue(v)}
+                />
+              </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row) => (
+            <tr key={row.id} className={row.getIsSelected() ? "selected" : ""}>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={row.getIsSelected()}
+                  onChange={row.getToggleSelectedHandler()}
+                />
+              </td>
+              {row.getVisibleCells().map((cell) => {
+                const meta = cell.column.columnDef.meta as { actionPlaceholder?: boolean } | undefined;
+                return (
+                  <td key={cell.id} className={meta?.actionPlaceholder ? "row-action-col" : undefined}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      </div>
+      {makeLink.isError && <p className="error">{makeLink.error.message}</p>}
+    </div>
+  );
+}
+
+/**
+ * Compact soma-count indicator: a small colored dot whose tooltip carries the
+ * underlying count.
+ *   0  → gray   ("orphan", likely an unattached fragment)
+ *   1  → green  ("single", the well-formed case — has a unique cell_id)
+ *   >1 → red    ("multi", proofreading hasn't separated this neuron yet)
+ */
+function SomaIndicator({ count }: { count: number | undefined | null }) {
+  if (count === undefined || count === null) return null;
+  let cls = "soma-dot soma-dot-orphan";
+  let label = "orphan";
+  if (count === 1) {
+    cls = "soma-dot soma-dot-single";
+    label = "single";
+  } else if (count > 1) {
+    cls = "soma-dot soma-dot-multi";
+    label = `multi (${count})`;
+  }
+  return <span className={cls} title={`${label} — ${count} soma`} aria-label={label} />;
+}
+

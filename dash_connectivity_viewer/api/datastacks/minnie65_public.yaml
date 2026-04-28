@@ -1,0 +1,53 @@
+# minnie65_public is a release datastack — only the published mat versions are
+# meaningful to users; live mode would drift from what's officially released.
+live_mode: false
+
+# Cell-id lookup. Pattern lifted from ceesem/cortical-tools (microns_public.py):
+# the lookup view maps cell_id (== row id in the nucleus table) to a stable
+# supervoxel + root, and the main / alt tables answer the reverse direction
+# for every persistent id in the dataset, including ones broken across edits.
+cell_id_lookup_view: nucleus_detection_lookup_v1
+root_id_lookup_main_table: nucleus_detection_v0
+root_id_lookup_alt_tables:
+  - nucleus_alternative_points
+
+synapse_position_prefix: ctr_pt
+synapse_columns:
+  - id
+  - pre_pt_root_id
+  - post_pt_root_id
+  - size
+  - ctr_pt_position
+synapse_aggregation_rules:
+  mean_size:
+    column: size
+    agg: mean
+  net_size:
+    column: size
+    agg: sum
+
+# Spatial transform for soma depth, radial distance to the root neuron's soma,
+# and synapse-to-partner-soma distances. minnie_nm consumes positions in nm
+# (what the connectivity service emits at desired_resolution=[1,1,1]) and
+# returns oriented microns — the second output axis is depth, the other two
+# are tangential.
+spatial:
+  transform: minnie_nm
+
+# Periodic decoration-cache warming. Off by default (`enabled: false`).
+# Each fire resolves "latest valid mat_version" against CAVE and writes the
+# refreshed table into the SwrCache keyed by that version.
+#
+# In production set DCV_WARMUP_AUTH_TOKEN to a CAVE service token; locally
+# CAVEclient falls back to ~/.cloudvolume/secrets/cave-secret.json.
+#
+# `startup_delay_seconds` matters in autoscaling deployments: when K8s spins
+# up new pods the warmer should NOT immediately hit CAVE — wait a few minutes
+# so a scaling burst doesn't multiplex into a thundering herd.
+decoration_warmup:
+  enabled: false
+  cell_type_tables:
+    - aibs_metamodel_celltypes_v661
+  warm_soma_table: true
+  interval_seconds: 3600       # one hour
+  startup_delay_seconds: 180   # three minutes
