@@ -90,7 +90,6 @@ def _make_viewer(info_cache, config):
         vs.add_image_layer(
             source=img_src,
             name="img",
-            shader=_image_contrast_shader(config.image_black, config.image_white),
         )
     seg_src = seg_source(info_cache)
     if seg_src:
