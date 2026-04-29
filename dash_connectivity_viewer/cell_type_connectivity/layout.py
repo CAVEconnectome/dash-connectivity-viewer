@@ -172,24 +172,6 @@ def make_table_link_row(state):
                 width=1,
             ),
             dbc.Col(
-                html.Div(
-                    [
-                        dcc.Dropdown(
-                            options={
-                                "seunglab": "Seung-lab Neuroglancer (classic)",
-                                "mainline": "Spelunker (experimental)",
-                            },
-                            value="seunglab",
-                            id="ngl-target-site",
-                            clearable=False,
-                        ),
-                    ],
-                    style={"font-size": "13px"},
-                ),
-                align="top",
-                width={"size": 2, "offset": 1},
-            ),
-            dbc.Col(
                 html.A(
                     "Instructions for filtering the table",
                     href="https://dash.plotly.com/datatable/filtering",

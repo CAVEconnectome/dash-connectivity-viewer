@@ -10,12 +10,9 @@ from .config import CellTypeConfig, RegisterTable
 from dash.dependencies import Input, Output, State
 from ..common.dataframe_utilities import *
 from ..common.link_utilities import (
-    DEFAULT_NGL,
     generate_statebuilder,
     generate_url_cell_types,
     EMPTY_INFO_CACHE,
-    MAX_URL_LENGTH,
-    get_viewer_site_from_target,
 )
 from ..common.lookup_utilities import (
     get_type_tables,
@@ -334,7 +331,7 @@ def register_callbacks(app, config):
         Input("pt-column", "data"),
         Input("do-group", "value"),
         Input("group-by", "value"),
-        Input("ngl-target-site", "value"),
+        InputDatastack,
     )
     def update_link(
         rows,
@@ -344,66 +341,48 @@ def register_callbacks(app, config):
         pt_column,
         do_group,
         group_column,
-        target_site,
+        datastack,
     ):
         def state_text(n):
             return f"Neuroglancer: ({n} rows)"
 
         if info_cache is None:
             return "", "No datastack set", True, ""
-
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
-
         if pt_column is None:
             return "", "No clear point field in table", True, ""
 
-        if 1 in do_group:
-            do_group = True
-        else:
-            do_group = False
+        try:
+            client = make_client(datastack, c.server_address)
+        except Exception:
+            client = None
 
-        if group_column is None:
+        do_group = 1 in do_group
+        if not group_column:
             do_group = False
-        else:
-            if len(group_column) == 0:
-                do_group = False
 
         if rows is None or len(rows) == 0:
-            sb = generate_statebuilder(info_cache, c, anno_layer="anno")
-            url = sb.render_state(None, return_as="url")
-            link_name = state_text(0)
-            link_color = True
-        else:
-            df = pd.DataFrame(rows)
-            if len(df) > c.max_dataframe_length and len(selected_rows) == 0:
-                url = ""
-                link_name = "State Too Large"
-                link_color = True
-            else:
-                url = generate_url_cell_types(
-                    selected_rows,
-                    df,
-                    info_cache,
-                    c,
-                    pt_column,
-                    group_annotations=do_group,
-                    cell_type_column=group_column,
-                    data_resolution=data_resolution,
-                )
-                if len(url) > MAX_URL_LENGTH:
-                    url = ""
-                    link_name = "State Too Large"
-                    link_color = True
-                else:
-                    if len(selected_rows) == 0:
-                        link_name = state_text(len(df))
-                    else:
-                        link_name = state_text(len(selected_rows))
-                    link_color = False
-        return url, link_name, link_color, ""
+            url = generate_statebuilder(
+                info_cache, c, df=None, client=client, anno_layer="anno"
+            )
+            return url, state_text(0), True, ""
+
+        df = pd.DataFrame(rows)
+        if len(df) > c.max_dataframe_length and len(selected_rows) == 0:
+            return "", "State Too Large", True, ""
+
+        url = generate_url_cell_types(
+            selected_rows,
+            df,
+            info_cache,
+            c,
+            pt_column,
+            client=client,
+            group_annotations=do_group,
+            cell_type_column=group_column,
+            data_resolution=data_resolution,
+        )
+        n = len(selected_rows) if selected_rows else len(df)
+        return url, state_text(n), False, ""
 
     @app.callback(
         Output("whole-table-link", "children"),
@@ -418,7 +397,6 @@ def register_callbacks(app, config):
         Input("pt-column", "data"),
         Input("do-group", "value"),
         Input("group-by", "value"),
-        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def update_whole_table_link(
@@ -431,11 +409,10 @@ def register_callbacks(app, config):
         pt_column,
         do_group,
         group_column,
-        target_site,
     ):
         ctx = callback_context
         if not ctx.triggered:
-            return ""
+            return "", "Generate Link", False
         trigger_src = ctx.triggered[0]["prop_id"].split(".")[0]
         if trigger_src in [
             "submit-button",
@@ -444,31 +421,17 @@ def register_callbacks(app, config):
             "pt-column",
             "do-group",
             "group-by",
-            "ngl-target-site",
         ]:
             return "", "Generate Link", False
 
         if rows is None or len(rows) == 0:
             return html.Div("No items to show"), "Error", True
-
         if pt_column is None:
-            return "", "No clear point field in table", True, ""
+            return html.Div("No clear point field in table"), "Error", True
 
-        if 1 in do_group:
-            do_group = True
-        else:
+        do_group = 1 in do_group
+        if not group_column:
             do_group = False
-
-        if group_column is None:
-            do_group = False
-        else:
-            if len(group_column) == 0:
-                do_group = False
-
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
 
         df = pd.DataFrame(rows)
         if len(df) > c.max_server_dataframe_length:
@@ -477,38 +440,22 @@ def register_callbacks(app, config):
         else:
             sampled = False
 
-        if len(df) > c.max_dataframe_length:
-            try:
-                client = make_client(datastack, c.server_address)
-                state = generate_url_cell_types(
-                    [],
-                    df,
-                    info_cache,
-                    c,
-                    pt_column,
-                    group_annotations=do_group,
-                    cell_type_column=group_column,
-                    data_resolution=data_resolution,
-                    return_as="dict",
-                )
-                state_id = client.state.upload_state_json(state)
-                ngl_url = client.info.viewer_site()
-                if ngl_url is None:
-                    ngl_url = DEFAULT_NGL
-                url = client.state.build_neuroglancer_url(state_id, ngl_url=ngl_url)
-            except Exception as e:
-                return html.Div(str(e)), "Error", True
-        else:
+        try:
+            client = make_client(datastack, c.server_address)
             url = generate_url_cell_types(
                 [],
                 df,
                 info_cache,
                 c,
                 pt_column,
+                client=client,
                 group_annotations=do_group,
                 cell_type_column=group_column,
                 data_resolution=data_resolution,
+                shorten=True,
             )
+        except Exception as e:
+            return html.Div(str(e)), "Error", True
 
         if sampled:
             link_text = f"Neuroglancer Link (State very large — Random {c.max_server_dataframe_length} shown)"
