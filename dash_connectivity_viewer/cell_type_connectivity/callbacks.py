@@ -15,10 +15,7 @@ from ..common.link_utilities import (
     generate_statebuider_syn_grouped,
     generate_statebuilder_syn_cell_types,
     EMPTY_INFO_CACHE,
-    MAX_URL_LENGTH,
-    make_url_robust,
     aligned_volume,
-    get_viewer_site_from_target,
 )
 from ..common.dash_url_helper import _COMPONENT_ID_TYPE
 from ..common.lookup_utilities import (
@@ -97,7 +94,7 @@ def allowed_action_trigger(ctx, allowed_buttons):
 
 
 def generic_syn_link_generation(
-    sb_function,
+    url_function,
     rows,
     info_cache,
     datastack,
@@ -105,17 +102,16 @@ def generic_syn_link_generation(
     link_text,
     item_name="synapses",
 ):
+    """url_function(info_cache, df=..., client=...) -> Neuroglancer URL string."""
     if rows is None or len(rows) == 0:
         return html.Div(f"No {item_name} to show")
-    else:
-        syn_df = rehydrate_dataframe(rows, config.syn_pt_position_split)
-        sb = sb_function(info_cache)
+    syn_df = rehydrate_dataframe(rows, config.syn_pt_position_split)
     try:
-        url = make_url_robust(
-            syn_df.sort_values(by=config.num_syn_col, ascending=False),
-            sb,
-            datastack,
-            config,
+        client = make_client(datastack, config.server_address)
+        url = url_function(
+            info_cache,
+            df=syn_df.sort_values(by=config.num_syn_col, ascending=False),
+            client=client,
         )
     except Exception as e:
         return html.Div(str(e))
@@ -575,7 +571,6 @@ def register_callbacks(app, config):
         Input("data-table", "derived_virtual_selected_rows"),
         Input("client-info-json", "data"),
         Input("synapse-table-resolution-json", "data"),
-        Input("ngl-target-site", "value"),
         InputDatastack,
     )
     def update_link(
@@ -584,82 +579,52 @@ def register_callbacks(app, config):
         selected_rows,
         info_cache,
         synapse_data_resolution,
-        target_site,
         datastack_name,
     ):
-        if c.debug:
-            print(f"Target site: {target_site}")
-        large_state_text = (
-            "Table Too Large - Please Filter or Use Whole Cell Neuroglancer Links"
-        )
-
         def small_state_text(n):
             return f"Neuroglancer: ({n} partners)"
 
+        client = make_client(datastack_name, c.server_address)
         if info_cache is None:
-            client = make_client(datastack_name, c.server_address)
             info_cache = client.info.info_cache[datastack_name]
 
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
-        if c.debug:
-            print("generating link")
-            print(info_cache)
         if rows is None or len(rows) == 0:
-            rows = {}
-            sb = generate_statebuilder(info_cache, c)
-            return (
-                sb.render_state(None, return_as="url"),
-                small_state_text(0),
-                False,
-                "",
-            )
-        else:
-            syn_df = rehydrate_dataframe(rows, c.syn_pt_position_split)
+            url = generate_statebuilder(info_cache, c, df=None, client=client)
+            return url, small_state_text(0), False, ""
 
-            if len(selected_rows) == 0:
-                if tab_value == "tab-pre":
-                    sb = generate_statebuilder_pre(
-                        info_cache, c, data_resolution=synapse_data_resolution
-                    )
-                elif tab_value == "tab-post":
-                    sb = generate_statebuilder_post(
-                        info_cache, c, data_resolution=synapse_data_resolution
-                    )
-                else:
-                    raise ValueError('tab must be "tab-pre" or "tab-post"')
-                url = sb.render_state(
-                    syn_df.sort_values(by=c.num_syn_col, ascending=False),
-                    return_as="url",
-                )
-                small_out_text = small_state_text(len(syn_df))
-
-            else:
-                if tab_value == "tab-pre":
-                    anno_layer = "Output Synapses"
-                elif tab_value == "tab-post":
-                    anno_layer = "Input Synapses"
-                sb = generate_statebuider_syn_grouped(
-                    info_cache,
-                    anno_layer,
-                    c,
-                    preselect=len(selected_rows) == 1,
+        syn_df = rehydrate_dataframe(rows, c.syn_pt_position_split)
+        if len(selected_rows) == 0:
+            sorted_df = syn_df.sort_values(by=c.num_syn_col, ascending=False)
+            if tab_value == "tab-pre":
+                url = generate_statebuilder_pre(
+                    info_cache, c, df=sorted_df, client=client,
                     data_resolution=synapse_data_resolution,
                 )
-                url = sb.render_state(
-                    syn_df.iloc[selected_rows].sort_values(
-                        by=c.num_syn_col, ascending=False
-                    ),
-                    return_as="url",
+            elif tab_value == "tab-post":
+                url = generate_statebuilder_post(
+                    info_cache, c, df=sorted_df, client=client,
+                    data_resolution=synapse_data_resolution,
                 )
-                small_out_text = small_state_text(len(selected_rows))
-
-        if len(url) > MAX_URL_LENGTH:
-            return "", large_state_text, True, ""
+            else:
+                raise ValueError('tab must be "tab-pre" or "tab-post"')
+            small_out_text = small_state_text(len(syn_df))
         else:
-            return url, small_out_text, False, ""
+            if tab_value == "tab-pre":
+                anno_layer = "Output Synapses"
+            elif tab_value == "tab-post":
+                anno_layer = "Input Synapses"
+            sub = syn_df.iloc[selected_rows].sort_values(
+                by=c.num_syn_col, ascending=False
+            )
+            url = generate_statebuider_syn_grouped(
+                info_cache, anno_layer, c,
+                df=sub, client=client,
+                preselect=len(selected_rows) == 1,
+                data_resolution=synapse_data_resolution,
+            )
+            small_out_text = small_state_text(len(selected_rows))
+
+        return url, small_out_text, False, ""
 
     @app.callback(
         Output("all-input-link", "children"),
@@ -672,7 +637,6 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
-        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def generate_all_input_link(
@@ -683,13 +647,7 @@ def register_callbacks(app, config):
         info_cache,
         datastack,
         data_resolution,
-        target_site,
     ):
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
-
         if not allowed_action_trigger(callback_context, ["all-input-link-button"]):
             return "  ", "Generate Link", False
         return (
@@ -722,7 +680,6 @@ def register_callbacks(app, config):
         Input("synapse-table-resolution-json", "data"),
         Input("group-by", "value"),
         Input("no-type-annotation", "value"),
-        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def generate_cell_typed_input_link(
@@ -734,13 +691,7 @@ def register_callbacks(app, config):
         data_resolution,
         value_column,
         include_no_type,
-        target_site,
     ):
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
-
         if value_column is None or value_column == "":
             return "  ", "No Annotation Column Set", True
         if not allowed_action_trigger(
@@ -750,20 +701,21 @@ def register_callbacks(app, config):
 
         include_no_type = 1 in include_no_type
 
-        sb, dfs = generate_statebuilder_syn_cell_types(
-            info_cache,
-            rows,
-            c,
-            cell_type_column=value_column,
-            multipoint=True,
-            fill_null="NoType",
-            data_resolution=data_resolution,
-            include_no_type=include_no_type,
-        )
         try:
-            url = make_url_robust(dfs, sb, datastack, c)
+            client = make_client(datastack, c.server_address)
+            url = generate_statebuilder_syn_cell_types(
+                info_cache,
+                rows,
+                c,
+                client=client,
+                cell_type_column=value_column,
+                multipoint=True,
+                fill_null="NoType",
+                data_resolution=data_resolution,
+                include_no_type=include_no_type,
+            )
         except Exception as e:
-            return html.Div(str(e))
+            return html.Div(str(e)), "Error", True
         return (
             html.A(
                 "Grouped Input Link",
@@ -785,17 +737,11 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
-        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def generate_all_output_link(
-        _1, _2, rows, info_cache, datastack, data_resolution, target_site
+        _1, _2, rows, info_cache, datastack, data_resolution
     ):
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
-
         if not allowed_action_trigger(callback_context, ["all-output-link-button"]):
             return "", "Generate Link", False
         return (
@@ -826,7 +772,6 @@ def register_callbacks(app, config):
         Input("synapse-table-resolution-json", "data"),
         Input("group-by", "value"),
         Input("no-type-annotation", "value"),
-        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def generate_cell_typed_output_link(
@@ -838,13 +783,7 @@ def register_callbacks(app, config):
         data_resolution,
         value_column,
         include_no_type,
-        target_site,
     ):
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
-
         if value_column is None or value_column == "":
             return "  ", "No Annotation Column Set", True
 
@@ -855,20 +794,21 @@ def register_callbacks(app, config):
 
         include_no_type = 1 in include_no_type
 
-        sb, df_dict = generate_statebuilder_syn_cell_types(
-            info_cache,
-            rows,
-            c,
-            cell_type_column=value_column,
-            multipoint=True,
-            fill_null="NoType",
-            data_resolution=data_resolution,
-            include_no_type=include_no_type,
-        )
         try:
-            url = make_url_robust(df_dict, sb, datastack, c)
+            client = make_client(datastack, c.server_address)
+            url = generate_statebuilder_syn_cell_types(
+                info_cache,
+                rows,
+                c,
+                client=client,
+                cell_type_column=value_column,
+                multipoint=True,
+                fill_null="NoType",
+                data_resolution=data_resolution,
+                include_no_type=include_no_type,
+            )
         except Exception as e:
-            return html.Div(str(e))
+            return html.Div(str(e)), "Error", True
         return (
             html.A(
                 "Cell Typed Output Link",

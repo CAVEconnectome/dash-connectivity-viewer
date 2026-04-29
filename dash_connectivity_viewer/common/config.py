@@ -23,7 +23,6 @@ class CommonConfig(object):
             raise ValueError("Must set server address parameter!")
 
         self.viewer_site = config.get("viewer_site", None)
-        self.target_site = config.get("target_site", None)
 
         self.disallow_live_query = config.get("disallow_live_query", False)
         self.image_black = config.get("image_black", 0)

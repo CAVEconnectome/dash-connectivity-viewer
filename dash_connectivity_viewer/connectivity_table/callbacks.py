@@ -11,9 +11,6 @@ from ..common.link_utilities import (
     generate_statebuilder_pre,
     generate_statebuilder_post,
     EMPTY_INFO_CACHE,
-    MAX_URL_LENGTH,
-    make_url_robust,
-    get_viewer_site_from_target,
 )
 from ..common.dataframe_utilities import (
     stringify_root_ids,
@@ -310,7 +307,7 @@ def register_callbacks(app, config):
         Input("data-table", "derived_virtual_selected_rows"),
         Input("client-info-json", "data"),
         Input("synapse-table-resolution-json", "data"),
-        Input("ngl-target-site", "value"),
+        InputDatastack,
     )
     def update_link(
         tab_value,
@@ -318,69 +315,56 @@ def register_callbacks(app, config):
         selected_rows,
         info_cache,
         data_resolution,
-        target_site,
+        datastack_name,
     ):
-        large_state_text = "State Too Large - Please Filter"
-
         def small_state_text(n):
             return f"Neuroglancer: ({n} partners)"
 
         if info_cache is None:
             return "", "No datastack set", True, ""
 
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
+        try:
+            client = make_client(datastack_name, c.server_address)
+        except Exception:
+            client = None
 
         if rows is None or len(rows) == 0:
-            rows = {}
-            sb = generate_statebuilder(info_cache, c)
-            return (
-                sb.render_state(None, return_as="url"),
-                small_state_text(0),
-                False,
-                "",
-            )
-        else:
-            syn_df = pd.DataFrame(rows)
-            for col in c.syn_pt_position_split:
-                repopulate_list(col, syn_df)
-            if len(selected_rows) == 0:
-                if tab_value == "tab-pre":
-                    sb = generate_statebuilder_pre(
-                        info_cache, c, data_resolution=data_resolution
-                    )
-                elif tab_value == "tab-post":
-                    sb = generate_statebuilder_post(
-                        info_cache, c, data_resolution=data_resolution
-                    )
-                else:
-                    raise ValueError('tab must be "tab-pre" or "tab-post"')
-                url = sb.render_state(
-                    syn_df.sort_values(by=c.num_syn_col, ascending=False),
-                    return_as="url",
-                )
-                small_out_text = small_state_text(len(syn_df))
-            else:
-                if tab_value == "tab-pre":
-                    anno_layer = "Output Synapses"
-                elif tab_value == "tab-post":
-                    anno_layer = "Input Synapses"
-                sb = generate_statebuider_syn_grouped(
-                    info_cache,
-                    anno_layer,
-                    c,
-                    preselect=len(selected_rows) == 1,
+            url = generate_statebuilder(info_cache, c, df=None, client=client)
+            return url, small_state_text(0), False, ""
+
+        syn_df = pd.DataFrame(rows)
+        for col in c.syn_pt_position_split:
+            repopulate_list(col, syn_df)
+        if len(selected_rows) == 0:
+            sorted_df = syn_df.sort_values(by=c.num_syn_col, ascending=False)
+            if tab_value == "tab-pre":
+                url = generate_statebuilder_pre(
+                    info_cache, c, df=sorted_df, client=client,
                     data_resolution=data_resolution,
                 )
-                url = sb.render_state(syn_df.iloc[selected_rows], return_as="url")
-                small_out_text = small_state_text(len(selected_rows))
-
-        if len(url) > MAX_URL_LENGTH:
-            return "", large_state_text, True, ""
+            elif tab_value == "tab-post":
+                url = generate_statebuilder_post(
+                    info_cache, c, df=sorted_df, client=client,
+                    data_resolution=data_resolution,
+                )
+            else:
+                raise ValueError('tab must be "tab-pre" or "tab-post"')
+            small_out_text = small_state_text(len(syn_df))
         else:
-            return url, small_out_text, False, ""
+            if tab_value == "tab-pre":
+                anno_layer = "Output Synapses"
+            elif tab_value == "tab-post":
+                anno_layer = "Input Synapses"
+            url = generate_statebuider_syn_grouped(
+                info_cache, anno_layer, c,
+                df=syn_df.iloc[selected_rows],
+                client=client,
+                preselect=len(selected_rows) == 1,
+                data_resolution=data_resolution,
+            )
+            small_out_text = small_state_text(len(selected_rows))
+
+        return url, small_out_text, False, ""
 
     @app.callback(
         Output("all-input-link", "children"),
@@ -390,11 +374,10 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
-        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def generate_all_input_link(
-        _1, _2, rows, info_cache, datastack, data_resolution, target_site
+        _1, _2, rows, info_cache, datastack, data_resolution
     ):
         ctx = callback_context
         if not ctx.triggered:
@@ -407,30 +390,23 @@ def register_callbacks(app, config):
         ):
             return ""
 
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
-
         if rows is None or len(rows) == 0:
             return html.Div("No inputs to show")
-        else:
-            syn_df = pd.DataFrame(rows)
-            for col in c.syn_pt_position_split:
-                repopulate_list(col, syn_df)
 
-            sb = generate_statebuilder_post(
-                info_cache, c, data_resolution=data_resolution
+        syn_df = pd.DataFrame(rows)
+        for col in c.syn_pt_position_split:
+            repopulate_list(col, syn_df)
+
+        try:
+            client = make_client(datastack, c.server_address)
+            url = generate_statebuilder_post(
+                info_cache, c,
+                df=syn_df.sort_values(by=c.num_syn_col, ascending=False),
+                client=client,
+                data_resolution=data_resolution,
             )
-            try:
-                url = make_url_robust(
-                    syn_df.sort_values(by=c.num_syn_col, ascending=False),
-                    sb,
-                    datastack,
-                    c,
-                )
-            except Exception as e:
-                return html.Div(str(e))
+        except Exception as e:
+            return html.Div(str(e))
         return html.A(
             "All Input Link", href=url, target="_blank", style={"font-size": "20px"}
         )
@@ -443,11 +419,10 @@ def register_callbacks(app, config):
         Input("client-info-json", "data"),
         InputDatastack,
         Input("synapse-table-resolution-json", "data"),
-        Input("ngl-target-site", "value"),
         prevent_initial_call=True,
     )
     def generate_all_output_link(
-        _1, _2, rows, info_cache, datastack, data_resolution, target_site
+        _1, _2, rows, info_cache, datastack, data_resolution
     ):
         ctx = callback_context
         if not ctx.triggered:
@@ -460,30 +435,23 @@ def register_callbacks(app, config):
         ):
             return ""
 
-        info_cache["target_site"] = target_site
-        info_cache["viewer_site"] = get_viewer_site_from_target(
-            info_cache.get("viewer_site"), target_site
-        )
-
         if rows is None or len(rows) == 0:
             return html.Div("No outputs to show")
-        else:
-            syn_df = pd.DataFrame(rows)
-            for col in c.syn_pt_position_split:
-                repopulate_list(col, syn_df)
-            sb = generate_statebuilder_pre(
-                info_cache, c, data_resolution=data_resolution
-            )
 
-            try:
-                url = make_url_robust(
-                    syn_df.sort_values(by=c.num_syn_col, ascending=False),
-                    sb,
-                    datastack,
-                    c,
-                )
-            except Exception as e:
-                return html.Div(str(e))
+        syn_df = pd.DataFrame(rows)
+        for col in c.syn_pt_position_split:
+            repopulate_list(col, syn_df)
+
+        try:
+            client = make_client(datastack, c.server_address)
+            url = generate_statebuilder_pre(
+                info_cache, c,
+                df=syn_df.sort_values(by=c.num_syn_col, ascending=False),
+                client=client,
+                data_resolution=data_resolution,
+            )
+        except Exception as e:
+            return html.Div(str(e))
         return html.A(
             "All Output Link", href=url, target="_blank", style={"font-size": "20px"}
         )

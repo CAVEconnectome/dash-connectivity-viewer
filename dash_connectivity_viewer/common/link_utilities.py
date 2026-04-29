@@ -1,28 +1,13 @@
-from logging import info
 from nglui import statebuilder
+from nglui.statebuilder import PointAnnotation
 import pandas as pd
 import numpy as np
 from seaborn import color_palette
 from itertools import cycle
-from .lookup_utilities import make_client
-from .schema_utils import bound_pt_position, bound_pt_root_id
+from .schema_utils import bound_pt_position
 from .dataframe_utilities import rehydrate_dataframe
 
 EMPTY_INFO_CACHE = {"aligned_volume": {}, "cell_type_column": None}
-MAX_URL_LENGTH = 1_750_000
-DEFAULT_NGL = "https://neuromancer-seung-import.appspot.com/"
-DEFAULT_SEUNGLAB = "https://neuroglancer.neuvue.io/"
-DEFAULT_SPELUNKER = "https://spelunker.cave-explorer.org/"
-
-
-def get_viewer_site_from_target(viewer_site, target_site):
-    if target_site == "seunglab":
-        # if viewer_site:
-        # return viewer_site
-        # else:
-        return DEFAULT_SEUNGLAB
-    elif target_site == "mainline":
-        return DEFAULT_SPELUNKER
 
 
 def image_source(info_cache):
@@ -46,7 +31,7 @@ def seg_source(info_cache):
 def viewer_site(info_cache):
     if info_cache is None:
         return None
-    return info_cache.get("viewer_site", "")
+    return info_cache.get("viewer_site", "") or None
 
 
 def state_server(info_cache):
@@ -58,7 +43,10 @@ def state_server(info_cache):
 def root_id(info_cache):
     if info_cache is None:
         return None
-    return int(info_cache.get("root_id", None))
+    rid = info_cache.get("root_id", None)
+    if rid is None:
+        return None
+    return int(rid)
 
 
 def timestamp(info_cache):
@@ -74,213 +62,292 @@ def voxel_resolution_from_info(info_cache):
             info_cache.get("viewer_resolution_y"),
             info_cache.get("viewer_resolution_z"),
         ]
+        if any(v is None for v in vr):
+            return None
         return vr
-    except:
+    except Exception:
         return None
 
 
-def target_site(info_cache):
-    if info_cache is None:
-        return None
-    return info_cache.get("target_site", None)
-
-
-def statebuilder_kwargs(info_cache):
-    return dict(
-        url_prefix=viewer_site(info_cache),
-        state_server=state_server(info_cache),
-        resolution=voxel_resolution_from_info(info_cache),
-        target_site=target_site(info_cache),
+def _image_contrast_shader(black, white):
+    return (
+        f"#uicontrol invlerp normalized(range=[{black}, {white}])\n"
+        "void main() {\n"
+        "  emitGrayscale(normalized());\n"
+        "}\n"
     )
+
+
+def _make_viewer(info_cache, config):
+    res = voxel_resolution_from_info(info_cache)
+    vs = statebuilder.ViewerState(
+        target_site="spelunker",
+        dimensions=res,
+        infer_coordinates=res is None,
+    )
+    img_src = image_source(info_cache)
+    if img_src:
+        vs.add_image_layer(
+            source=img_src,
+            name="img",
+            shader=_image_contrast_shader(config.image_black, config.image_white),
+        )
+    seg_src = seg_source(info_cache)
+    if seg_src:
+        vs.add_segmentation_layer(source=seg_src, name="seg", alpha_3d=0.8)
+    return vs
+
+
+def _explode_position_df(df, position_split_cols):
+    """One row per point — the 4.x equivalent of 3.x PointMapper(multipoint=True).
+
+    Coerces stringified list cells (from dcc.Store JSON round-trip) back to lists,
+    then explodes the three position columns simultaneously.
+    """
+    if df is None or len(df) == 0:
+        return df
+    cols = [c for c in position_split_cols if c in df.columns]
+    if not cols:
+        return df
+    df = df.copy()
+    for col in cols:
+        sample = df[col].iloc[0]
+        if isinstance(sample, str):
+            df[col] = df[col].apply(
+                lambda x: [float(y) for y in x.split(",")]
+                if isinstance(x, str) and x else x
+            )
+    return df.explode(cols).reset_index(drop=True)
+
+
+def _to_url(vs, info_cache, client, shorten):
+    return vs.to_url(
+        target_url=viewer_site(info_cache),
+        shorten=shorten,
+        client=client,
+    )
+
+
+def _unique_int_ids(df, col):
+    if df is None or col not in df.columns or len(df) == 0:
+        return []
+    return (
+        pd.to_numeric(df[col], errors="coerce")
+        .dropna()
+        .astype(np.int64)
+        .unique()
+        .tolist()
+    )
+
+
+def _add_dual_linked_synapse_layer(
+    vs,
+    df,
+    config,
+    name,
+    *,
+    base_root_id,
+    partner_column,
+    color=None,
+    data_resolution=None,
+    filter_by_segmentation=False,
+):
+    """Add a synapse annotation layer where each point links to BOTH the
+    queried cell (`base_root_id`) and the per-row partner id from
+    `partner_column`.
+
+    nglui's `AnnotationLayer.add_points` only accepts a single `segment_column`,
+    so we build PointAnnotation objects directly to attach two segment ids per
+    annotation. Returns the new layer (or None when nothing was added).
+    """
+    if df is None or len(df) == 0:
+        return None
+    exploded = _explode_position_df(df, config.syn_pt_position_split)
+    if exploded is None or len(exploded) == 0:
+        return None
+    pt_cols = [c for c in config.syn_pt_position_split if c in exploded.columns]
+    if len(pt_cols) != 3:
+        return None
+    pts = exploded[pt_cols].to_numpy()
+
+    if partner_column in exploded.columns:
+        partners = pd.to_numeric(exploded[partner_column], errors="coerce")
+    else:
+        partners = pd.Series([np.nan] * len(exploded))
+
+    base_seg = int(base_root_id) if base_root_id is not None else None
+
+    annos = []
+    for pt, partner in zip(pts, partners):
+        seg_ids = []
+        if base_seg is not None:
+            seg_ids.append(base_seg)
+        if pd.notna(partner):
+            partner_int = int(partner)
+            if partner_int != 0 and partner_int != base_seg:
+                seg_ids.append(partner_int)
+        annos.append(
+            PointAnnotation(
+                point=[float(x) for x in pt],
+                segments=seg_ids if seg_ids else None,
+                resolution=data_resolution,
+            )
+        )
+
+    vs.add_annotation_layer(name=name, linked_segmentation="seg", color=color)
+    layer = vs.get_layer(name)
+    layer.add_annotations(annos)
+    if filter_by_segmentation:
+        layer.filter_by_segmentation = True
+    return layer
 
 
 def generate_statebuilder(
     info_cache,
     config,
+    df=None,
+    *,
+    client=None,
     base_root_id=None,
     base_color="#ffffff",
     preselect_all=True,
     anno_column="post_pt_root_id",
     anno_layer="syns",
     data_resolution=[1, 1, 1],
+    shorten="if_long",
 ):
-    img = statebuilder.ImageLayerConfig(
-        image_source(info_cache),
-        contrast_controls=True,
-        black=config.image_black,
-        white=config.image_white,
-    )
-    if preselect_all:
-        selected_ids_column = [anno_column]
-    else:
-        selected_ids_column = None
-    if base_root_id is None:
-        base_root_id = []
-        base_color = [None]
-    else:
-        base_root_id = [base_root_id]
-        base_color = [base_color]
+    """Empty/overview viewer state. Returns a Neuroglancer URL.
 
-    seg = statebuilder.SegmentationLayerConfig(
-        seg_source(info_cache),
-        selected_ids_column=selected_ids_column,
-        fixed_ids=base_root_id,
-        fixed_id_colors=base_color,
-        alpha_3d=0.8,
-        timestamp=timestamp(info_cache),
-    )
+    With df=None this produces an empty state with image + segmentation only.
+    With a dataframe, points are added under `anno_layer`, and partner ids in
+    `anno_column` are pre-selected on the segmentation layer.
+    """
+    vs = _make_viewer(info_cache, config)
 
-    points = statebuilder.PointMapper(
-        config.syn_pt_position,
-        linked_segmentation_column=anno_column,
-        group_column=anno_column,
-        multipoint=True,
-        set_position=True,
-        collapse_groups=True,
-        split_positions=True,
-    )
-    anno = statebuilder.AnnotationLayerConfig(
-        anno_layer,
-        mapping_rules=points,
-        linked_segmentation_layer=seg.name,
-        filter_by_segmentation=True,
-        data_resolution=data_resolution,
-    )
+    if base_root_id is not None:
+        vs.add_segments(segments=[base_root_id], segment_colors={base_root_id: base_color})
 
-    sb = statebuilder.StateBuilder(
-        [img, seg, anno],
-        **statebuilder_kwargs(info_cache),
-    )
-    return sb
+    if preselect_all and df is not None:
+        partner_ids = _unique_int_ids(df, anno_column)
+        if partner_ids:
+            vs.add_segments(segments=partner_ids)
+
+    if df is not None and len(df) > 0:
+        _add_dual_linked_synapse_layer(
+            vs,
+            df,
+            config,
+            anno_layer,
+            base_root_id=base_root_id,
+            partner_column=anno_column,
+            data_resolution=data_resolution,
+            filter_by_segmentation=True,
+        )
+
+    return _to_url(vs, info_cache, client, shorten)
 
 
 def generate_statebuilder_pre(
     info_cache,
     config,
-    preselect=False,
+    df=None,
+    *,
+    client=None,
     data_resolution=[1, 1, 1],
+    shorten="if_long",
 ):
-    img = statebuilder.ImageLayerConfig(
-        image_source(info_cache),
-        contrast_controls=True,
-        black=config.image_black,
-        white=config.image_white,
-    )
-    seg = statebuilder.SegmentationLayerConfig(
-        seg_source(info_cache),
-        fixed_ids=[root_id(info_cache)],
-        fixed_id_colors=["#ffffff"],
-        alpha_3d=0.8,
-        timestamp=timestamp(info_cache),
-    )
-    points = statebuilder.PointMapper(
-        config.syn_pt_position,
-        linked_segmentation_column=config.root_id_col,
-        set_position=True,
-        multipoint=True,
-        split_positions=True,
-    )
-    anno = statebuilder.AnnotationLayerConfig(
-        "output_syns",
-        mapping_rules=points,
-        linked_segmentation_layer=seg.name,
-        data_resolution=data_resolution,
-    )
-    sb = statebuilder.StateBuilder(
-        [img, seg, anno],
-        **statebuilder_kwargs(info_cache),
-    )
-    return sb
+    """Output (pre→) synapses on a single root_id. Returns a Neuroglancer URL."""
+    vs = _make_viewer(info_cache, config)
+
+    rid = root_id(info_cache)
+    if rid is not None:
+        vs.add_segments(segments=[rid], segment_colors={rid: "#ffffff"})
+
+    if df is not None and len(df) > 0:
+        _add_dual_linked_synapse_layer(
+            vs,
+            df,
+            config,
+            "output_syns",
+            base_root_id=rid,
+            partner_column=config.root_id_col,
+            data_resolution=data_resolution,
+        )
+
+    return _to_url(vs, info_cache, client, shorten)
 
 
-def generate_statebuilder_post(info_cache, config, data_resolution=[1, 1, 1]):
-    img = statebuilder.ImageLayerConfig(
-        image_source(info_cache),
-        contrast_controls=True,
-        black=config.image_black,
-        white=config.image_white,
-    )
+def generate_statebuilder_post(
+    info_cache,
+    config,
+    df=None,
+    *,
+    client=None,
+    data_resolution=[1, 1, 1],
+    shorten="if_long",
+):
+    """Input (post→) synapses on a single root_id. Returns a Neuroglancer URL."""
+    vs = _make_viewer(info_cache, config)
 
-    seg = statebuilder.SegmentationLayerConfig(
-        seg_source(info_cache),
-        fixed_ids=[root_id(info_cache)],
-        fixed_id_colors=["#ffffff"],
-        alpha_3d=0.8,
-        timestamp=timestamp(info_cache),
-    )
-    points = statebuilder.PointMapper(
-        config.syn_pt_position,
-        linked_segmentation_column=config.root_id_col,
-        set_position=True,
-        split_positions=True,
-        multipoint=True,
-    )
-    anno = statebuilder.AnnotationLayerConfig(
-        "input_syns",
-        mapping_rules=points,
-        linked_segmentation_layer=seg.name,
-        data_resolution=data_resolution,
-    )
-    sb = statebuilder.StateBuilder(
-        [img, seg, anno],
-        **statebuilder_kwargs(info_cache),
-    )
-    return sb
+    rid = root_id(info_cache)
+    if rid is not None:
+        vs.add_segments(segments=[rid], segment_colors={rid: "#ffffff"})
+
+    if df is not None and len(df) > 0:
+        _add_dual_linked_synapse_layer(
+            vs,
+            df,
+            config,
+            "input_syns",
+            base_root_id=rid,
+            partner_column=config.root_id_col,
+            data_resolution=data_resolution,
+        )
+
+    return _to_url(vs, info_cache, client, shorten)
 
 
 def generate_statebuider_syn_grouped(
     info_cache,
     anno_name,
     config,
+    df=None,
+    *,
+    client=None,
     fixed_id_color="#FFFFFF",
     preselect=False,
     data_resolution=[1, 1, 1],
+    shorten="if_long",
 ):
-    points = statebuilder.PointMapper(
-        point_column=config.syn_pt_position,
-        linked_segmentation_column=config.root_id_col,
-        group_column=config.root_id_col,
-        split_positions=True,
-        multipoint=True,
-        set_position=True,
-        collapse_groups=True,
-    )
+    """Synapses to/from selected partners. Returns a Neuroglancer URL.
 
-    img = statebuilder.ImageLayerConfig(
-        image_source(info_cache),
-        contrast_controls=True,
-        black=config.image_black,
-        white=config.image_white,
-    )
+    The 3.x UI-grouping (`collapse_groups`, `group_column`) has no spelunker
+    equivalent; per-row segment links via `segment_column` are preserved.
+    """
+    vs = _make_viewer(info_cache, config)
 
-    if preselect:
-        selected_ids_column = config.root_id_col
-    else:
-        selected_ids_column = None
+    rid = root_id(info_cache)
+    if rid is not None:
+        vs.add_segments(segments=[rid], segment_colors={rid: fixed_id_color})
 
-    seg = statebuilder.SegmentationLayerConfig(
-        seg_source(info_cache),
-        fixed_ids=[root_id(info_cache)],
-        fixed_id_colors=[fixed_id_color],
-        selected_ids_column=selected_ids_column,
-        alpha_3d=0.8,
-        timestamp=timestamp(info_cache),
-    )
+    if preselect and df is not None:
+        partner_ids = _unique_int_ids(df, config.root_id_col)
+        if partner_ids:
+            vs.add_segments(segments=partner_ids)
 
-    anno = statebuilder.AnnotationLayerConfig(
-        anno_name,
-        mapping_rules=points,
-        linked_segmentation_layer=seg.name,
-        filter_by_segmentation=True,
-        data_resolution=data_resolution,
-    )
+    if df is not None and len(df) > 0:
+        _add_dual_linked_synapse_layer(
+            vs,
+            df,
+            config,
+            anno_name,
+            base_root_id=rid,
+            partner_column=config.root_id_col,
+            data_resolution=data_resolution,
+            filter_by_segmentation=True,
+        )
 
-    sb = statebuilder.StateBuilder(
-        [img, seg, anno],
-        **statebuilder_kwargs(info_cache),
-    )
-
-    return sb
+    return _to_url(vs, info_cache, client, shorten)
 
 
 def generate_url_cell_types(
@@ -289,191 +356,128 @@ def generate_url_cell_types(
     info_cache,
     config,
     pt_column,
+    *,
+    client=None,
     cell_type_column="cell_type",
     group_annotations=False,
     multipoint=False,
     fill_null=None,
     return_as="url",
     data_resolution=[1, 1, 1],
+    shorten="if_long",
 ):
-    if len(selected_rows) > 0 or selected_rows is None:
+    """Cell-type table → Neuroglancer URL (or state dict if return_as='dict').
+
+    With group_annotations=True, produces one colored annotation layer per
+    unique cell_type value (tab20 palette). Otherwise a single layer with
+    cell_type as the description column.
+    """
+    if df is None:
+        df = pd.DataFrame()
+
+    if selected_rows is not None and len(selected_rows) > 0:
         df = df.iloc[selected_rows].reset_index(drop=True)
 
-    img = statebuilder.ImageLayerConfig(
-        image_source(info_cache),
-        contrast_controls=True,
-        black=config.image_black,
-        white=config.image_white,
-    )
-    seg = statebuilder.SegmentationLayerConfig(
-        seg_source(info_cache),
-        alpha_3d=0.8,
-        timestamp=timestamp(info_cache),
-    )
-    # sbs = [
-    #     statebuilder.StateBuilder(
-    #         [img, seg],
-    #         **statebuilder_kwargs(info_cache),
-    #     )
-    # ]
-    annos = []
-    if group_annotations:
-        if fill_null:
-            df[cell_type_column].cat.add_categories(fill_null, inplace=True)
-            df[cell_type_column].fillna(fill_null, inplace=True)
-        cell_types = np.sort(pd.unique(df[cell_type_column].dropna()))
+    vs = _make_viewer(info_cache, config)
+
+    pt_position = bound_pt_position(pt_column)
+    pt_split = [f"{pt_position}_{s}" for s in ("x", "y", "z")]
+
+    use_ct_col = cell_type_column if cell_type_column else None
+    if use_ct_col == "":
+        use_ct_col = None
+
+    if group_annotations and use_ct_col and use_ct_col in df.columns:
+        if fill_null is not None:
+            df = df.copy()
+            if str(df[use_ct_col].dtype) == "category":
+                if fill_null not in df[use_ct_col].cat.categories:
+                    df[use_ct_col] = df[use_ct_col].cat.add_categories(fill_null)
+            df[use_ct_col] = df[use_ct_col].fillna(fill_null)
+
+        cell_types = np.sort(pd.unique(df[use_ct_col].dropna()))
         colors = color_palette("tab20").as_hex()
-
         for ct, clr in zip(cell_types, cycle(colors)):
-            annos.append(
-                statebuilder.AnnotationLayerConfig(
-                    ct,
-                    color=clr,
-                    linked_segmentation_layer=seg.name,
-                    data_resolution=data_resolution,
-                    mapping_rules=statebuilder.PointMapper(
-                        bound_pt_position(pt_column),
-                        linked_segmentation_column=config.root_id_col,
-                        set_position=True,
-                        multipoint=multipoint,
-                        split_positions=True,
-                        mapping_set=ct,
-                    ),
-                )
+            sub = df[df[use_ct_col] == ct]
+            if multipoint:
+                sub = _explode_position_df(sub, pt_split)
+            if len(sub) == 0:
+                continue
+            vs.add_points(
+                data=sub,
+                name=str(ct),
+                point_column=pt_position,
+                segment_column=config.root_id_col,
+                linked_segmentation="seg",
+                color=clr,
+                data_resolution=data_resolution,
             )
-        sb = statebuilder.StateBuilder(
-            [img, seg] + annos, **statebuilder_kwargs(info_cache)
-        )
-        return sb.render_state(
-            {ct: df.query(f"{cell_type_column}==@ct") for ct in cell_types},
-            return_as=return_as,
-        )
     else:
-        if cell_type_column is not None:
-            if len(cell_type_column) == 0:
-                cell_type_column = None
-        anno = statebuilder.AnnotationLayerConfig(
-            "Annotations",
-            linked_segmentation_layer=seg.name,
-            mapping_rules=statebuilder.PointMapper(
-                bound_pt_position(pt_column),
-                linked_segmentation_column=config.root_id_col,
-                split_positions=True,
-                multipoint=multipoint,
-                set_position=True,
-                description_column=cell_type_column,
-            ),
-            data_resolution=data_resolution,
-        )
-        sb = statebuilder.StateBuilder(
-            [img, seg, anno], **statebuilder_kwargs(info_cache)
-        )
-        return sb.render_state(
-            df,
-            return_as=return_as,
-        )
+        sub = df
+        if multipoint and len(sub) > 0:
+            sub = _explode_position_df(sub, pt_split)
+        if len(sub) > 0:
+            description_col = use_ct_col if use_ct_col in sub.columns else None
+            vs.add_points(
+                data=sub,
+                name="Annotations",
+                point_column=pt_position,
+                segment_column=config.root_id_col,
+                linked_segmentation="seg",
+                description_column=description_col,
+                data_resolution=data_resolution,
+            )
 
-    # for ct, clr in zip(cell_types, cycle(colors)):
-    #     anno = statebuilder.AnnotationLayerConfig(
-    #         ct,
-    #         color=clr,
-    #         linked_segmentation_layer=seg.name,
-    #         mapping_rules=statebuilder.PointMapper(
-    #             bound_pt_position(pt_column),
-    #             linked_segmentation_column=config.root_id_col,
-    #             set_position=True,
-    #             multipoint=multipoint,
-    #             split_positions=True,
-    #         ),
-    #         data_resolution=data_resolution,
-    #     )
-    #     sbs.append(
-    #         statebuilder.StateBuilder(
-    #             [anno],
-    #             **statebuilder_kwargs(info_cache),
-    #         )
-    #     )
-    #     dfs.append(df.query("cell_type == @ct"))
-    # csb = statebuilder.ChainedStateBuilder(sbs)
-    # return csb.render_state(dfs, return_as=return_as)
+    if return_as == "dict":
+        return vs.to_dict()
+    if return_as == "url":
+        return _to_url(vs, info_cache, client, shorten)
+    raise ValueError(f"Unsupported return_as: {return_as!r}")
 
 
 def generate_statebuilder_syn_cell_types(
     info_cache,
     rows,
     config,
+    *,
+    client=None,
     cell_type_column="cell_type",
     group_annotations=True,
     multipoint=False,
     fill_null=None,
     data_resolution=[1, 1, 1],
     include_no_type=True,
+    shorten="if_long",
 ):
+    """Synapses colored by partner cell type. Returns a Neuroglancer URL."""
     df = rehydrate_dataframe(rows, config.syn_pt_position_split)
-    if fill_null and include_no_type:
-        df[cell_type_column].fillna(fill_null, inplace=True)
+    if fill_null and include_no_type and cell_type_column in df.columns:
+        df = df.copy()
+        df[cell_type_column] = df[cell_type_column].fillna(fill_null)
 
-    cell_types = np.sort(pd.unique(df[cell_type_column].dropna()))
-    img = statebuilder.ImageLayerConfig(
-        image_source(info_cache),
-        contrast_controls=True,
-        black=config.image_black,
-        white=config.image_white,
-    )
-    seg = statebuilder.SegmentationLayerConfig(
-        seg_source(info_cache),
-        alpha_3d=0.8,
-        fixed_ids=[int(info_cache["root_id"])],
-        timestamp=timestamp(info_cache),
-    )
+    cell_types = np.sort(pd.unique(df[cell_type_column].dropna())) if cell_type_column in df.columns else np.array([])
 
-    # sbs = [
-    #     statebuilder.StateBuilder(
-    #         [img, seg],
-    #         **statebuilder_kwargs(info_cache),
-    #     )
-    # ]
+    vs = _make_viewer(info_cache, config)
+
+    rid = info_cache.get("root_id") if info_cache else None
+    rid_int = int(rid) if rid is not None else None
+    if rid_int is not None:
+        vs.add_segments(segments=[rid_int], segment_colors={rid_int: "#ffffff"})
+
     colors = color_palette("tab20").as_hex()
-    annos = []
     for ct, clr in zip(cell_types, cycle(colors)):
-        anno = statebuilder.AnnotationLayerConfig(
-            ct,
+        sub = df[df[cell_type_column] == ct]
+        if len(sub) == 0:
+            continue
+        _add_dual_linked_synapse_layer(
+            vs,
+            sub,
+            config,
+            str(ct),
+            base_root_id=rid_int,
+            partner_column=config.root_id_col,
             color=clr,
-            linked_segmentation_layer=seg.name,
-            mapping_rules=statebuilder.PointMapper(
-                config.syn_pt_position,
-                linked_segmentation_column=config.root_id_col,
-                set_position=True,
-                multipoint=multipoint,
-                split_positions=True,
-                mapping_set=ct,
-            ),
             data_resolution=data_resolution,
         )
-        annos.append(anno)
-        # statebuilder.StateBuilder(
-        # [anno],
-        # **statebuilder_kwargs(info_cache),
-        # )
-        # )
-        # dfs.append(df.query(f"{cell_type_column} == @ct"))
-    sb = statebuilder.StateBuilder(
-        [img, seg] + annos, **statebuilder_kwargs(info_cache)
-    )
-    # csb = statebuilder.ChainedStateBuilder(sbs)
-    df_dict = {ct: df.query(f'{cell_type_column}=="{ct}"') for ct in cell_types}
-    return sb, df_dict
 
-
-def make_url_robust(df, sb, datastack, config):
-    """Generate a url from a neuroglancer state. If too long, return through state server"""
-    url = sb.render_state(df, return_as="url")
-    if len(url) > MAX_URL_LENGTH:
-        client = make_client(datastack, config.server_address)
-        state = sb.render_state(df, return_as="dict")
-        state_id = client.state.upload_state_json(state)
-        ngl_url = client.info.viewer_site()
-        if ngl_url is None:
-            ngl_url = DEFAULT_NGL
-        url = client.state.build_neuroglancer_url(state_id, ngl_url=ngl_url)
-    return url
+    return _to_url(vs, info_cache, client, shorten)

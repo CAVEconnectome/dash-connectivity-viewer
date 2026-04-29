@@ -13,7 +13,7 @@ authors = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "nglui>=3",
+    "nglui>=4.7",
     "pandas",
     "numpy",
     "seaborn",

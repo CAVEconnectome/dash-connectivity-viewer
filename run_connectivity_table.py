@@ -40,4 +40,4 @@ fanc_config = {
 
 if __name__ == "__main__":
     app = create_app(config=minnie_public_config)
-    app.run_server(port=8050, debug=True)
+    app.run(port=8050, debug=True)

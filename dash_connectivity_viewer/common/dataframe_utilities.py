@@ -9,6 +9,33 @@ import flask
 DESIRED_RESOLUTION = [1, 1, 1]
 
 
+def _coerce_nullable_dtypes(df):
+    """Convert pandas extension dtypes (Int64/Float64/boolean/string[pyarrow])
+    back to plain numpy-backed dtypes with np.nan as the null sentinel.
+
+    Why: the caveclient pyarrow deserializer (`reader.read_pandas()`) returns
+    columns with pandas nullable extension dtypes whose missing-value sentinel
+    is `pd.NA` (NAType). Downstream paths — Dash/plotly JSON serialization,
+    explicit `float(...)` calls on stringified position cells, `.astype` chains
+    — call `float()` on cell values and crash with
+    "float() argument must be a string or a real number, not 'NAType'".
+    Round-tripping through object dtype with np.nan as the sentinel restores
+    the legacy numpy-backed behaviour the rest of the code expects.
+    """
+    if df is None or len(df) == 0:
+        return df
+    for col, dtype in list(df.dtypes.items()):
+        if not pd.api.types.is_extension_array_dtype(dtype):
+            continue
+        s = df[col]
+        obj = s.astype(object).where(s.notna(), np.nan)
+        if pd.api.types.is_integer_dtype(dtype) or pd.api.types.is_float_dtype(dtype):
+            df[col] = pd.to_numeric(obj, errors="coerce")
+        else:
+            df[col] = obj
+    return df
+
+
 def query_table_any(
     table,
     root_id_column,
@@ -76,7 +103,7 @@ def _query_table_single(
             else:
                 filter_kwargs["filter_in_dict"] = extra_query
     if is_live:
-        return client.materialize.live_live_query(
+        df = client.materialize.live_live_query(
             table,
             timestamp=timestamp,
             split_positions=True,
@@ -87,7 +114,7 @@ def _query_table_single(
             **filter_kwargs,
         )
     else:
-        return client.materialize.query_table(
+        df = client.materialize.query_table(
             table,
             split_positions=True,
             desired_resolution=DESIRED_RESOLUTION,
@@ -95,6 +122,7 @@ def _query_table_single(
             timestamp=timestamp,
             **filter_kwargs,
         )
+    return _coerce_nullable_dtypes(df)
 
 
 def _query_table_join(
@@ -115,7 +143,7 @@ def _query_table_join(
             filter_kwargs["filter_in_dict"] = {table: extra_query}
     if is_live:
         join = [[table, "target_id", ref_table, "id"]]
-        return client.materialize.live_live_query(
+        df = client.materialize.live_live_query(
             table,
             joins=join,
             timestamp=timestamp,
@@ -129,7 +157,7 @@ def _query_table_join(
         ).rename(columns={"idx": "id"})
     else:
         join = [[table, "target_id"], [ref_table, "id"]]
-        return client.materialize.join_query(
+        df = client.materialize.join_query(
             join,
             suffixes={table: "", ref_table: "_ref"},
             split_positions=True,
@@ -137,6 +165,7 @@ def _query_table_join(
             metadata=False,
             **filter_kwargs,
         )
+    return _coerce_nullable_dtypes(df)
 
 
 def get_specific_soma(soma_table, root_id, client, timestamp, is_live):
@@ -174,6 +203,7 @@ def _synapse_df(
             desired_resolution=DESIRED_RESOLUTION,
             metadata=False,
         )
+    syn_df = _coerce_nullable_dtypes(syn_df)
 
     if exclude_autapses:
         syn_df = syn_df.query("pre_pt_root_id != post_pt_root_id").reset_index(

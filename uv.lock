@@ -579,7 +579,7 @@ requires-dist = [
     { name = "dfbridge", specifier = ">=0.0.2" },
     { name = "flask" },
     { name = "loguru" },
-    { name = "nglui", specifier = ">=3" },
+    { name = "nglui", specifier = ">=4.7" },
     { name = "numpy" },
     { name = "orjson" },
     { name = "pandas" },

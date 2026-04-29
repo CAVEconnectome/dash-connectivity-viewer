@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from .lookup_utilities import get_root_id_from_nuc_id, make_client
-from .dataframe_utilities import query_table_any
+from .dataframe_utilities import _coerce_nullable_dtypes, query_table_any
 from .schema_utils import get_table_info
 from ..common.config import RegisterTable
 from dfbridge import DataframeBridge
@@ -129,10 +129,12 @@ class TableViewer(object):
             self._id_query = None
 
     def _lookup_roots_from_nucleus(self, soma_ids):
-        df = self.client.materialize.query_table(
-            self.soma_table,
-            filter_in_dict={self.config.nucleus_id_column: soma_ids},
-            timestamp=self.timestamp,
+        df = _coerce_nullable_dtypes(
+            self.client.materialize.query_table(
+                self.soma_table,
+                filter_in_dict={self.config.nucleus_id_column: soma_ids},
+                timestamp=self.timestamp,
+            )
         )
         if self.config.soma_table_query is not None:
             df = df.query(self.config.soma_table_query)
