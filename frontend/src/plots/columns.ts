@@ -15,11 +15,12 @@
  *                                NOT a useful plot binding (excluded from hue/x/y/size)
  *
  * `suitableFor` flags drive picker UIs:
- *   - x:    everything except "string" (id-shaped strings included via the
- *           explicit id-suffix check below — those are also excluded)
- *   - y:    same as x
- *   - hue:  any classified vocabulary except "string"
- *   - size: numeric only (discrete or continuous)
+ *   - x:      everything except "string" (id-shaped strings included via the
+ *             explicit id-suffix check below — those are also excluded)
+ *   - y:      same as x
+ *   - hue:    any classified vocabulary except "string"
+ *   - size:   numeric only (discrete or continuous)
+ *   - weight: numeric only — sums on bar plots; same eligibility as size.
  *
  * Keep this file the single source of truth — when a new use site appears
  * (e.g. a "color-by" channel for histograms), add a flag here, not a parallel
@@ -43,11 +44,13 @@ export interface ColumnProfile {
     y: boolean;
     hue: boolean;
     size: boolean;
+    weight: boolean;
   };
 }
 
-/** Canonical thresholds — tied to the backend's `_HUE_*_MAX` policy. */
-export const PALETTE_MAX_CARDINALITY = 12;
+/** Canonical thresholds — tied to the backend's `_HUE_*_MAX` policy.
+ *  Kept aligned: 10 = `--cat-1..--cat-10` and matplotlib's tab10. */
+export const PALETTE_MAX_CARDINALITY = 10;
 export const CATEGORICAL_MAX_CARDINALITY = 30;
 
 /** Hand-pinned categorical column names (for older datastacks where
@@ -118,6 +121,7 @@ export function classify(col: string, rows: Record<string, unknown>[]): ColumnPr
       y: !idShaped && vocabulary !== "string",
       hue: !idShaped && vocabulary !== "string",
       size: !idShaped && isNumeric,
+      weight: !idShaped && isNumeric,
     },
   };
 }

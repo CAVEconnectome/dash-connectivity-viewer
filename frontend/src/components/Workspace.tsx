@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link } from "react-router-dom";
-import { useDatastackInfo, useVersions } from "../api/queries";
-import { useSetUrlParams, useUrlParam } from "../hooks/useUrlState";
+import {
+  useDatastackInfo,
+  useDatastacks,
+  useMakeSegmentsLinkMutation,
+  useVersions,
+} from "../api/queries";
+import { parseMatVersion, useSetUrlParams, useUrlParam } from "../hooks/useUrlState";
 import { TokenBanner } from "./TokenBanner";
-
-const KNOWN_DATASTACKS = ["minnie65_public"];
 
 const SIDEBAR_COLLAPSED_KEY = "dcv:sidebar_collapsed";
 
@@ -22,10 +25,24 @@ export function Workspace() {
   const setUrl = useSetUrlParams();
   const navigate = useNavigate();
 
+  const datastacks = useDatastacks();
   const versions = useVersions(ds);
   const info = useDatastackInfo(ds);
-  const liveAllowed = info.data?.live_mode !== false;
   const [from] = useUrlParam("from");
+
+  // "live" is always offered in the picker. Datastacks with `live_mode: false`
+  // (public release datastacks) still gate the connectivity / plots / links
+  // endpoints — picking "live" for those falls back to "browse the latest
+  // version" in the table view but errors out on the neuron view. This keeps
+  // the table-browsing affordance available everywhere without giving a
+  // misleading impression that connectivity queries can run live on a
+  // release datastack.
+
+  // Show whatever's in `?ds=` even if it's not in the allowlist response yet
+  // (race on first paint, or operator forgot to add it). The select still
+  // renders the URL value so the picker reads as "in sync" with the URL.
+  const allowed = datastacks.data?.datastacks ?? [];
+  const dsOptions = ds && !allowed.includes(ds) ? [ds, ...allowed] : allowed;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
   const toggleSidebar = () => {
@@ -52,13 +69,18 @@ export function Workspace() {
     <div className={`workspace${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
         {sidebarCollapsed ? (
+          // Vertical "Connectivity Viewer ›" label — uses the otherwise-
+          // wasted collapsed-strip space to brand the app and signal
+          // that the strip is interactive. Click anywhere on the
+          // button expands the sidebar.
           <button
-            className="sidebar-toggle"
+            className="sidebar-toggle vertical"
             onClick={toggleSidebar}
             title="Expand sidebar"
             aria-label="Expand sidebar"
           >
-            ›
+            <span className="vertical-label">Connectivity Viewer</span>
+            <span className="vertical-chevron">›</span>
           </button>
         ) : (
           <>
@@ -80,26 +102,54 @@ export function Workspace() {
               <select
                 value={ds ?? ""}
                 onChange={(e) => setUrl({ ds: e.target.value || null, mv: null })}
+                disabled={datastacks.isError}
               >
-                <option value="">— select —</option>
-                {KNOWN_DATASTACKS.map((d) => (
+                <option value="">
+                  {datastacks.isFetching && !datastacks.data ? "loading…" : "— select —"}
+                </option>
+                {dsOptions.map((d) => (
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
+              {datastacks.isError && (
+                <div className="error-row">
+                  <span>datastack list failed: {datastacks.error instanceof Error ? datastacks.error.message : "unknown"}</span>
+                  <button onClick={() => datastacks.refetch()} disabled={datastacks.isFetching}>
+                    {datastacks.isFetching ? "retrying…" : "retry"}
+                  </button>
+                </div>
+              )}
             </label>
 
             <label>
               Materialization
               <select
                 value={mv ?? "live"}
-                onChange={(e) => setUrl({ mv: e.target.value === "live" ? null : e.target.value })}
-                disabled={!versions.data}
+                // Write "live" as an explicit URL value rather than clearing
+                // `?mv=` — that way the auto-default-to-latest effect below
+                // (which keys off `!mv`) doesn't immediately overwrite the
+                // user's choice the moment they pick "live".
+                onChange={(e) => setUrl({ mv: e.target.value })}
+                disabled={!ds || versions.isError}
               >
-                {liveAllowed && <option value="live">live</option>}
+                <option value="live">live</option>
+                {/* Show the URL's current mv immediately so the select isn't empty
+                    while versions.data is in flight (cold CAVE call can be slow). */}
+                {mv && !versions.data && (
+                  <option value={mv}>v{mv}{versions.isFetching ? " (loading…)" : ""}</option>
+                )}
                 {versions.data?.versions.filter((v) => v.valid).map((v) => (
                   <option key={v.version} value={String(v.version)}>v{v.version}</option>
                 ))}
               </select>
+              {versions.isError && (
+                <div className="error-row">
+                  <span>versions failed: {versions.error instanceof Error ? versions.error.message : "unknown"}</span>
+                  <button onClick={() => versions.refetch()} disabled={versions.isFetching}>
+                    {versions.isFetching ? "retrying…" : "retry"}
+                  </button>
+                </div>
+              )}
             </label>
 
             {info.data && (
@@ -110,6 +160,7 @@ export function Workspace() {
                 <p><strong>Voxel:</strong> {info.data.voxel_resolution?.join(" × ")}</p>
               </details>
             )}
+            {info.data && <NeutralNeuroglancerLink ds={ds!} mv={mv} />}
 
             <nav className="nav">
               <button
@@ -170,5 +221,52 @@ function Breadcrumb({ from, ds, mv }: BreadcrumbProps) {
     <div className="breadcrumb">
       <Link to={to}>← back to {label}</Link>
     </div>
+  );
+}
+
+interface NeutralNeuroglancerLinkProps {
+  ds: string;
+  mv: string | null;
+}
+
+/**
+ * "Open in Neuroglancer" affordance for the sidebar's Datastack-info block.
+ * Empty `root_ids` means the segments-link endpoint composes a viewer with
+ * just the datastack's default image + segmentation layers, no segments
+ * pinned and no point annotations — a neutral landing for "I want to look
+ * around this dataset before I have a specific cell in mind."
+ *
+ * In live mode the connectivity flow is gated on release datastacks but the
+ * neutral viewer is fine — there's no live-vs-materialized data being read,
+ * we're just composing a default Neuroglancer state. The mutation forwards
+ * the URL's mat_version verbatim; backend endpoint accepts both.
+ */
+function NeutralNeuroglancerLink({ ds, mv }: NeutralNeuroglancerLinkProps) {
+  const matVersion = parseMatVersion(mv);
+  const makeLink = useMakeSegmentsLinkMutation();
+  const open = async () => {
+    try {
+      const result = await makeLink.mutateAsync({ ds, matVersion, rootIds: [] });
+      window.open(result.url, "_blank");
+    } catch {
+      // Error message renders below; nothing to do here.
+    }
+  };
+  return (
+    <p className="ngl-link-row">
+      <button
+        type="button"
+        className="link-button"
+        onClick={open}
+        disabled={makeLink.isPending}
+      >
+        {makeLink.isPending ? "opening…" : "Open in Neuroglancer ↗"}
+      </button>
+      {makeLink.isError && (
+        <span className="error">
+          {(makeLink.error as Error).message}
+        </span>
+      )}
+    </p>
   );
 }

@@ -11,28 +11,14 @@ root_id_lookup_main_table: nucleus_detection_v0
 root_id_lookup_alt_tables:
   - nucleus_alternative_points
 
-synapse_position_prefix: ctr_pt
-synapse_columns:
-  - id
-  - pre_pt_root_id
-  - post_pt_root_id
-  - size
-  - ctr_pt_position
-synapse_aggregation_rules:
-  mean_size:
-    column: size
-    agg: mean
-  net_size:
-    column: size
-    agg: sum
-
-# Spatial transform for soma depth, radial distance to the root neuron's soma,
-# and synapse-to-partner-soma distances. minnie_nm consumes positions in nm
-# (what the connectivity service emits at desired_resolution=[1,1,1]) and
-# returns oriented microns — the second output axis is depth, the other two
-# are tangential.
-spatial:
-  transform: minnie_nm
+# Spatial config (transform, depth_range, layer_boundaries) AND synapse-table
+# conventions (column projection, aggregation rules) for this datastack live
+# in `api/aligned_volumes/minnie65_phase3.yaml` — keyed by aligned_volume
+# rather than datastack so every proofreading version of the same volume
+# (public release, internal v1, future versions) shares one coordinate system
+# and one set of synapse columns. To override a synapse field for this
+# specific datastack, drop a `synapse:` block here; field-level overrides
+# inherit unspecified fields from the aligned_volume defaults.
 
 # Periodic decoration-cache warming. Off by default (`enabled: false`).
 # Each fire resolves "latest valid mat_version" against CAVE and writes the

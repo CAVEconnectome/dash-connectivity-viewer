@@ -3,7 +3,12 @@ from flask import Blueprint, current_app, jsonify, request
 from ..auth import auth_required, current_token, is_dev_bypass
 from ..cave import request_client
 from ..errors import ApiError
-from ..services.datastack_config import check_live_allowed, load_datastack_config
+from ..services.datastack_config import (
+    aligned_volume_config_for,
+    check_live_allowed,
+    load_datastack_config,
+    resolve_synapse_config,
+)
 from ..services.neuron import NeuronQuery, connectivity_bundle
 
 bp = Blueprint("connectivity", __name__, url_prefix="/datastacks")
@@ -38,8 +43,6 @@ def connectivity(ds: str, root_id: int):
         raise ApiError(422, "live_mode_disallowed", str(exc)) from exc
 
     cfg = load_datastack_config(ds)
-    rules = body.get("synapse_aggregation_rules") or cfg.aggregation_rules_for_neuron_query()
-    synapse_columns = body.get("synapse_columns", cfg.merged_synapse_columns())
 
     # Capture the user's auth token + dev_bypass flag in the request thread;
     # the background revalidator runs after the request context is gone and
@@ -62,6 +65,20 @@ def connectivity(ds: str, root_id: int):
         client = client_factory()
     except ValueError as exc:
         raise ApiError(401, "no_auth_token", str(exc)) from exc
+    # Aligned-volume config carries spatial transform + synapse defaults.
+    # `minnie65_public` and `minnie65_phase3_v1` share `minnie65_phase3` so
+    # they pick up identical transform / depth_range / layer guides AND
+    # synapse conventions without duplicate YAML. Volumes without a
+    # configured aligned_volumes/*.yaml (e.g. brain_and_nerve_cord) fall
+    # back to schema defaults and rely on the datastack YAML's `synapse:`
+    # block for any non-default conventions.
+    av_cfg = aligned_volume_config_for(ds, client)
+    syn_cfg = resolve_synapse_config(av_cfg, cfg)
+    # Per-request body can still override the resolved aggregation rules /
+    # column projection — power-user knob for ad-hoc queries that the
+    # datastack YAML doesn't anticipate.
+    rules = body.get("synapse_aggregation_rules") or syn_cfg.aggregation_rules_for_neuron_query()
+    synapse_columns = body.get("synapse_columns", syn_cfg.merged_columns())
     nq = NeuronQuery(
         client,
         root_id=root_id,
@@ -69,7 +86,7 @@ def connectivity(ds: str, root_id: int):
         mat_version=mat_version,
         synapse_aggregation_rules=rules,
         synapse_columns=synapse_columns,
-        synapse_position_prefix=cfg.synapse_position_prefix,
+        synapse_position_prefix=syn_cfg.position_prefix,
     )
     try:
         payload = connectivity_bundle(
@@ -78,7 +95,10 @@ def connectivity(ds: str, root_id: int):
             cell_type_table=cell_type_table,
             decoration_tables=decoration_tables,
             client_factory=client_factory,
-            spatial_transform_name=cfg.spatial.transform,
+            spatial_transform_name=av_cfg.spatial.transform,
+            depth_range=av_cfg.spatial.depth_range,
+            layer_boundaries=av_cfg.spatial.layer_boundaries,
+            layer_names=av_cfg.spatial.layer_names,
         )
     except ValueError as exc:
         raise ApiError(409, "neuron_query_failed", str(exc)) from exc

@@ -124,6 +124,9 @@ def connectivity_bundle(
     decoration_tables: list[str] | None = None,
     client_factory=None,
     spatial_transform_name: str | None = None,
+    depth_range: list[float] | None = None,
+    layer_boundaries: list[float] | None = None,
+    layer_names: list[str] | None = None,
 ) -> dict:
     include = set(include or ["partners_in", "partners_out", "summary"])
     # All root_id values cross the wire as JSON strings: int64 root ids overflow
@@ -150,14 +153,22 @@ def connectivity_bundle(
         if client_factory is None:
             raise ValueError("connectivity_bundle requires client_factory when enriching")
         from .decoration import lookup_decorations
-        # Only enrich partners that will actually be in the response.
+        # Only enrich partners that will actually be in the response —
+        # plus the queried root, which the SPA's "Cell" tab renders as a
+        # standalone row alongside the partner tabs. Including the root
+        # in this single lookup means the per-partner enrichment + the
+        # root enrichment share one CAVE round-trip per decoration table.
         partner_ids: list[int] = []
         if pin is not None and "partners_in" in include:
             partner_ids.extend(int(x) for x in pin["root_id"].tolist())
         if pout is not None and "partners_out" in include:
             partner_ids.extend(int(x) for x in pout["root_id"].tolist())
         partner_ids = list(dict.fromkeys(partner_ids))  # preserve order, dedupe
-        if partner_ids:
+        # Root included AFTER partners so it doesn't perturb the order
+        # the partner enrichment iterates in. `dict.fromkeys` deduplicates
+        # if the root happens to also appear as a partner (self-loop).
+        decoration_ids = list(dict.fromkeys([*partner_ids, int(nq.root_id)]))
+        if decoration_ids:
             decoration_lookup, decoration_groups, revalidation = lookup_decorations(
                 client_factory=client_factory,
                 ds=nq.datastack,
@@ -165,28 +176,48 @@ def connectivity_bundle(
                 cell_type_table=cell_type_table,
                 soma_table=nq.soma_table,
                 soma_root_id_column=nq.soma_root_id_column,
-                root_ids=partner_ids,
+                root_ids=decoration_ids,
                 decoration_tables=decoration_tables or [],
             )
 
     # Spatial features. Two tiers:
     #   - median_dist_to_target_soma is plain Euclidean — runs whenever any
     #     partner has a known soma position, no transform required.
-    #   - soma_depth + radial_dist_root_soma require an oriented standard_transform;
-    #     attach_spatial_features returns an empty intrinsic dict when none is configured.
+    #   - soma_depth + soma_x + soma_z + radial_dist_root_soma + median_syn_depth
+    #     require an oriented standard_transform; attach_spatial_features
+    #     returns empty dicts for those when none is configured.
     spatial_intrinsic: dict[int, dict[str, float]] = {}
     spatial_median_in: dict[int, float] = {}
     spatial_median_out: dict[int, float] = {}
+    spatial_syn_depth_in: dict[int, float] = {}
+    spatial_syn_depth_out: dict[int, float] = {}
+    # Lift the transform load up so the depth-profile computation below
+    # can reuse it without re-parsing the YAML / reloading the
+    # standard_transform module. The per-partner spatial features still
+    # gate on `decoration_lookup` (they need partner soma positions);
+    # the per-cell depth profile only needs the synapse df + transform.
+    from .spatial import (
+        attach_spatial_features,
+        compute_synapse_depth_profile,
+        load_streamline,
+        load_transform,
+    )
+    transform = load_transform(spatial_transform_name) if spatial_transform_name else None
+    streamline = load_streamline(spatial_transform_name) if spatial_transform_name else None
+
     if decoration_lookup:
-        from .spatial import attach_spatial_features, load_streamline, load_transform
-        transform = load_transform(spatial_transform_name) if spatial_transform_name else None
-        streamline = load_streamline(spatial_transform_name) if spatial_transform_name else None
         # `nq.soma_summary()` is cached on the NeuronQuery via the underlying
         # CAVEclient call; calling here is free if the summary block also runs
         # below. Root soma is only used for radial-dist; missing → that single
         # column is omitted but the others still flow.
         root_soma = nq.soma_summary().get("soma_pt_position")
-        spatial_intrinsic, spatial_median_in, spatial_median_out = attach_spatial_features(
+        (
+            spatial_intrinsic,
+            spatial_median_in,
+            spatial_median_out,
+            spatial_syn_depth_in,
+            spatial_syn_depth_out,
+        ) = attach_spatial_features(
             transform=transform,
             streamline=streamline,
             decoration_lookup=decoration_lookup,
@@ -197,7 +228,27 @@ def connectivity_bundle(
             syn_position_prefix=nq.synapse_position_prefix,
         )
 
-    def _enrich_records(df, median_lookup: dict[int, float]):
+    # Per-cell synapse depth profile — populated when the datastack has a
+    # transform. Independent of decoration / partner enrichment because
+    # it's a property of the cell's full synapse cloud, not of any
+    # particular partner.
+    synapse_depth_profile = compute_synapse_depth_profile(
+        transform=transform,
+        syn_df_in=nq._synapse_df("post") if need_in else None,
+        syn_df_out=nq._synapse_df("pre") if need_out else None,
+        syn_position_prefix=nq.synapse_position_prefix,
+        depth_range=depth_range,
+        layer_boundaries=layer_boundaries,
+        layer_names=layer_names,
+    )
+    if synapse_depth_profile is not None:
+        payload["synapse_depth_profile"] = synapse_depth_profile
+
+    def _enrich_records(
+        df,
+        median_lookup: dict[int, float],
+        syn_depth_lookup: dict[int, float],
+    ):
         if df is None:
             return None
         records = df.to_dict(orient="records")
@@ -207,12 +258,14 @@ def connectivity_bundle(
             if extra:
                 rec.update(extra)
             # Spatial: intrinsic features (same for both directions) + the
-            # direction-specific median synapse distance.
+            # direction-specific synapse-edge stats.
             spatial_extra = spatial_intrinsic.get(rid)
             if spatial_extra:
                 rec.update(spatial_extra)
             if rid in median_lookup:
                 rec["median_dist_to_target_soma"] = median_lookup[rid]
+            if rid in syn_depth_lookup:
+                rec["median_syn_depth"] = syn_depth_lookup[rid]
             # `pt_position` is internal scaffolding for the spatial computation;
             # strip it so the wire payload stays tight and the SPA doesn't see
             # a column it has no place to render.
@@ -223,9 +276,31 @@ def connectivity_bundle(
         return records
 
     if "partners_in" in include and pin is not None:
-        payload["partners_in"] = _enrich_records(pin, spatial_median_in)
+        payload["partners_in"] = _enrich_records(pin, spatial_median_in, spatial_syn_depth_in)
     if "partners_out" in include and pout is not None:
-        payload["partners_out"] = _enrich_records(pout, spatial_median_out)
+        payload["partners_out"] = _enrich_records(pout, spatial_median_out, spatial_syn_depth_out)
+
+    # The queried cell, shaped as a single partner-record so the SPA's
+    # "Cell" tab can reuse PartnersTable's column rendering. Synapse
+    # columns and per-edge stats don't apply here — they're per-partner
+    # by construction. We include the cell-type / soma decoration and
+    # intrinsic spatial features (soma_depth / soma_x / soma_z) so the
+    # tab reads as a place to find "what does CAVE know about this
+    # specific cell." `radial_dist_root_soma` for the root would be 0
+    # by definition (distance from itself), so we drop it as noise.
+    root_rid = int(nq.root_id)
+    root_rec: dict[str, Any] = {"root_id": str(root_rid)}
+    extra = decoration_lookup.get(root_rid)
+    if extra:
+        root_rec.update(extra)
+    spatial_self = spatial_intrinsic.get(root_rid)
+    if spatial_self:
+        for k, v in spatial_self.items():
+            if k == "radial_dist_root_soma":
+                continue  # zero by construction
+            root_rec[k] = v
+    root_rec.pop("pt_position", None)
+    payload["root_record"] = root_rec
     if "summary" in include:
         soma = nq.soma_summary()
         payload["summary"] = {
@@ -247,11 +322,17 @@ def connectivity_bundle(
     # the left-to-right column order. Each group has `kind` (intrinsic, synapse,
     # soma, cell_type, table, spatial) so the frontend can style them per-class.
     synapse_cols = ["num_syn"] + list(nq.synapse_aggregation_rules.keys())
+    # Direction-specific spatial stats live in the synapse group so the
+    # Both-tab unifier splits each into `_in` / `_out` alongside num_syn /
+    # mean_size. Two columns here, registered independently because they
+    # gate on different requirements:
+    #   - median_dist_to_target_soma: plain Euclidean, runs without a
+    #     transform whenever any partner has a soma position.
+    #   - median_syn_depth: oriented-frame, requires the standard_transform.
     if spatial_median_in or spatial_median_out:
-        # Direction-specific spatial stat lives in the synapse group so the Both-
-        # tab unifier splits it into _in / _out alongside num_syn / mean_size.
-        # No standard_transform required — this column rides on plain Euclidean.
         synapse_cols.append("median_dist_to_target_soma")
+    if spatial_syn_depth_in or spatial_syn_depth_out:
+        synapse_cols.append("median_syn_depth")
     column_groups = [
         {"name": "id",      "kind": "intrinsic", "columns": ["root_id"]},
         {"name": "synapse", "kind": "synapse",   "columns": synapse_cols},
@@ -259,10 +340,12 @@ def connectivity_bundle(
     ]
     if spatial_intrinsic:
         # Partner-intrinsic spatial columns: same value for both directions, so
-        # the unifier passes them through unchanged.
+        # the unifier passes them through unchanged. `soma_x` / `soma_z` give
+        # the tangential coordinates so the SPA can scatter them as a
+        # top-down view of the partner population.
         intrinsic_spatial_cols: list[str] = []
         sample_rec = next(iter(spatial_intrinsic.values()))
-        for col in ("soma_depth", "radial_dist_root_soma"):
+        for col in ("soma_depth", "soma_x", "soma_z", "radial_dist_root_soma"):
             if col in sample_rec:
                 intrinsic_spatial_cols.append(col)
         if intrinsic_spatial_cols:

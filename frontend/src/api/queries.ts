@@ -5,12 +5,35 @@ import type {
   CellIdLookupResponse,
   ConnectivityBundle,
   DatastackInfo,
+  DatastacksListResponse,
   LinkResponse,
   PlotResponse,
   TableRowsResponse,
+  TableUniqueValuesResponse,
   TablesResponse,
   VersionsResponse,
 } from "./types";
+
+// Metadata calls hit CAVE on cache miss and occasionally flake (cold connection,
+// upstream blip). The global retry default is 0 because expensive queries like
+// /connectivity shouldn't auto-retry, but cheap metadata reads should — bump
+// retry locally so a transient 502 doesn't strand the dropdown.
+const META_RETRY = 2;
+const META_RETRY_DELAY = (attempt: number) => Math.min(500 * 2 ** attempt, 4000);
+
+export function useDatastacks() {
+  // Allowlist served by the backend (`DCV_DATASTACKS_ALLOWED`). Drives the
+  // sidebar's datastack picker. Cached aggressively — this list only changes
+  // with a deployment-config change, so a short staleTime would just create
+  // unnecessary refetches every time the sidebar mounts.
+  return useQuery<DatastacksListResponse>({
+    queryKey: ["datastacks"],
+    queryFn: () => apiFetch<DatastacksListResponse>(`/api/v1/datastacks`),
+    staleTime: 60 * 60 * 1000,
+    retry: META_RETRY,
+    retryDelay: META_RETRY_DELAY,
+  });
+}
 
 export function useDatastackInfo(ds: string | null) {
   return useQuery<DatastackInfo>({
@@ -18,6 +41,8 @@ export function useDatastackInfo(ds: string | null) {
     queryFn: () => apiFetch<DatastackInfo>(`/api/v1/datastacks/${ds}/info`),
     enabled: !!ds,
     staleTime: 60 * 60 * 1000, // 1h — info_cache is server-side too
+    retry: META_RETRY,
+    retryDelay: META_RETRY_DELAY,
   });
 }
 
@@ -27,6 +52,42 @@ export function useVersions(ds: string | null) {
     queryFn: () => apiFetch<VersionsResponse>(`/api/v1/datastacks/${ds}/versions`),
     enabled: !!ds,
     staleTime: 60 * 60 * 1000,
+    retry: META_RETRY,
+    retryDelay: META_RETRY_DELAY,
+  });
+}
+
+/**
+ * Full distinct-value universe for a table's string columns, used to
+ * populate category filter dropdowns with *every* selectable value rather
+ * than just the values present in the loaded slice. Backend caches the
+ * call effectively forever (the universe is mat-version-stable), so this
+ * is essentially free on warm requests.
+ *
+ * Disabled while `ds` / `table` are null and for views (which CAVE doesn't
+ * expose `get_unique_string_values` for); callers degrade silently to
+ * row-walking when `data` is undefined.
+ */
+export function useTableUniqueValues(
+  ds: string | null,
+  table: string | null,
+  matVersion: number | "live" | null,
+  enabled: boolean = true,
+) {
+  return useQuery<TableUniqueValuesResponse>({
+    queryKey: ["table_unique_values", ds, table, matVersion],
+    queryFn: () =>
+      apiFetch<TableUniqueValuesResponse>(
+        `/api/v1/datastacks/${ds}/tables/${table}/values`,
+        { query: { mat_version: matVersion === "live" ? undefined : matVersion ?? undefined } },
+      ),
+    enabled: enabled && !!ds && !!table,
+    // Distinct-value universe is immutable per (datastack, mat_version,
+    // table) — backend caches it in `unique_values_cache` for 7 days and
+    // we trust that, so the SPA tier can match. Effectively "session-stable."
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: META_RETRY,
+    retryDelay: META_RETRY_DELAY,
   });
 }
 
@@ -39,6 +100,8 @@ export function useTables(ds: string | null, matVersion: number | "live" | null)
       }),
     enabled: !!ds,
     staleTime: 60 * 60 * 1000,
+    retry: META_RETRY,
+    retryDelay: META_RETRY_DELAY,
   });
 }
 
@@ -201,8 +264,13 @@ export interface PlotBindings {
   y?: string | null;
   hue?: string | null;
   size?: string | null;
+  /** Numeric column to sum on bar plots; replaces implicit row-count. */
+  weight?: string | null;
   x_scope?: "pre" | "post" | "both" | null;
   y_scope?: "pre" | "post" | "both" | null;
+  /** Draw the target neuron's soma depth on depth-axis plots. Default ON
+   *  on the backend; the SPA only sets this when the user toggled it off. */
+  show_cell_depth?: boolean | null;
 }
 
 export interface PlotArgs {
@@ -217,30 +285,41 @@ export interface PlotArgs {
   /** Multi-channel binding: backend auto-picks chart kind for `dynamic` specs
    *  (1 axis → histogram, 2 axes → scatter). Wins over `column` when set. */
   bindings?: PlotBindings | null;
+  /** Global cell filter, raw `?cells=` URL value. Shape:
+   *  `<table>.<col>:<op>:<val>[,...]`. Backend AUTO-extends decoration_tables
+   *  with referenced tables, so the caller doesn't have to mirror them. */
+  cells?: string | null;
 }
 
 function bindingsCacheKey(b: PlotBindings | null | undefined): string {
   if (!b) return "";
-  return `${b.x ?? ""}|${b.y ?? ""}|${b.hue ?? ""}|${b.size ?? ""}|${b.x_scope ?? ""}|${b.y_scope ?? ""}`;
+  // `show_cell_depth` only contributes when explicitly off — the backend
+  // default is ON, so undefined and true produce the same fetch key.
+  const scd = b.show_cell_depth === false ? "0" : "";
+  return `${b.x ?? ""}|${b.y ?? ""}|${b.hue ?? ""}|${b.size ?? ""}|${b.weight ?? ""}|${b.x_scope ?? ""}|${b.y_scope ?? ""}|${scd}`;
 }
 
 function hasAnyBinding(b: PlotBindings | null | undefined): boolean {
   if (!b) return false;
-  return !!(b.x || b.y || b.hue || b.size);
+  return !!(b.x || b.y || b.hue || b.size || b.weight);
 }
 
 export function usePlot(args: PlotArgs | null) {
   return useQuery<PlotResponse>({
     queryKey: args
       ? ["plot", args.ds, args.spec, args.rootId, args.matVersion,
-         (args.decorationTables ?? []).join(","), args.column ?? "", bindingsCacheKey(args.bindings)]
+         (args.decorationTables ?? []).join(","), args.column ?? "", bindingsCacheKey(args.bindings),
+         args.cells ?? ""]
       : ["plot", "disabled"],
     queryFn: () =>
       apiFetch<PlotResponse>(
         `/api/v1/datastacks/${args!.ds}/plots/${args!.spec}`,
         {
           method: "POST",
-          query: { mat_version: args!.matVersion === "live" ? undefined : args!.matVersion ?? undefined },
+          query: {
+            mat_version: args!.matVersion === "live" ? undefined : args!.matVersion ?? undefined,
+            cells: args!.cells || undefined,
+          },
           body: {
             root_id: args!.rootId,
             decoration_tables: args!.decorationTables ?? [],
@@ -292,6 +371,40 @@ export function useMakeLinkMutation() {
             root_id: args.rootId,
             selected_partner_ids: args.selectedPartnerIds,
           },
+        },
+      }),
+  });
+}
+
+export interface MakeSegmentsLinkArgs {
+  ds: string;
+  matVersion: number | "live";
+  rootIds: string[];
+  /** Optional view position to open the viewer at, in raw voxel coordinates
+   *  (typically pulled from a row's `<prefix>_pt_position_x/y/z` triple). */
+  position?: [number, number, number];
+  /** Optional voxel resolution (nm/voxel) for the table the position came
+   *  from. Used as the data dimension so `position` reads as voxel coords;
+   *  omit to fall back to nglui's inferred coordinates. */
+  voxelResolution?: [number, number, number];
+}
+
+/**
+ * Open Neuroglancer with a flat list of segments pinned. Used by the
+ * per-table view, where there's no focal neuron — just a set of root_ids
+ * the user is interested in. Distinct mutation from useMakeLinkMutation
+ * (focal-neuron + direction shaped) because the API endpoints are different.
+ */
+export function useMakeSegmentsLinkMutation() {
+  return useMutation<LinkResponse, Error, MakeSegmentsLinkArgs>({
+    mutationFn: (args) =>
+      apiFetch<LinkResponse>(`/api/v1/datastacks/${args.ds}/links/segments`, {
+        method: "POST",
+        query: { mat_version: args.matVersion === "live" ? undefined : args.matVersion ?? undefined },
+        body: {
+          root_ids: args.rootIds,
+          position: args.position,
+          voxel_resolution: args.voxelResolution,
         },
       }),
   });

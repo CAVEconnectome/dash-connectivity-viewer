@@ -3,9 +3,10 @@ import { useSearchParams } from "react-router-dom";
 import type { ConnectivityBundle } from "../api/types";
 import { directionalColumnNames, unifyColumnGroups, unifyPartners } from "../plots/unify";
 import { gatherSelections, isSelKey } from "../plots/urlState";
+import { CellPanel } from "./CellPanel";
 import { PartnersTable } from "./PartnersTable";
 
-type Tab = "out" | "in" | "both";
+type Tab = "out" | "in" | "both" | "cell";
 
 interface Props {
   ds: string;
@@ -74,10 +75,9 @@ export function PartnersPane({ ds, rootId, matVersion, bundle, decorationTables 
   }, [tab, selectionBySource]);
 
   /**
-   * Drop every `sel_*` URL key — clears all plot brushes. Per-plot clearing
-   * is handled by the plot itself (via Plotly's onDeselect, which fires
-   * when the user clicks an empty area in select mode and writes a `[]`
-   * selection that AnalyticsRail then drops).
+   * Drop every `sel_*` URL key — clears all plot brushes. The plot panels
+   * never write empty selections (PlotPanel gates that path), so this button
+   * on the brush pill is the only way to clear.
    */
   const clearAllSelections = useCallback(() => {
     setSearchParams(
@@ -154,6 +154,15 @@ export function PartnersPane({ ds, rootId, matVersion, bundle, decorationTables 
         >
           Both ({counts.both})
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === "cell"}
+          className={tab === "cell" ? "active" : ""}
+          onClick={() => setTab("cell")}
+          title="Annotations on the queried cell itself"
+        >
+          Cell
+        </button>
       </div>
 
       {tab === "out" && (
@@ -194,6 +203,15 @@ export function PartnersPane({ ds, rootId, matVersion, bundle, decorationTables 
           defaultHiddenColumns={bothDefaultHidden}
           externalSelection={externalSelection}
           onClearSelection={clearAllSelections}
+        />
+      )}
+      {tab === "cell" && (
+        <CellPanel
+          ds={ds}
+          rootId={rootId}
+          matVersion={matVersion}
+          bundle={bundle}
+          columnGroups={bundle.column_groups}
         />
       )}
     </div>

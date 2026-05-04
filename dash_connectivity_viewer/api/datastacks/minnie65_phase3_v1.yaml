@@ -1,0 +1,16 @@
+# Internal working datastack on the minnie65_phase3 aligned volume. Inherits
+# spatial transform / depth axis / layer boundaries AND synapse-table
+# conventions from `api/aligned_volumes/minnie65_phase3.yaml` — both kinds
+# of config are resolved per request from `client.info.get_aligned_volume()`.
+#
+# Unlike the release datastack, live mode is meaningful here — proofreading
+# lands continuously and the working frontend wants to query the latest
+# segmentation, not a frozen snapshot.
+live_mode: true
+
+# Cell-id lookup. Same nucleus-table family as the public datastack — both
+# datastacks materialize from the same aligned-volume reference geometry.
+cell_id_lookup_view: nucleus_detection_lookup_v1
+root_id_lookup_main_table: nucleus_detection_v0
+root_id_lookup_alt_tables:
+  - nucleus_alternative_points

@@ -1,28 +1,42 @@
 """Spatial features for connectivity bundles.
 
-Computes three per-partner columns when the datastack has a configured
-`spatial.transform`:
+Two families of columns, both gated on a configured `spatial.transform`:
 
-  - `soma_depth`              µm — depth of partner's soma in the oriented frame
-  - `radial_dist_root_soma`   µm — distance from partner soma to root soma along
-                                   the streamline-corrected tangential plane
+  **Partner-intrinsic** (one value per partner; same for both directions):
+  - `soma_depth`              µm — partner's soma depth in the oriented frame
+  - `soma_x`, `soma_z`        µm — partner's soma tangential coordinates
+                                   (axes 0 and 2 of the transform output —
+                                   the cortex-flat plane orthogonal to depth).
+                                   Lets the SPA scatter `soma_x` vs `soma_z`
+                                   to render the partner population as a
+                                   top-down view of cortical layout.
+  - `radial_dist_root_soma`   µm — distance from partner soma to root soma
+                                   along the streamline-corrected tangential
+                                   plane.
+
+  **Per-direction (synapse-edge)** (one value per partner per direction;
+  unified-tab splits these into `_in` / `_out` next to `num_syn`):
   - `median_dist_to_target_soma`
                               µm — median 3D distance from each connecting
-                                   synapse to the *target* (postsynaptic) soma:
-                                   the partner's soma for outputs, the root's
-                                   soma for inputs. Each synapse's "target" is
-                                   whichever side owns the receiving dendrite.
+                                   synapse to the *target* (postsynaptic) soma.
+                                   Plain Euclidean, no transform required.
+  - `median_syn_depth`        µm — median depth of the connecting synapses
+                                   in the oriented frame. Requires transform.
+                                   Useful for "where on the dendrite does this
+                                   partner contact" — values cluster near the
+                                   target soma's depth when synapses are
+                                   somatic / proximal, drift toward layer
+                                   boundaries for distal contacts.
 
-`soma_depth` and `radial_dist_root_soma` are partner-intrinsic and require
-the partner to have an unambiguous soma (`num_soma == 1`).
+Coverage rules for the per-direction columns:
 
-`median_dist_to_target_soma` is per-edge and lives in the `synapse` column
-group, so the SPA's Both-tab unifier splits it into `_in` / `_out` alongside
-`num_syn`, `mean_size`, etc. Coverage by direction:
-
-  - outputs: target = partner; needs partner with `num_soma == 1`
-  - inputs:  target = root; populated whenever the root itself has a soma,
-             regardless of the partner's `num_soma`
+  - `median_dist_to_target_soma`
+      outputs: target = partner; needs partner soma.
+      inputs:  target = root;   needs root soma; partner soma optional.
+  - `median_syn_depth`
+      Both directions: only needs synapse positions and a transform. The
+      partner's soma isn't relevant — we're reporting where the synapses
+      themselves sit in cortical depth.
 
 The transform is loaded by name from `standard_transform.datasets`; positions
 are passed in nanometers (matching `desired_resolution=[1,1,1]`), so use the
@@ -169,7 +183,17 @@ def compute_partner_spatial(
 
     out: dict[int, dict[str, float]] = {}
     for i, rid in enumerate(rids):
-        rec: dict[str, float] = {"soma_depth": float(transformed[i, _DEPTH_AXIS])}
+        # `transformed[i]` is `[tangential_a, depth, tangential_b]` in µm
+        # (the standard_transform output is already in micrometers; the
+        # `_nm` suffix on the loader names refers to the *input* unit).
+        # Naming the tangential axes `soma_x` / `soma_z` mirrors the array
+        # indices (0 and 2) and is short enough to read in chip / picker
+        # labels. Together with `soma_depth` they give a full 3-tuple.
+        rec: dict[str, float] = {
+            "soma_depth": float(transformed[i, _DEPTH_AXIS]),
+            "soma_x": float(transformed[i, _TANGENTIAL_AXES[0]]),
+            "soma_z": float(transformed[i, _TANGENTIAL_AXES[1]]),
+        }
         if radial is not None:
             rec["radial_dist_root_soma"] = float(radial[i])
         out[int(rid)] = rec
@@ -218,6 +242,132 @@ def compute_median_syn_dist(
     return out
 
 
+def compute_synapse_depth_profile(
+    *,
+    transform,
+    syn_df_in: pd.DataFrame | None,
+    syn_df_out: pd.DataFrame | None,
+    syn_position_prefix: str,
+    depth_range: list[float] | None = None,
+    layer_boundaries: list[float] | None = None,
+    layer_names: list[str] | None = None,
+    n_bins: int = 40,
+) -> dict | None:
+    """Per-direction histogram of synapse depths in the oriented frame.
+
+    Used by the SPA's "Synapse depth profile" summary panel — a top-level
+    figure answering "where in cortex does this neuron collect inputs and
+    deposit outputs?" as a two-color (input + output) histogram. The
+    computation rides on the same transform + synapse positions that
+    drive the per-partner spatial features, so the marginal cost over the
+    rest of the bundle is tiny.
+
+    Returns `None` when `transform` is None — depth has no axis to project
+    onto without an oriented frame, so we don't fabricate one.
+
+    Bins span `depth_range` when provided (datastack-configured), so
+    different neurons of the same datastack share a coordinate system and
+    histograms are visually comparable. Without `depth_range` the bins
+    span the observed min/max across both directions — still self-
+    consistent within a single chart but not comparable across neurons.
+
+    Output:
+        {
+            "bin_edges":  [float * (n_bins + 1)],
+            "counts_in":  [int * n_bins],   # synapses on root's dendrite
+            "counts_out": [int * n_bins],   # synapses on partner dendrites
+            "depth_axis_name": "soma_depth",
+        }
+    `counts_in` / `counts_out` are zero-arrays when the corresponding
+    `syn_df` is None or has no usable position columns — caller doesn't
+    have to special-case the directionless setup.
+    """
+    if transform is None:
+        return None
+
+    pos_cols = [f"{syn_position_prefix}_position_{a}" for a in ("x", "y", "z")]
+
+    def _depths(syn_df: pd.DataFrame | None) -> np.ndarray:
+        if syn_df is None or syn_df.empty:
+            return np.empty(0, dtype=float)
+        if any(c not in syn_df.columns for c in pos_cols):
+            return np.empty(0, dtype=float)
+        pts = syn_df[pos_cols].to_numpy(dtype=float)
+        return _apply_transform(transform, pts)[:, _DEPTH_AXIS]
+
+    depths_in = _depths(syn_df_in)
+    depths_out = _depths(syn_df_out)
+    if depths_in.size == 0 and depths_out.size == 0:
+        return None
+
+    if depth_range and len(depth_range) == 2:
+        lo, hi = float(depth_range[0]), float(depth_range[1])
+    else:
+        # Combined extent across both directions so the two histograms
+        # share an x-axis. `np.concatenate` over an empty side is fine.
+        combined = np.concatenate(
+            [depths_in if depths_in.size else np.empty(0),
+             depths_out if depths_out.size else np.empty(0)]
+        )
+        lo, hi = float(combined.min()), float(combined.max())
+        if hi <= lo:  # degenerate single-depth case — pad ±1 µm so np.histogram is happy
+            lo, hi = lo - 1.0, hi + 1.0
+
+    edges = np.linspace(lo, hi, n_bins + 1)
+    counts_in, _ = np.histogram(depths_in, bins=edges) if depths_in.size else (np.zeros(n_bins, dtype=int), edges)
+    counts_out, _ = np.histogram(depths_out, bins=edges) if depths_out.size else (np.zeros(n_bins, dtype=int), edges)
+    # Echo the depth-range / layer config alongside the counts so the SPA
+    # can draw layer guides client-side without a second fetch. None
+    # values pass through cleanly — frontend treats absent fields as
+    # "no guides," same default behaviour as elsewhere.
+    return {
+        "bin_edges": edges.tolist(),
+        "counts_in": counts_in.astype(int).tolist(),
+        "counts_out": counts_out.astype(int).tolist(),
+        # Display label for the depth axis on the SPA-rendered chart.
+        # Reads more accurately as "Synapse depth" than `soma_depth` —
+        # these *are* synapse positions in the oriented frame, not soma
+        # positions, even though they share the same coordinate system.
+        "depth_axis_name": "Synapse depth",
+        "depth_range": [lo, hi] if depth_range else None,
+        "layer_boundaries": list(layer_boundaries) if layer_boundaries else None,
+        "layer_names": list(layer_names) if layer_names else None,
+    }
+
+
+def compute_median_syn_depth(
+    syn_df: pd.DataFrame,
+    *,
+    transform,
+    partner_root_id_column: str,
+    syn_position_prefix: str,
+) -> dict[int, float]:
+    """Per partner, median synapse depth in the oriented (cortical) frame.
+
+    Each connecting synapse's position is run through the cortical transform
+    so axis 1 reads as depth-from-pia, then we median that axis per partner.
+    Result is in µm (the transform's output unit), matching `soma_depth`.
+
+    Returns `{partner_id: median_depth}`. Partners with no synapses in
+    `syn_df` (after the per-direction filter) are simply absent from the
+    result; their cell renders null. Empty / missing-position-column input
+    short-circuits to an empty dict so callers can compose cleanly.
+    """
+    if syn_df.empty or transform is None:
+        return {}
+    pos_cols = [f"{syn_position_prefix}_position_{a}" for a in ("x", "y", "z")]
+    if any(c not in syn_df.columns for c in pos_cols):
+        return {}
+
+    out: dict[int, float] = {}
+    for partner_id, group in syn_df.groupby(partner_root_id_column, sort=False):
+        rid = int(partner_id)
+        pts = group[pos_cols].to_numpy(dtype=float)
+        transformed = _apply_transform(transform, pts)
+        out[rid] = float(np.median(transformed[:, _DEPTH_AXIS]))
+    return out
+
+
 def attach_spatial_features(
     *,
     transform,
@@ -228,9 +378,11 @@ def attach_spatial_features(
     syn_df_out: pd.DataFrame | None,
     syn_position_prefix: str,
 ) -> tuple[
-    dict[int, dict[str, float]],   # intrinsic features (soma_depth, radial_dist)
-    dict[int, float],              # in-direction median syn dist
-    dict[int, float],              # out-direction median syn dist
+    dict[int, dict[str, float]],   # intrinsic features (soma_depth, soma_x, soma_z, radial_dist)
+    dict[int, float],              # in-direction median syn distance to target soma
+    dict[int, float],              # out-direction median syn distance to target soma
+    dict[int, float],              # in-direction median syn depth (oriented)
+    dict[int, float],              # out-direction median syn depth (oriented)
 ]:
     """Compute the spatial column families for a connectivity bundle.
 
@@ -295,6 +447,8 @@ def attach_spatial_features(
     # streamline (when present) makes radial distance follow local column
     # curvature; without it we fall back to a flat depth-strip.
     intrinsic: dict[int, dict[str, float]] = {}
+    syn_depth_in: dict[int, float] = {}
+    syn_depth_out: dict[int, float] = {}
     if transform is not None:
         intrinsic = compute_partner_spatial(
             transform,
@@ -302,5 +456,22 @@ def attach_spatial_features(
             root_soma_position_nm=root_soma_position_nm,
             partner_soma_positions=partner_soma_positions,
         )
+        # Per-direction synapse-depth median. Only the synapse positions
+        # are needed (no partner-soma dependency), so this populates for
+        # every partner with synapses regardless of `num_soma`.
+        if syn_df_in is not None:
+            syn_depth_in = compute_median_syn_depth(
+                syn_df_in,
+                transform=transform,
+                partner_root_id_column="pre_pt_root_id",
+                syn_position_prefix=syn_position_prefix,
+            )
+        if syn_df_out is not None:
+            syn_depth_out = compute_median_syn_depth(
+                syn_df_out,
+                transform=transform,
+                partner_root_id_column="post_pt_root_id",
+                syn_position_prefix=syn_position_prefix,
+            )
 
-    return intrinsic, median_in, median_out
+    return intrinsic, median_in, median_out, syn_depth_in, syn_depth_out

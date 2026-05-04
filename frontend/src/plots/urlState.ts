@@ -29,12 +29,23 @@ export interface PlotBindings {
   y?: string | null;
   hue?: string | null;
   size?: string | null;
+  /** Numeric column to sum on bar plots. Replaces the implicit row-count so
+   *  `x=cell_type, weight=n_syn_in` shows synapses-per-cell-type instead of
+   *  partners-per-cell-type. Silently ignored on scatter / histogram. */
+  weight?: string | null;
   /** Per-axis pre/post scope. Filters the unified frame: `pre` keeps rows
    *  where `n_syn_in > 0`, `post` keeps rows where `n_syn_out > 0`, `both`
    *  is the no-op default. Combine x_scope=post + y_scope=pre to isolate
    *  reciprocal partners. */
   x_scope?: AxisScope | null;
   y_scope?: AxisScope | null;
+  /** When at least one bound axis is depth-shaped, draw the target neuron's
+   *  own soma depth as a reference glyph (dashed line on one axis, open
+   *  circle on the diagonal when both axes are depth). Default ON when
+   *  omitted; only set to `false` to suppress the marker. The toggle is
+   *  hidden in the UI when no bound axis is depth-shaped, but the param is
+   *  still respected on the backend if present. */
+  show_cell_depth?: boolean | null;
 }
 
 const URL_KEY_PREFIX = "viz_";
@@ -53,7 +64,7 @@ export function parseVizParam(raw: string | null): PlotBindings {
     const obj = JSON.parse(raw);
     if (obj && typeof obj === "object" && !Array.isArray(obj)) {
       const out: PlotBindings = {};
-      for (const k of ["x", "y", "hue", "size"] as const) {
+      for (const k of ["x", "y", "hue", "size", "weight"] as const) {
         const v = (obj as Record<string, unknown>)[k];
         if (typeof v === "string" && v.length > 0) out[k] = v;
       }
@@ -61,6 +72,10 @@ export function parseVizParam(raw: string | null): PlotBindings {
         const v = (obj as Record<string, unknown>)[k];
         if (v === "pre" || v === "post" || v === "both") out[k] = v;
       }
+      // `show_cell_depth` only persists when explicitly false — the default
+      // is ON, so omitting the key keeps the URL tight in the common case.
+      const scd = (obj as Record<string, unknown>).show_cell_depth;
+      if (scd === false) out.show_cell_depth = false;
       return out;
     }
   } catch {
@@ -71,8 +86,8 @@ export function parseVizParam(raw: string | null): PlotBindings {
 
 /** Encode bindings into the URL viz-param string, dropping empty / default keys. */
 export function encodeVizParam(bindings: PlotBindings): string {
-  const out: Record<string, string> = {};
-  for (const k of ["x", "y", "hue", "size"] as const) {
+  const out: Record<string, string | boolean> = {};
+  for (const k of ["x", "y", "hue", "size", "weight"] as const) {
     const v = bindings[k];
     if (typeof v === "string" && v.length > 0) out[k] = v;
   }
@@ -80,6 +95,9 @@ export function encodeVizParam(bindings: PlotBindings): string {
     const v = bindings[k];
     if (v && v !== "both") out[k] = v;  // default "both" is implicit
   }
+  // Only emit when explicitly off — default is ON, so the URL stays tight
+  // in the common case. Matches `parseVizParam`'s asymmetric handling.
+  if (bindings.show_cell_depth === false) out.show_cell_depth = false;
   return JSON.stringify(out);
 }
 
@@ -99,6 +117,45 @@ export function encodePlotsList(ids: string[]): string {
 export function newPlotId(): string {
   return `dyn-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+
+// --- per-panel filter override -----------------------------------------------
+
+/**
+ * `?unfilter=<id1>,<id2>` lists panels that opt OUT of the global
+ * `?cells=` cell filter. The cell filter is otherwise applied to every
+ * plot panel uniformly. The override is per-plot and per-session;
+ * shareable via the URL like everything else.
+ *
+ * Why a single comma-separated key rather than a flag per panel: keeps
+ * the URL surface tight (one extra key regardless of how many panels
+ * the user toggles), and parses the same way as `?plots=`.
+ */
+const UNFILTER_KEY = "unfilter";
+
+export function parseUnfilterList(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+export function encodeUnfilterList(ids: string[]): string {
+  return ids.join(",");
+}
+
+export function isPanelUnfiltered(params: URLSearchParams, panelId: string): boolean {
+  return parseUnfilterList(params.get(UNFILTER_KEY)).includes(panelId);
+}
+
+/** Returns the toggled list — id removed if present, appended if not.
+ *  Caller writes the result back to `?unfilter=` (or deletes the key
+ *  when the list becomes empty). */
+export function toggleUnfilter(params: URLSearchParams, panelId: string): string[] {
+  const current = parseUnfilterList(params.get(UNFILTER_KEY));
+  if (current.includes(panelId)) return current.filter((id) => id !== panelId);
+  return [...current, panelId];
+}
+
+export const UNFILTER_PARAM_KEY = UNFILTER_KEY;
 
 
 // --- selection (brushing) URL state -----------------------------------------

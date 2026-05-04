@@ -17,6 +17,10 @@ export interface DatastackInfo {
   live_mode: boolean;
 }
 
+export interface DatastacksListResponse {
+  datastacks: string[];
+}
+
 export interface CellIdLookupResponse {
   // Either or both keys are populated; entries map to null on no match.
   cell_to_root: Record<string, string | null>;
@@ -33,9 +37,49 @@ export interface VersionsResponse {
   versions: VersionMetadata[];
 }
 
+export interface TableListItem {
+  name: string;
+  kind: "table" | "view";
+  /** Free-text description from CAVE table metadata. Long; the SPA truncates
+   *  with a "show more" toggle. Null when the metadata endpoint had nothing
+   *  for this table — happens for views (no batch view-metadata endpoint),
+   *  or when the upstream metadata fetch failed. */
+  description?: string | null;
+  /** Annotation schema, e.g. "synapse", "cell_type_local", "cell_type_reference",
+   *  "bound_tag". Useful as a chip — the user can scan for the kind of table
+   *  they're after without reading every name. */
+  schema_type?: string | null;
+  /** When set, this is a reference table that points its `target_id` at rows
+   *  in `reference_table`. Surfaced as a small "→ <table>" badge in the UI. */
+  reference_table?: string | null;
+  /** Voxel resolution in nm/voxel for this table's points. Mostly informative;
+   *  shown compactly as "4×4×40 nm" in the card detail row. */
+  voxel_resolution?: [number, number, number] | null;
+  /** Row count on the materialized version we queried metadata against.
+   *  Null when CAVE didn't populate `valid_row_count` for this table. */
+  row_count?: number | null;
+}
+
 export interface TablesResponse {
-  tables: { name: string; kind: "table" | "view" }[];
+  tables: TableListItem[];
+  /** Mirrors the requested mode: `null` for live, integer for a specific
+   *  materialization. The SPA's "tables (live)" / "v<N>" label keys off this. */
   mat_version: number | null;
+  /** The version actually used to fetch the names + metadata. In live mode
+   *  this resolves to the latest valid materialized version (CAVE doesn't
+   *  expose a stable live table set). Lets the SPA disclose "live, showing
+   *  v<N>" when it wants to without having to re-run the version lookup. */
+  effective_mat_version: number | null;
+}
+
+/** Full distinct-string-values dict for a table, returned by the
+ *  `/datastacks/<ds>/tables/<table>/values` endpoint. Maps each string-typed
+ *  column to its complete universe of values across the entire table —
+ *  not just the loaded slice — so category filter dropdowns surface every
+ *  selectable choice even when the table is too large to load in full. */
+export interface TableUniqueValuesResponse {
+  table: string;
+  values: Record<string, string[]>;
 }
 
 export interface TableRowsResponse {
@@ -46,6 +90,10 @@ export interface TableRowsResponse {
   limit: number;
   filters: Record<string, unknown>;
   row_count: number;
+  /** True when the response was capped at `limit` and matching rows beyond
+   *  the cap may exist. The SPA flips into "server mode" filter dispatch
+   *  on this signal and shows a partial-results disclosure. */
+  limit_hit: boolean;
   columns: string[];
   rows: Record<string, unknown>[];
 }
@@ -102,6 +150,12 @@ export interface ConnectivityBundle {
   cell_type_table: string | null;
   partners_in?: PartnerRecord[];
   partners_out?: PartnerRecord[];
+  /** The queried cell itself, shaped as a single partner-style record so
+   *  the SPA's "Cell" tab can reuse the same column-rendering machinery
+   *  as the partner tabs. Holds intrinsic + cell-type + decoration +
+   *  spatial annotations; synapse-group fields don't apply (per-edge
+   *  stats are per-partner by construction). */
+  root_record?: PartnerRecord;
   summary?: ConnectivitySummary;
   synapse_columns_meta: {
     aggregation_rules: { name: string; column: string; agg: string }[];
@@ -113,6 +167,25 @@ export interface ConnectivityBundle {
     pending_root_ids: string[];
     poll_url: string;
   } | null;
+  /** Per-cell synapse-depth distribution. Populated only when the
+   *  datastack has a `spatial.transform` configured. The summary panel
+   *  in the analytics rail consumes this directly — `bin_edges` has
+   *  N+1 entries; `counts_in` and `counts_out` are length-N parallel
+   *  arrays of synapse counts in the oriented frame.
+   *
+   *  `depth_range` / `layer_boundaries` / `layer_names` echo the
+   *  datastack-level spatial config so the client-side renderer can
+   *  draw layer guides without a second fetch. All three are null when
+   *  the datastack hasn't configured them. */
+  synapse_depth_profile?: {
+    bin_edges: number[];
+    counts_in: number[];
+    counts_out: number[];
+    depth_axis_name: string;
+    depth_range: [number, number] | null;
+    layer_boundaries: number[] | null;
+    layer_names: string[] | null;
+  };
 }
 
 export interface LinkResponse {
@@ -125,4 +198,11 @@ export interface LinkResponse {
 // it server-side via go.Figure.to_json().
 export interface PlotResponse {
   figure: { data: unknown[]; layout: Record<string, unknown> };
+  meta?: {
+    /** Rows after cell-filter mask (or before, if no filter is active). */
+    matched_count: number;
+    /** Rows before cell-filter mask. Equal to matched_count when no filter. */
+    pre_filter_count: number;
+    filtered: boolean;
+  };
 }

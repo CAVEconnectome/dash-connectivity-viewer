@@ -3,9 +3,14 @@ from flask import Blueprint, current_app, jsonify, request
 from ..auth import auth_required, current_token, is_dev_bypass
 from ..cave import request_client
 from ..errors import ApiError
-from ..services.datastack_config import check_live_allowed, load_datastack_config
+from ..services.datastack_config import (
+    aligned_volume_config_for,
+    check_live_allowed,
+    load_datastack_config,
+    resolve_synapse_config,
+)
 from ..services.neuron import NeuronQuery
-from ..services.plots import load_plot_specs, resolve_plot
+from ..services.plots import _parse_cells_param, load_plot_specs, resolve_plot
 
 bp = Blueprint("plots", __name__, url_prefix="/datastacks")
 
@@ -24,7 +29,22 @@ def make_plot(ds: str, spec_name: str):
     # takes precedence over the legacy single `column` override; the resolver
     # auto-picks chart kind for `dynamic` specs based on which axes are bound.
     bindings = body.get("bindings") or None
+    # `show_cell_depth` rides on the bindings payload (lives in the panel's
+    # ?viz_<id>= URL state on the SPA). Default True so the marker shows up
+    # without the user opting in. Accept it loosely so a malformed value
+    # silently degrades to the default rather than 422-ing the whole plot.
+    show_cell_depth = True
+    if isinstance(bindings, dict) and "show_cell_depth" in bindings:
+        show_cell_depth = bool(bindings.get("show_cell_depth"))
     mat_version = request.args.get("mat_version") or None
+    # Global cell filter — `?cells=<table>.<col>:<op>:<val>[,...]`. Applied as
+    # a row mask after decoration columns are merged. Tables referenced by a
+    # predicate are auto-added to decoration_tables so the user doesn't have
+    # to also "show" them.
+    try:
+        cell_filters = _parse_cells_param(request.args.get("cells"))
+    except ValueError as exc:
+        raise ApiError(422, "cells_invalid", str(exc)) from exc
 
     try:
         check_live_allowed(ds, mat_version)
@@ -57,14 +77,18 @@ def make_plot(ds: str, spec_name: str):
         raise ApiError(401, "no_auth_token", str(exc)) from exc
 
     cfg = load_datastack_config(ds)
+    # Spatial + synapse config from the aligned_volume; see /connectivity for
+    # the cross-datastack-sharing rationale.
+    av_cfg = aligned_volume_config_for(ds, client)
+    syn_cfg = resolve_synapse_config(av_cfg, cfg)
     nq = NeuronQuery(
         client,
         root_id=int(root_id),
         datastack=ds,
         mat_version=mat_version,
-        synapse_aggregation_rules=cfg.aggregation_rules_for_neuron_query(),
-        synapse_columns=cfg.merged_synapse_columns(),
-        synapse_position_prefix=cfg.synapse_position_prefix,
+        synapse_aggregation_rules=syn_cfg.aggregation_rules_for_neuron_query(),
+        synapse_columns=syn_cfg.merged_columns(),
+        synapse_position_prefix=syn_cfg.position_prefix,
     )
     try:
         result = resolve_plot(
@@ -74,7 +98,12 @@ def make_plot(ds: str, spec_name: str):
             column_override=column_override,
             bindings=bindings,
             client_factory=client_factory,
-            spatial_transform_name=cfg.spatial.transform,
+            spatial_transform_name=av_cfg.spatial.transform,
+            depth_range=av_cfg.spatial.depth_range,
+            layer_boundaries=av_cfg.spatial.layer_boundaries,
+            layer_names=av_cfg.spatial.layer_names,
+            cell_filters=cell_filters,
+            show_cell_depth=show_cell_depth,
         )
     except ValueError as exc:
         raise ApiError(422, "plot_invalid_request", str(exc)) from exc

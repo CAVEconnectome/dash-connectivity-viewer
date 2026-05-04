@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { isSelKey } from "../plots/urlState";
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -15,7 +16,7 @@ import {
 } from "@tanstack/react-table";
 import { useMakeLinkMutation } from "../api/queries";
 import type { ColumnGroup, PartnerRecord } from "../api/types";
-import { CopyableId, FilterInput, formatCell, inferKind, type ColumnKind } from "./tableColumns";
+import { CopyableId, FilterInput, displayName, formatCell, inferKind, type ColumnKind } from "./tableColumns";
 
 interface Props {
   ds: string;
@@ -89,7 +90,7 @@ function truncateLabel(s: string, max: number): string {
 }
 
 export function PartnersTable({ ds, rootId, matVersion, direction, rows, columnGroups, decorationTables, defaultHiddenColumns, externalSelection, onClearSelection }: Props) {
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const makeLink = useMakeLinkMutation();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -221,7 +222,7 @@ export function PartnersTable({ ds, rootId, matVersion, direction, rows, columnG
       const def: ColumnDef<PartnerRecord> = {
         id: c,
         accessorFn: (row) => row[c],
-        header: display === "num_soma" ? "soma" : display,
+        header: displayName(display),
         cell:
           c === "num_soma"
             ? (ctx) => <SomaIndicator count={ctx.getValue() as number | undefined | null} />
@@ -274,20 +275,43 @@ export function PartnersTable({ ds, rootId, matVersion, direction, rows, columnG
     [ds, matVersion, makeLink, rootId],
   );
 
-  const goToPartner = useCallback(
+  // URL builder for the per-row "view this partner" Link. Carries the active
+  // view config forward — analytics-rail layout (`?plots`, `?viz_*`), the
+  // global cell filter (`?cells`), the decoration set (`?dec`), and the
+  // datastack/version (`?ds`, `?mv`) — so navigating to a partner doesn't
+  // wipe the user's setup. Per-plot brush selections (`?sel_*`) are stripped
+  // because they reference the previous root's partner ids and would
+  // nonsense-filter the new neuron's tables. `?from` powers the breadcrumb.
+  //
+  // Returns a `to=` value (not an imperative `navigate()` call) so the
+  // `<Link>` renders a real `<a href>` — that lets cmd-click / middle-click
+  // open the partner in a new tab natively without any extra event plumbing.
+  const partnerHref = useCallback(
     (partnerRoot: string) => {
-      const params = new URLSearchParams({ ds, root: partnerRoot });
-      if (matVersion !== "live") params.set("mv", String(matVersion));
-      // Carry the active decoration set forward so the partner's view fetches
-      // with the same annotation context the user is currently looking at.
-      if (decorationTables && decorationTables.length > 0) {
-        params.set("dec", decorationTables.join(","));
+      const next = new URLSearchParams(searchParams);
+      for (const key of [...next.keys()]) {
+        if (isSelKey(key)) next.delete(key);
       }
-      // `from=` powers the breadcrumb back-link in Workspace.
-      params.set("from", `neuron:${rootId}`);
-      navigate(`/neuron?${params}`);
+      next.set("root", partnerRoot);
+      next.set("from", `neuron:${rootId}`);
+      // Defensive: the table can render with stale `searchParams` if the user
+      // changed datastack/mv via another control mid-render. Reassert these
+      // from props so the partner link is always self-consistent.
+      next.set("ds", ds);
+      // Preserve the explicit "live" choice across cross-nav. Deleting
+      // `?mv=` would let the destination's auto-default-to-latest effect
+      // overwrite the user's preference; setting the literal "live" keeps
+      // it intact (and any view that disallows live mode surfaces a clean
+      // error rather than silently switching versions).
+      next.set("mv", matVersion === "live" ? "live" : String(matVersion));
+      if (decorationTables && decorationTables.length > 0) {
+        next.set("dec", decorationTables.join(","));
+      } else {
+        next.delete("dec");
+      }
+      return `/neuron?${next.toString()}`;
     },
-    [ds, decorationTables, matVersion, navigate, rootId],
+    [searchParams, rootId, ds, matVersion, decorationTables],
   );
 
   // Direction → link-template resolution lifted up here so the per-row NGL
@@ -341,12 +365,15 @@ export function PartnersTable({ ds, rootId, matVersion, direction, rows, columnG
             id: "__action_view__",
             header: "",
             cell: (ctx) => (
-              <button
+              // `<Link>` (not a button) so the browser sees a real `<a href>`
+              // — cmd-click / middle-click open the partner in a new tab via
+              // the platform's native handling without any extra wiring.
+              <Link
                 className="row-action"
-                onClick={() => goToPartner(ctx.row.id)}
-                title="View this partner"
+                to={partnerHref(ctx.row.id)}
+                title="View this partner (⌘-click for a new tab)"
                 aria-label="View this partner"
-              >→</button>
+              >→</Link>
             ),
             accessorFn: () => null,
             enableSorting: false,
@@ -371,20 +398,38 @@ export function PartnersTable({ ds, rootId, matVersion, direction, rows, columnG
           },
         ];
       }
-      const headerText =
+      // Two header forms by mode:
+      //   - Intrinsic group has no visible label.
+      //   - Collapsed group: rotated 5-char ellipsis (existing behavior).
+      //   - Expanded group: full name wrapped in `.group-label` so CSS
+      //     can cap it at a reasonable width with ellipsis. Long table
+      //     names like `proofreading_status_and_strategy` would otherwise
+      //     widen their columns far past what their data needs; the cap
+      //     + tooltip preserves discoverability without the whitespace.
+      // TanStack accepts strings or render functions for `header`. The
+      // expanded case wants a JSX wrapper for CSS truncation, so we go
+      // through a function. Intrinsic / collapsed cases stay as plain
+      // strings — same as before.
+      const collapsedLabel = collapsed ? truncateLabel(g.name, COLLAPSED_LABEL_MAX_CHARS) : null;
+      // The wrapping `<span>` deliberately omits `title` — the parent
+      // `<th>` already sets "<name> — click to collapse/expand" via the
+      // header-row mapper below, and the browser picks the *nearest*
+      // ancestor's title. A span title would shadow the click hint and
+      // give the user a less informative tooltip.
+      const headerRender =
         g.kind === "intrinsic"
           ? ""
           : collapsed
-            ? truncateLabel(g.name, COLLAPSED_LABEL_MAX_CHARS)
-            : g.name;
+            ? collapsedLabel ?? ""
+            : () => <span className="group-label">{g.name}</span>;
       return {
         id: `group:${g.name}`,
-        header: headerText,
+        header: headerRender,
         meta: { kind: g.kind, groupName: g.name, collapsed },
         columns: leafs,
       };
     });
-  }, [columnGroups, leafColumnDefs, collapsedGroups, goToPartner, open, linkTemplate]);
+  }, [columnGroups, leafColumnDefs, collapsedGroups, partnerHref, open, linkTemplate]);
 
   // External selection (from a plot brush) ANDs with column filters via
   // TanStack's globalFilter. Empty / null disables; otherwise rows whose

@@ -33,3 +33,8 @@ class _LazyTTLCache:
 
 query_cache = _LazyTTLCache("CACHE_QUERY_TTL_SECONDS", maxsize=4096)
 table_meta_cache = _LazyTTLCache("CACHE_TABLE_META_TTL_SECONDS", maxsize=512)
+# Universe of distinct string values per (ds, mat_version, table). One entry
+# holds the entire `get_unique_string_values()` dict for a table; per-column
+# slicing happens at the call site. Keyed by (ds, mat_version, table) so a
+# single CAVE call answers every column on the table for free.
+unique_values_cache = _LazyTTLCache("CACHE_UNIQUE_VALUES_TTL_SECONDS", maxsize=512)

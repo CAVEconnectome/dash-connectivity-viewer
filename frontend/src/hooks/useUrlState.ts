@@ -29,6 +29,28 @@ export function useUrlParam(
   return [value, setValue];
 }
 
+/**
+ * Resolve the `?mv=` URL parameter to a materialization-version value the
+ * data-fetching hooks understand: an integer for a specific materialization,
+ * or the string `"live"` for live mode.
+ *
+ * The picker writes `?mv=live` as an explicit URL value (rather than clearing
+ * the param) so the auto-default-to-latest effect doesn't immediately
+ * overwrite the user's choice — `mv` being null in the URL means "no
+ * preference, default to latest", whereas `mv === "live"` means "the user
+ * picked live."
+ *
+ * Null URL parameter: also resolves to `"live"`. The Workspace effect then
+ * picks the latest valid version on first mount and writes it back to the
+ * URL, so this fallback is only material on the first frame.
+ */
+export function parseMatVersion(mv: string | null): number | "live" {
+  if (!mv || mv === "live") return "live";
+  const n = Number(mv);
+  return Number.isFinite(n) ? n : "live";
+}
+
+
 // Batch setter for multiple URL params in a single navigation. Necessary because
 // react-router v6's setSearchParams reads the current params at *call* time, so
 // two back-to-back calls (e.g. set ds, then clear mv) race — the second call
