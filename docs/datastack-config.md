@@ -494,6 +494,69 @@ bindings:
   hue: "aibs_metamodel_celltypes_v661.cell_type" # decoration: qualified
 ```
 
+#### Direction handling: input vs output
+
+There are two distinct mechanisms for restricting a plot to input
+partners (presynaptic to the focal cell) or output partners
+(postsynaptic to it), depending on whether the column carries
+direction in its name.
+
+**Direction-encoded columns** carry the direction in the column name
+itself — pick the column you want, no `*_scope` needed. These are the
+bundle columns suffixed `_in` or `_out`:
+
+| Pair | Meaning |
+| --- | --- |
+| `n_syn_in` / `n_syn_out` | synapse counts |
+| `net_size_in` / `net_size_out` | summed synapse size |
+| `mean_size_in` / `mean_size_out` | mean synapse size |
+| `median_syn_depth_in` / `median_syn_depth_out` | median synapse-position depth |
+
+Plus any custom aggregation rule from the synapse config, which gets
+the same `_in` / `_out` suffix treatment automatically.
+
+**Direction-agnostic columns** are properties of the partner itself —
+the value doesn't change with synapse direction. To restrict the plot
+to inputs or outputs, set `x_scope` (or `y_scope`) to `pre` or `post`:
+
+| `x_scope` | Keeps rows where | Means |
+| --- | --- | --- |
+| `pre` | `n_syn_in > 0` | partner is presynaptic to the focal cell — **input partners** |
+| `post` | `n_syn_out > 0` | partner is postsynaptic to the focal cell — **output partners** |
+| `both` | always | every partner regardless of direction (default; can omit) |
+
+Direction-agnostic columns include the partner's spatial features
+(`soma_depth`, `soma_x`, `soma_z`, `radial_dist_root_soma`,
+`median_dist_to_target_soma`) and every decoration-table column
+(`cell_type`, etc.).
+
+```yaml
+# Histogram: soma depths of partners we receive INPUT from
+bindings:
+  x: soma_depth
+  x_scope: pre
+
+# Histogram: soma depths of partners we send OUTPUT to
+bindings:
+  x: soma_depth
+  x_scope: post
+
+# Reciprocal-partners-only scatter — partner soma depth on x, partner's
+# median output-synapse depth on y, restricted to partners with edges in
+# both directions:
+bindings:
+  x: soma_depth                  # bundle, direction-agnostic → use scope
+  y: median_syn_depth_out        # bundle, direction-encoded   → no scope
+  x_scope: post                  # keep partners we project to
+  y_scope: pre                   # keep partners we receive from
+  # → intersection of post-on-x AND pre-on-y is the reciprocal set
+```
+
+The two-axis scope intersection is what makes the *Both* tab useful for
+reciprocal-pair analysis: combining `x_scope: post` with `y_scope: pre`
+filters to partners that appear on both sides of the synaptic exchange
+with the focal cell.
+
 `summary_kind` accepts the values declared in
 `frontend/src/plots/presets.ts::SummaryKind`. Currently the only summary
 kind is `synapse_depth_profile`.
