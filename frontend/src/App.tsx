@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { LandingPage } from "./components/LandingPage";
 import { NeuronView } from "./components/NeuronView";
+import { NotFound } from "./components/NotFound";
 import { TableRowsView } from "./components/TableRowsView";
 import { TableView } from "./components/TableView";
 import { Workspace } from "./components/Workspace";
@@ -25,10 +27,16 @@ export function App() {
       >
         <Routes>
           <Route path="/" element={<Workspace />}>
-            <Route index element={<Navigate to="/neuron" replace />} />
+            <Route index element={<LandingPage />} />
             <Route path="neuron" element={<NeuronView />} />
             <Route path="tables" element={<TableView />} />
             <Route path="tables/:name" element={<TableRowsView />} />
+            {/* Catch-all inside the Workspace shell so the sidebar +
+                breadcrumb stay rendered around the 404 message —
+                makes recovery (typing a new id, going to tables) feel
+                continuous rather than dropping the user onto a bare
+                error page. */}
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </BrowserRouter>

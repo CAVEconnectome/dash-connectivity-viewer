@@ -167,6 +167,20 @@ export interface ConnectivityBundle {
     pending_root_ids: string[];
     poll_url: string;
   } | null;
+  /** Set when the backend translated a stale root_id via
+   *  `chunkedgraph.suggest_latest_root` because synapse queries on the
+   *  original root returned empty. Both directions empty is a strong
+   *  signal that proofreading edited the cell since the URL was minted;
+   *  the backend silently retries with the suggested current root and
+   *  surfaces the swap so the SPA can update `?root=` and notify the
+   *  user. `original` and `current` are stringified int64 root_ids
+   *  (same convention as `root_id` itself). `reason` is a short
+   *  machine-readable tag for logs / future-feature dispatch. */
+  root_id_updated?: {
+    original: string;
+    current: string;
+    reason: string;
+  };
   /** Per-cell synapse-depth distribution. Populated only when the
    *  datastack has a `spatial.transform` configured. The summary panel
    *  in the analytics rail consumes this directly — `bin_edges` has
@@ -191,6 +205,66 @@ export interface ConnectivityBundle {
 export interface LinkResponse {
   url: string;
   shortened: boolean;
+}
+
+/**
+ * Operator-curated tour entries (examples + recipes) loaded by the landing
+ * page and the sidebar Recipes widget. Mirrors the YAML schema in
+ * `services/datastack_config.py` (TourBase / Example / Recipe).
+ *
+ * Bindings are JSON-stringified into the SPA's `?viz_<id>=` URL key
+ * verbatim; field names match the backend wire contract.
+ */
+export interface TourPlotBindings {
+  x?: string | null;
+  y?: string | null;
+  hue?: string | null;
+  size?: string | null;
+  weight?: string | null;
+  x_scope?: string | null;
+  y_scope?: string | null;
+  show_cell_depth?: boolean | null;
+}
+
+export interface TourPlot {
+  /** Author-facing label (for diff readability). The SPA generates fresh
+   *  panel ids on apply so opening the same tour twice doesn't collide. */
+  id?: string | null;
+  /** Summary panel kind (e.g. "synapse_depth_profile"). Mutually exclusive
+   *  with `bindings`; if both are set the SPA prefers `summary_kind`. */
+  summary_kind?: string | null;
+  bindings?: TourPlotBindings | null;
+  /** When true, this panel opts out of the tour's `cells:` filter. The SPA
+   *  collects matching panel ids into the `?unfilter=` URL key at apply
+   *  time. Defaults to false. */
+  unfiltered?: boolean | null;
+}
+
+export interface TourBase {
+  id: string;
+  title: string;
+  description?: string | null;
+  decoration_tables: string[];
+  plots: TourPlot[];
+  /** Raw `?cells=` URL value. Shape: `<table>.<col>:<op>:<val>[,...]`. */
+  cells?: string | null;
+  hide: string[];
+  show: string[];
+  coll: string[];
+}
+
+export interface Example extends TourBase {
+  mat_version: number;
+  /** Stringified int64 root id. */
+  root: string;
+}
+
+export type Recipe = TourBase;
+
+export interface ToursResponse {
+  datastack: string;
+  examples: Example[];
+  recipes: Recipe[];
 }
 
 // Plotly's figure JSON. We don't try to type the full Plotly trace shape —

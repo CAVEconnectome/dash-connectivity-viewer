@@ -25,13 +25,11 @@ else:
 
 
 def current_token() -> str | None:
-    token = flask.g.get("auth_token")
-    if token:
-        return token
-    header = flask.request.headers.get("Authorization", "")
-    if header.lower().startswith("bearer "):
-        return header.split(None, 1)[1].strip() or None
-    return None
+    # `flask.g.auth_token` is populated by middle-auth-client's
+    # `@auth_required` decorator after it validates the cookie. With the
+    # SPA's paste-token escape hatch removed, the cookie is the only auth
+    # path — so this is the only place a token surfaces.
+    return flask.g.get("auth_token")
 
 
 def is_dev_bypass() -> bool:

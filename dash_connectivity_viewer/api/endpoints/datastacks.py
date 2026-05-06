@@ -240,6 +240,29 @@ def tables(ds: str):
     return jsonify(payload)
 
 
+@bp.route("/<ds>/tours")
+@auth_required
+def tours(ds: str):
+    """Operator-curated examples + recipes for the landing page.
+
+    Pure passthrough of `examples` / `recipes` from the per-datastack YAML.
+    No URL minting on the server — the SPA owns URL construction so the
+    URL-state conventions (`?ds`, `?mv`, `?root`, `?dec`, `?plots`,
+    `?viz_<id>`, `?cells`, `?hide`, `?show`, `?coll`) live in one place.
+
+    Auth-gated so the response inherits the same access policy as the
+    rest of `/datastacks/<ds>/*`. Cheap on the wire and the data is
+    YAML-static, so no server-side cache layer needed — Pydantic dump
+    is fast enough that a per-request serialize is fine.
+    """
+    cfg = load_datastack_config(ds)
+    return jsonify({
+        "datastack": ds,
+        "examples": [e.model_dump(mode="json") for e in cfg.examples],
+        "recipes": [r.model_dump(mode="json") for r in cfg.recipes],
+    })
+
+
 @bp.route("/<ds>/tables/<table>/values")
 @auth_required
 def table_values(ds: str, table: str):

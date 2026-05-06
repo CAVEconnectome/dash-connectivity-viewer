@@ -1,6 +1,6 @@
 # Internal working datastack on the minnie65_phase3 aligned volume. Inherits
 # spatial transform / depth axis / layer boundaries AND synapse-table
-# conventions from `api/aligned_volumes/minnie65_phase3.yaml` — both kinds
+# conventions from `config/aligned_volumes/minnie65_phase3.yaml` — both kinds
 # of config are resolved per request from `client.info.get_aligned_volume()`.
 #
 # Unlike the release datastack, live mode is meaningful here — proofreading

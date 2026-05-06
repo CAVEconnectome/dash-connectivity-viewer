@@ -222,6 +222,14 @@ def compute_median_syn_dist(
     `syn_position_prefix` is typically `ctr_pt`. Distances come back in the
     same length unit as the input positions (nm when called from the
     connectivity service); the bundle assembler converts nm → µm.
+
+    Implementation: one vectorized norm over all rows + a pandas
+    groupby-median. An earlier version iterated `groupby(...)` in Python
+    and called `np.linalg.norm` per partner — fine on small cells, but at
+    40K synapses / 500 partners the Python boundary dominated. The
+    constant-target case (inputs) and the per-partner-target case
+    (outputs) share this single code path; the latter just builds a
+    per-row target array via a one-time partner→soma map.
     """
     if syn_df.empty:
         return {}
@@ -229,17 +237,36 @@ def compute_median_syn_dist(
     if any(c not in syn_df.columns for c in pos_cols):
         return {}
 
-    out: dict[int, float] = {}
-    for partner_id, group in syn_df.groupby(partner_root_id_column, sort=False):
-        rid = int(partner_id)
-        target = target_soma_for(rid)
-        if target is None:
-            continue
-        pts = group[pos_cols].to_numpy(dtype=float)
-        diffs = pts - np.asarray(target, dtype=float)
-        dists = np.linalg.norm(diffs, axis=1)
-        out[rid] = float(np.median(dists))
-    return out
+    partner_col_int = syn_df[partner_root_id_column].astype("int64")
+    # Build per-partner target lookup once. For inputs this is the same
+    # value for every partner (constant root soma); for outputs each
+    # partner gets its own soma. Partners with no usable target (None
+    # return) are dropped from the output entirely.
+    target_arrays: dict[int, np.ndarray] = {}
+    for p in partner_col_int.unique():
+        t = target_soma_for(int(p))
+        if t is not None:
+            target_arrays[int(p)] = np.asarray(t, dtype=float)
+    if not target_arrays:
+        return {}
+
+    valid_mask = partner_col_int.isin(target_arrays.keys()).to_numpy()
+    if not valid_mask.any():
+        return {}
+    sub_partner_col = partner_col_int.to_numpy()[valid_mask]
+    sub_pts = syn_df.loc[valid_mask, pos_cols].to_numpy(dtype=float)
+    # `np.stack` over the per-row partner→target map produces an Nx3
+    # target array aligned to sub_pts. The list-comp is the only Python
+    # loop that survives, and it's a single pass over N rows.
+    targets = np.stack([target_arrays[int(p)] for p in sub_partner_col])
+    dists = np.linalg.norm(sub_pts - targets, axis=1)
+
+    return (
+        pd.Series(dists, index=sub_partner_col)
+        .groupby(level=0, sort=False)
+        .median()
+        .to_dict()
+    )
 
 
 def compute_synapse_depth_profile(
@@ -352,6 +379,13 @@ def compute_median_syn_depth(
     `syn_df` (after the per-direction filter) are simply absent from the
     result; their cell renders null. Empty / missing-position-column input
     short-circuits to an empty dict so callers can compose cleanly.
+
+    Implementation: ONE `transform.apply()` over all synapse positions,
+    then a pandas groupby-median on the depth axis. Earlier per-partner
+    loop called `transform.apply()` once per group (~500 calls for a
+    40K-synapse cell with ~500 partners), with fixed setup overhead per
+    call dominating wall time. Vectorizing collapses the spatial step
+    from ~4s to a few hundred ms on the same cell.
     """
     if syn_df.empty or transform is None:
         return {}
@@ -359,13 +393,15 @@ def compute_median_syn_depth(
     if any(c not in syn_df.columns for c in pos_cols):
         return {}
 
-    out: dict[int, float] = {}
-    for partner_id, group in syn_df.groupby(partner_root_id_column, sort=False):
-        rid = int(partner_id)
-        pts = group[pos_cols].to_numpy(dtype=float)
-        transformed = _apply_transform(transform, pts)
-        out[rid] = float(np.median(transformed[:, _DEPTH_AXIS]))
-    return out
+    depths = _apply_transform(
+        transform, syn_df[pos_cols].to_numpy(dtype=float)
+    )[:, _DEPTH_AXIS]
+    return (
+        pd.Series(depths, index=syn_df[partner_root_id_column].astype("int64").to_numpy())
+        .groupby(level=0, sort=False)
+        .median()
+        .to_dict()
+    )
 
 
 def attach_spatial_features(
@@ -475,3 +511,71 @@ def attach_spatial_features(
             )
 
     return intrinsic, median_in, median_out, syn_depth_in, syn_depth_out
+
+
+def attach_spatial_features_cached(
+    *,
+    nq,
+    transform,
+    streamline,
+    decoration_lookup: dict[int, dict[str, Any]],
+    root_soma_position_nm: list[float] | None,
+    syn_position_prefix: str,
+):
+    """Cached wrapper around `attach_spatial_features`.
+
+    Cache key is `(datastack, mat_version, root_id, soma_table)` —
+    every input that influences the result. The full 5-tuple is cached
+    regardless of which directions the caller asks for; synapse dfs are
+    themselves cached so computing both sides is essentially free, and
+    a uniform cache shape lets the connectivity and plot endpoints
+    share entries.
+
+    Augmentation: the connectivity bundle includes the queried root in
+    `decoration_lookup` (so the SPA's "Cell" tab gets soma_depth /
+    soma_x / soma_z); the plot endpoint doesn't. To produce a cache
+    entry that's reusable from either path, we augment the lookup with
+    the root's `pt_position` here when it's missing — the cached
+    intrinsic dict then always contains the root's spatial features.
+
+    Saves ~1.2s per warm plot request on a 5K-synapse cell. Failures
+    are not cached — a transient CAVE error during the first compute
+    shouldn't poison the cache for the TTL window.
+    """
+    from ..caches import spatial_features_cache
+    from .timing import timer
+
+    key = (nq.datastack, nq.mat_version, nq.root_id, nq.soma_table)
+    cached = spatial_features_cache.get(key)
+    if cached is not None:
+        with timer("spatial_features_cache_hit"):
+            return cached
+
+    if (
+        root_soma_position_nm is not None
+        and int(nq.root_id) not in decoration_lookup
+    ):
+        decoration_lookup = {
+            **decoration_lookup,
+            int(nq.root_id): {"pt_position": root_soma_position_nm},
+        }
+
+    # Always pull both directions. `_synapse_df` is cached so the side
+    # the caller doesn't want costs ~zero, and including it in the
+    # cached result lets a future request that does want it skip the
+    # whole compute.
+    syn_df_in = nq._synapse_df("post")
+    syn_df_out = nq._synapse_df("pre")
+
+    with timer("attach_spatial_features"):
+        result = attach_spatial_features(
+            transform=transform,
+            streamline=streamline,
+            decoration_lookup=decoration_lookup,
+            root_soma_position_nm=root_soma_position_nm,
+            syn_df_in=syn_df_in,
+            syn_df_out=syn_df_out,
+            syn_position_prefix=syn_position_prefix,
+        )
+    spatial_features_cache[key] = result
+    return result

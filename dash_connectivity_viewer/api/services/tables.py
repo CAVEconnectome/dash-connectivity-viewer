@@ -152,4 +152,8 @@ class TableQuery:
             kwargs["desired_resolution"] = desired_resolution
         # Views always use .query(); tables dispatch on live mode.
         live = (not self.is_view) and is_live(self.mat_version)
-        return run_query(qf, live=live, **kwargs)
+        # Pinned consistency timestamp from the request (live mode only).
+        # Outside a request context `current_timestamp` returns None and
+        # `run_query` falls back to `now()`.
+        from .request_state import current_timestamp
+        return run_query(qf, live=live, timestamp=current_timestamp(), **kwargs)

@@ -1,23 +1,11 @@
 // Tiny fetch wrapper:
 //   - Sends `credentials: "include"` so the middle-auth cookie rides along.
-//   - Optionally attaches a localStorage Bearer token (paste-once API path).
-//   - Throws an ApiError-shaped Error so TanStack Query surfaces a useful message.
+//     The cookie is set by middle-auth-client during the initial SPA-shell
+//     load (see backend `_register_spa` in `api/__init__.py`); the SPA
+//     itself never handles the token directly.
+//   - Throws an ApiCallError so TanStack Query surfaces a useful message.
 
 import type { ApiError } from "./types";
-
-const TOKEN_STORAGE_KEY = "dcv:auth_token";
-
-export function setAuthToken(token: string | null): void {
-  if (token) {
-    localStorage.setItem(TOKEN_STORAGE_KEY, token);
-  } else {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-  }
-}
-
-export function getAuthToken(): string | null {
-  return localStorage.getItem(TOKEN_STORAGE_KEY);
-}
 
 export class ApiCallError extends Error {
   status: number;
@@ -38,8 +26,6 @@ interface RequestOptions {
 
 export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
-  const token = getAuthToken();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
   let url = path;
   if (opts.query) {
     const search = new URLSearchParams();

@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { isSelKey } from "../plots/urlState";
+import { useSetUrlParams } from "../hooks/useUrlState";
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -46,30 +47,71 @@ function bareColumnName(key: string): string {
   return i >= 0 ? key.slice(i + 1) : key;
 }
 
-// Column visibility persistence. Two global localStorage keys:
-//   dcv:hidden_cols — columns the user has explicitly unchecked.
-//   dcv:shown_cols  — columns the user has explicitly re-shown after they
-//                     started default-hidden. Only meaningful when the
-//                     calling view passes a `defaultHiddenColumns` list.
-// Column keys are namespaced (per decoration table) so a single hidden-list
-// applies sensibly across datastacks — e.g. hiding
-// `proofreading_status_and_strategy.valid_id` once means it stays hidden
-// anywhere that table appears.
-const HIDDEN_COLUMNS_STORAGE_KEY = "dcv:hidden_cols";
-const SHOWN_COLUMNS_STORAGE_KEY = "dcv:shown_cols";
-const COLLAPSED_GROUPS_STORAGE_KEY = "dcv:collapsed_groups";
+// Column visibility persistence — URL-state-first.
+//
+// Three URL params hold the user's column-visibility preferences:
+//   ?hide=col1,col2  — columns the user has explicitly unchecked.
+//   ?show=col1,col2  — columns the user has explicitly re-shown after they
+//                      started default-hidden. Only meaningful when the
+//                      calling view passes a `defaultHiddenColumns` list.
+//   ?coll=group1,…   — collapsed column groups in the table header.
+//
+// URL state was the right move (over localStorage) because:
+// 1. Recipes / Examples (operator-curated tour configurations) need to set
+//    the user's view atomically — `apply view → URL state updates`. With
+//    localStorage, applying a recipe would have to navigate to a URL AND
+//    write three localStorage keys, and the ordering matters.
+// 2. Sharing a Slack link reproduces the colleague's view exactly,
+//    including which columns they hid.
+// 3. The legacy localStorage approach put state on the BROWSER, which
+//    meant a single user with two tabs open at different neurons saw
+//    their hidden-list snap-sync between them — surprising behavior.
+//
+// Format: comma-separated column keys. Column keys can contain dots
+// (e.g. `proofreading_status_and_strategy.valid_id`); commas don't appear
+// in CAVE column names so they're a safe separator without escaping.
+const HIDE_URL_KEY = "hide";
+const SHOW_URL_KEY = "show";
+const COLLAPSED_URL_KEY = "coll";
 
-function loadColumnSet(key: string): string[] {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
+// Legacy localStorage keys — read once on first mount per session and
+// migrated into URL state if the URL is empty. Existing users get their
+// saved hidden-list carried forward without losing it; the legacy keys
+// are not written to anymore.
+const LEGACY_HIDDEN_LS_KEY = "dcv:hidden_cols";
+const LEGACY_SHOWN_LS_KEY = "dcv:shown_cols";
+const LEGACY_COLLAPSED_LS_KEY = "dcv:collapsed_groups";
+
+function parseColumnList(raw: string | null): Set<string> {
+  if (!raw) return new Set();
+  return new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
 }
 
-function saveColumnSet(key: string, cols: string[]): void {
-  localStorage.setItem(key, JSON.stringify(cols));
+function encodeColumnList(cols: Iterable<string>): string {
+  return [...cols].join(",");
+}
+
+// One-shot localStorage → URL migration. Returns the legacy values if
+// any existed; the caller decides whether to apply them (only on first
+// mount and only when URL params for the same keys are absent).
+function readLegacyLocalStorage(): {
+  hidden: string[];
+  shown: string[];
+  collapsed: string[];
+} {
+  const read = (key: string): string[] => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  };
+  return {
+    hidden: read(LEGACY_HIDDEN_LS_KEY),
+    shown: read(LEGACY_SHOWN_LS_KEY),
+    collapsed: read(LEGACY_COLLAPSED_LS_KEY),
+  };
 }
 
 function visibilityState(hidden: Iterable<string>): VisibilityState {
@@ -91,24 +133,94 @@ function truncateLabel(s: string, max: number): string {
 
 export function PartnersTable({ ds, rootId, matVersion, direction, rows, columnGroups, decorationTables, defaultHiddenColumns, externalSelection, onClearSelection }: Props) {
   const [searchParams] = useSearchParams();
+  const setUrlParams = useSetUrlParams();
   const makeLink = useMakeLinkMutation();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [hidden, setHidden] = useState<Set<string>>(() => new Set(loadColumnSet(HIDDEN_COLUMNS_STORAGE_KEY)));
-  const [shown, setShown] = useState<Set<string>>(() => new Set(loadColumnSet(SHOWN_COLUMNS_STORAGE_KEY)));
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    () => new Set(loadColumnSet(COLLAPSED_GROUPS_STORAGE_KEY)),
+
+  // Hidden / shown / collapsed are derived from URL params on every render
+  // — the URL is the source of truth for column visibility.
+  const hidden = useMemo(
+    () => parseColumnList(searchParams.get(HIDE_URL_KEY)),
+    [searchParams],
+  );
+  const shown = useMemo(
+    () => parseColumnList(searchParams.get(SHOW_URL_KEY)),
+    [searchParams],
+  );
+  const collapsedGroups = useMemo(
+    () => parseColumnList(searchParams.get(COLLAPSED_URL_KEY)),
+    [searchParams],
+  );
+
+  // One-shot legacy-localStorage migration. On first mount of a session,
+  // if the URL doesn't carry hidden/shown/collapsed params but the user
+  // has values stashed in the legacy localStorage keys, transfer them
+  // into the URL once so existing users don't lose their preferences.
+  // Subsequent mounts skip this — the `migratedRef` blocks re-runs even
+  // if the user's URL clears the params via tour application.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return;
+    migratedRef.current = true;
+    const legacy = readLegacyLocalStorage();
+    const updates: Record<string, string | null> = {};
+    if (legacy.hidden.length > 0 && !searchParams.get(HIDE_URL_KEY)) {
+      updates[HIDE_URL_KEY] = encodeColumnList(legacy.hidden);
+    }
+    if (legacy.shown.length > 0 && !searchParams.get(SHOW_URL_KEY)) {
+      updates[SHOW_URL_KEY] = encodeColumnList(legacy.shown);
+    }
+    if (legacy.collapsed.length > 0 && !searchParams.get(COLLAPSED_URL_KEY)) {
+      updates[COLLAPSED_URL_KEY] = encodeColumnList(legacy.collapsed);
+    }
+    if (Object.keys(updates).length > 0) {
+      setUrlParams(updates);
+    }
+    // Clear legacy keys regardless of whether URL params existed — once
+    // a session has migrated (or chosen not to), we don't want the
+    // legacy keys masquerading as the source of truth on a future
+    // session that's been operating purely on URL state.
+    try {
+      localStorage.removeItem(LEGACY_HIDDEN_LS_KEY);
+      localStorage.removeItem(LEGACY_SHOWN_LS_KEY);
+      localStorage.removeItem(LEGACY_COLLAPSED_LS_KEY);
+    } catch {
+      // localStorage may be unavailable (private browsing, denied
+      // permissions, etc.). Migration is best-effort.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // empty deps — one-shot
+
+  // Helpers that update a column-list URL param atomically. The setter
+  // is single-key here (rather than the batch helper) because each
+  // toggle action only changes one of hide/show/coll at a time —
+  // multi-key updates only happen during legacy migration above.
+  const setHiddenUrl = useCallback(
+    (next: Set<string>) => {
+      setUrlParams({ [HIDE_URL_KEY]: next.size > 0 ? encodeColumnList(next) : null });
+    },
+    [setUrlParams],
+  );
+  const setShownUrl = useCallback(
+    (next: Set<string>) => {
+      setUrlParams({ [SHOW_URL_KEY]: next.size > 0 ? encodeColumnList(next) : null });
+    },
+    [setUrlParams],
+  );
+  const setCollapsedUrl = useCallback(
+    (next: Set<string>) => {
+      setUrlParams({ [COLLAPSED_URL_KEY]: next.size > 0 ? encodeColumnList(next) : null });
+    },
+    [setUrlParams],
   );
 
   const toggleGroupCollapsed = (groupName: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupName)) next.delete(groupName);
-      else next.add(groupName);
-      saveColumnSet(COLLAPSED_GROUPS_STORAGE_KEY, [...next]);
-      return next;
-    });
+    const next = new Set(collapsedGroups);
+    if (next.has(groupName)) next.delete(groupName);
+    else next.add(groupName);
+    setCollapsedUrl(next);
   };
   const defaultHiddenSet = useMemo(
     () => new Set(defaultHiddenColumns ?? []),
@@ -133,54 +245,40 @@ export function PartnersTable({ ds, rootId, matVersion, direction, rows, columnG
     const wasVisible = !effectiveHidden.has(columnKey);
     if (wasVisible) {
       // User wants to hide. Add to explicit-hidden; clear any explicit-shown.
-      setHidden((prev) => {
-        const next = new Set(prev);
-        next.add(columnKey);
-        saveColumnSet(HIDDEN_COLUMNS_STORAGE_KEY, [...next]);
-        return next;
-      });
-      if (isDefaultHidden) {
-        setShown((prev) => {
-          const next = new Set(prev);
-          next.delete(columnKey);
-          saveColumnSet(SHOWN_COLUMNS_STORAGE_KEY, [...next]);
-          return next;
-        });
+      const nextHidden = new Set(hidden);
+      nextHidden.add(columnKey);
+      setHiddenUrl(nextHidden);
+      if (isDefaultHidden && shown.has(columnKey)) {
+        const nextShown = new Set(shown);
+        nextShown.delete(columnKey);
+        setShownUrl(nextShown);
       }
     } else {
       // User wants to show. Remove from explicit-hidden; if the column is
       // default-hidden, mark it as explicitly shown so the override survives
       // a reload.
-      setHidden((prev) => {
-        const next = new Set(prev);
-        next.delete(columnKey);
-        saveColumnSet(HIDDEN_COLUMNS_STORAGE_KEY, [...next]);
-        return next;
-      });
+      const nextHidden = new Set(hidden);
+      nextHidden.delete(columnKey);
+      setHiddenUrl(nextHidden);
       if (isDefaultHidden) {
-        setShown((prev) => {
-          const next = new Set(prev);
-          next.add(columnKey);
-          saveColumnSet(SHOWN_COLUMNS_STORAGE_KEY, [...next]);
-          return next;
-        });
+        const nextShown = new Set(shown);
+        nextShown.add(columnKey);
+        setShownUrl(nextShown);
       }
     }
   };
 
   const showAllColumns = () => {
-    setHidden(new Set());
-    saveColumnSet(HIDDEN_COLUMNS_STORAGE_KEY, []);
-    if (defaultHiddenSet.size > 0) {
-      // "Show all" means literally all — including the default-hidden ones —
-      // so record explicit-shown overrides for each.
-      setShown((prev) => {
-        const next = new Set(prev);
-        for (const col of defaultHiddenSet) next.add(col);
-        saveColumnSet(SHOWN_COLUMNS_STORAGE_KEY, [...next]);
-        return next;
-      });
-    }
+    // "Show all" → clear hidden, AND record explicit-shown overrides for
+    // every default-hidden column so they actually appear. Two-key URL
+    // update so the navigation is atomic (no flash where hidden is
+    // cleared but shown hasn't caught up).
+    const nextShown = new Set(shown);
+    for (const col of defaultHiddenSet) nextShown.add(col);
+    setUrlParams({
+      [HIDE_URL_KEY]: null,
+      [SHOW_URL_KEY]: nextShown.size > 0 ? encodeColumnList(nextShown) : null,
+    });
   };
 
   // Flat ordered list of column keys (preserving the group order from the

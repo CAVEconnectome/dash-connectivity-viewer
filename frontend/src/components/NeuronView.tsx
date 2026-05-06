@@ -38,6 +38,15 @@ export function NeuronView() {
   const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem("dcv:rail_collapsed") === "1"; } catch { return false; }
   });
+
+  // Stale-root translation banner. When the backend swaps root_id via
+  // chunkedgraph.suggest_latest_root (because synapse queries on the
+  // requested root came back empty), it surfaces `root_id_updated` on
+  // the bundle. We capture it in component state so it persists past
+  // the URL update + refetch — by the time the SPA re-fetches with the
+  // new root, the next bundle won't carry the marker, but the user
+  // still needs to see the banner.
+  const [rootSwap, setRootSwap] = useState<{ original: string; current: string } | null>(null);
   const toggleRail = () => {
     setRailCollapsed((prev) => {
       const next = !prev;
@@ -85,6 +94,38 @@ export function NeuronView() {
       ? { ds, rootId, matVersion, decorationTables }
       : null,
   );
+
+  // React to a stale-root translation: capture the swap into component
+  // state (so the banner persists past the URL update) and rewrite
+  // ?root= to the suggested current id. Replace the history entry —
+  // back-button shouldn't return to the broken root.
+  useEffect(() => {
+    const u = connectivity.data?.root_id_updated;
+    if (!u) return;
+    setRootSwap({ original: u.original, current: u.current });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("root", u.current);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [
+    connectivity.data?.root_id_updated?.original,
+    connectivity.data?.root_id_updated?.current,
+    setSearchParams,
+  ]);
+
+  // Clear the swap notification when the user navigates to a third
+  // root (one that's neither the original nor the current). Keeps the
+  // banner visible while they explore the swapped cell, hides it when
+  // they move on.
+  useEffect(() => {
+    if (rootSwap && root && root !== rootSwap.current && root !== rootSwap.original) {
+      setRootSwap(null);
+    }
+  }, [root, rootSwap]);
 
   if (!ds) return <p>Pick a datastack from the sidebar to begin.</p>;
 
@@ -224,6 +265,28 @@ export function NeuronView() {
       )}
       {cellLookup.data && draftCellId === "" && Object.values(cellLookup.data.cell_to_root).every((v) => v === null) && (
         <p className="error">No cell with that id was found.</p>
+      )}
+      {/* Stale-root translation notice. Persistent until dismissed —
+          the user should know the URL was rewritten, but the banner
+          shouldn't flash and disappear on the URL update. The dismiss
+          button just clears local state; the URL stays at `current`. */}
+      {rootSwap && (
+        <div className="root-swap-notice" role="status">
+          <div className="root-swap-text">
+            Root id <code>{rootSwap.original}</code> is no longer current —
+            showing the equivalent cell at the requested timepoint:{" "}
+            <code>{rootSwap.current}</code>.
+          </div>
+          <button
+            type="button"
+            className="root-swap-dismiss"
+            onClick={() => setRootSwap(null)}
+            title="Dismiss this notice"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
       )}
       {connectivity.isFetching && <p>Loading…</p>}
       {connectivity.error && (

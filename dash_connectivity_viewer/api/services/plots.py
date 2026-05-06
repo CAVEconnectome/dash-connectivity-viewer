@@ -29,6 +29,7 @@ from .categorical import (
     resolve_categorical_color_map,
 )
 from .neuron import NeuronQuery
+from .timing import timer
 
 
 # ----- schema -----------------------------------------------------------------
@@ -112,51 +113,101 @@ def _parse_cells_param(raw: str | None) -> list[CellFilter]:
 
 # Truthy-ish strings that map to True for boolean-coerced comparisons. The
 # proofreading_status_and_strategy.status_axon column lands on the SPA as
-# Python booleans, but in the URL the user types "t" or "true". Coerce both
-# sides to a normalized lowercase string before equality checks.
+# Python booleans, but in the URL the user types "t" or "true". The
+# vectorized comparator below uses these to coerce the rhs to a real bool
+# when the lhs column is boolean-typed.
 _BOOL_TRUE = {"true", "t", "1", "yes", "y"}
 _BOOL_FALSE = {"false", "f", "0", "no", "n"}
 
+# Pandas vector method names for each ordered/equality op. The values are
+# the dataframe-element op names (`series.eq`, `series.gt`, ...) used by
+# `_comparison_mask`. Centralised so any future op additions touch one
+# place — and so the dispatch dict acts as the canonical op enumeration
+# matching `CellFilterOp`.
+_VEC_OP: dict[str, str] = {
+    "eq": "eq", "ne": "ne",
+    "gt": "gt", "gte": "ge",
+    "lt": "lt", "lte": "le",
+}
 
-def _normalize_for_compare(v):
-    """Coerce a cell value into a comparable scalar.
 
-    - `pd.NA` / NaN / None → None
-    - bool → unchanged (so `_coerce_pair` can match against truthy/falsy strings)
-    - everything else → unchanged (numeric coercion happens in `_coerce_pair`)
+def _is_boolish_series(series: pd.Series) -> bool:
+    """True when the column is bool-shaped enough to deserve bool-coercion
+    of the rhs. Covers `bool` / nullable `boolean` dtypes directly, plus
+    object-dtype columns whose first non-null value is a Python bool —
+    decoration tables (e.g. `proofreading_status_and_strategy.status_axon`)
+    arrive as `object` since the underlying CAVE return preserves None,
+    so a strict `is_bool_dtype` check would miss them.
     """
-    if v is None:
-        return None
-    if isinstance(v, bool):
-        return v
-    try:
-        if pd.isna(v):
-            return None
-    except (TypeError, ValueError):
-        pass
-    return v
+    if pd.api.types.is_bool_dtype(series):
+        return True
+    if series.dtype == object:
+        sample = series.dropna()
+        if len(sample) > 0:
+            return isinstance(sample.iloc[0], bool)
+    return False
 
 
-def _coerce_pair(left, right: str):
-    """Coerce both sides for comparison. Returns (a, b) as a comparable pair.
+def _comparison_mask(series: pd.Series, op: str, rhs: str) -> pd.Series:
+    """Vectorized eq/ne/gt/gte/lt/lte mask for a single decoration column.
 
-    Booleans on the left expand `right` against the truthy/falsy string sets so
-    `eq:t` / `eq:true` / `eq:1` all match a True value.
+    Coercion rules mirror the legacy per-row `_coerce_pair` logic:
+      - Bool-shaped column (incl. object-with-bools) → coerce rhs against
+        `_BOOL_TRUE` / `_BOOL_FALSE`.
+      - Numeric-coercible rhs and at least one numeric value in series →
+        cast both sides to float, comparison via pandas vector ops.
+      - Otherwise → string compare via `astype(str)`.
+
+    NaN / NA values fail every comparison (including `ne`, matching the
+    legacy `if a is None: return False` branch). Implemented with
+    `.fillna(False)` on the result mask.
     """
-    if left is None:
-        return None, right
-    if isinstance(left, bool):
-        rl = right.strip().lower()
+    method = _VEC_OP[op]
+    # NA short-circuit: legacy `_cmp` returned False whenever the value
+    # normalized to None, including for `ne`. Pandas vector comparisons
+    # don't preserve that semantics — `pd.NA != x` evaluates to True for
+    # numeric NaN and `None != True` is True at the Python level. We AND
+    # every result with `notna()` to enforce "NA fails every op".
+    not_na = series.notna()
+
+    # Boolean column path. The rhs comes in as a URL string; coerce it to
+    # a real bool when it's a known truthy/falsy token, else short-circuit
+    # to an empty mask (the legacy impl would TypeError on bool vs str
+    # and the per-row catch returned False).
+    if _is_boolish_series(series):
+        rl = rhs.strip().lower()
         if rl in _BOOL_TRUE:
-            return left, True
-        if rl in _BOOL_FALSE:
-            return left, False
-        return left, right
-    # Try numeric on both sides; fall back to string if either side fails.
+            rhs_v: object = True
+        elif rl in _BOOL_FALSE:
+            rhs_v = False
+        else:
+            return pd.Series(False, index=series.index)
+        cmp = getattr(series, method)(rhs_v).fillna(False).astype(bool)
+        return cmp & not_na
+
+    # Numeric path. Try to parse rhs as a float; if that succeeds and the
+    # column has at least one numeric value, do the whole comparison in
+    # the numeric domain. Non-numeric cells become NaN; we mask them out
+    # via `coerced.notna()` (a column with mixed numerics + strings has
+    # the strings excluded — they wouldn't have compared meaningfully
+    # anyway). At least one numeric value is required to avoid silently
+    # coercing an all-string column to NaN and producing an empty mask
+    # when the user clearly meant a string compare.
     try:
-        return float(left), float(right)
+        rhs_f = float(rhs)
     except (TypeError, ValueError):
-        return str(left), str(right)
+        rhs_f = None
+    if rhs_f is not None:
+        coerced = pd.to_numeric(series, errors="coerce")
+        if coerced.notna().any():
+            cmp = getattr(coerced, method)(rhs_f).fillna(False).astype(bool)
+            return cmp & coerced.notna()
+
+    # String fallback. NaN cells become "nan" via astype(str), but we still
+    # mask them out so a user filter `ne:"foo"` doesn't accidentally match
+    # NA rows (NaN's stringified form != "foo" → True without the mask).
+    cmp = getattr(series.astype(str), method)(rhs).astype(bool)
+    return cmp & not_na
 
 
 def _apply_cell_filters(df: pd.DataFrame, filters: list[CellFilter]) -> pd.DataFrame:
@@ -165,6 +216,10 @@ def _apply_cell_filters(df: pd.DataFrame, filters: list[CellFilter]) -> pd.DataF
 
     Operates on the *materialized* dataframe — by the time we get here the
     decoration columns have been merged on as `<table>.<column>` keys.
+
+    Vectorized — every op resolves to a pandas vector op (`series.eq`,
+    `series.gt`, etc.) so a 10K-row partner frame filters in microseconds
+    rather than the millisecond range the per-row `series.map(_cmp)` cost.
     """
     if not filters:
         return df
@@ -183,29 +238,18 @@ def _apply_cell_filters(df: pd.DataFrame, filters: list[CellFilter]) -> pd.DataF
         elif f.op == "null":
             mask = series.isna()
         elif f.op in ("in", "notin"):
+            # `|`-separated value list. Stringify both sides for comparison
+            # so the numeric cell `5` matches the URL token `"5"`. NaN
+            # cells become "nan" — won't match any user-typed token, which
+            # matches the legacy impl's effective behavior.
             wanted = [v.strip() for v in (f.value or "").split("|") if v.strip()]
-            normalized = series.map(_normalize_for_compare)
-            mask = normalized.astype(str).isin(wanted)
+            mask = series.astype(str).isin(wanted)
             if f.op == "notin":
                 mask = ~mask
         else:
             if f.value is None:
                 raise ValueError(f"cells op {f.op!r} requires a value")
-            def _cmp(v, _op=f.op, _rhs=f.value):
-                a, b = _coerce_pair(_normalize_for_compare(v), _rhs)
-                if a is None:
-                    return False
-                try:
-                    if _op == "eq":  return a == b
-                    if _op == "ne":  return a != b
-                    if _op == "gt":  return a >  b
-                    if _op == "gte": return a >= b
-                    if _op == "lt":  return a <  b
-                    if _op == "lte": return a <= b
-                except TypeError:
-                    return False
-                return False
-            mask = series.map(_cmp).astype(bool)
+            mask = _comparison_mask(series, f.op, f.value)
         df = df[mask]
     return df
 
@@ -1126,40 +1170,59 @@ def _build_unified_frame(nq: NeuronQuery) -> pd.DataFrame:
     Lets dynamic plots reach across both directions on a single row — e.g.
     scatter `n_syn_in` vs `n_syn_out` with `hue = cell_type` to find
     reciprocal partners stratified by class.
+
+    Implementation note: a vectorized outer merge on `root_id`. Earlier
+    versions iterated `pout`/`pin` row-by-row (`iterrows()`) which scaled
+    poorly — at 5K partners the per-request cost was tens of ms, at 20K
+    seconds. The merge is O(n) in C; rule columns left as NaN where the
+    partner is missing in that direction (`pd.merge` semantics) match the
+    SPA-side unifier (`unify.ts:48,76`), since averages of nothing are
+    not zero.
     """
     pin = nq.partners_in()
     pout = nq.partners_out()
     rule_names = list(nq.synapse_aggregation_rules.keys())
 
-    by_root: dict[int, dict] = {}
-
-    if not pout.empty:
-        for _, r in pout.iterrows():
-            rid = int(r["root_id"])
-            rec = {"root_id": rid, "n_syn_out": int(r["num_syn"]), "n_syn_in": 0}
-            for name in rule_names:
-                rec[f"{name}_out"] = r.get(name)
-                rec[f"{name}_in"] = None
-            by_root[rid] = rec
-
-    if not pin.empty:
-        for _, r in pin.iterrows():
-            rid = int(r["root_id"])
-            if rid in by_root:
-                existing = by_root[rid]
-                existing["n_syn_in"] = int(r["num_syn"])
-                for name in rule_names:
-                    existing[f"{name}_in"] = r.get(name)
-            else:
-                rec = {"root_id": rid, "n_syn_out": 0, "n_syn_in": int(r["num_syn"])}
-                for name in rule_names:
-                    rec[f"{name}_out"] = None
-                    rec[f"{name}_in"] = r.get(name)
-                by_root[rid] = rec
-
-    if not by_root:
+    if pin.empty and pout.empty:
         return pd.DataFrame(columns=["root_id", "n_syn_out", "n_syn_in"])
-    return pd.DataFrame(list(by_root.values()))
+
+    def _renamed(df: pd.DataFrame, suffix: str) -> pd.DataFrame:
+        # Map raw partner-frame columns to the unified frame's
+        # direction-suffixed names. Drops any unrelated columns so the
+        # merge doesn't pull in stragglers from upstream changes.
+        rename_map = {"num_syn": f"n_syn_{suffix}"}
+        for name in rule_names:
+            if name in df.columns:
+                rename_map[name] = f"{name}_{suffix}"
+        keep = ["root_id"] + [rename_map[k] for k in rename_map]
+        return df.rename(columns=rename_map)[keep]
+
+    if pout.empty:
+        merged = _renamed(pin, "in").copy()
+        merged["n_syn_out"] = 0
+        for name in rule_names:
+            merged[f"{name}_out"] = pd.NA
+    elif pin.empty:
+        merged = _renamed(pout, "out").copy()
+        merged["n_syn_in"] = 0
+        for name in rule_names:
+            merged[f"{name}_in"] = pd.NA
+    else:
+        merged = pd.merge(
+            _renamed(pout, "out"),
+            _renamed(pin, "in"),
+            on="root_id",
+            how="outer",
+        )
+        # Synapse counts get a real 0 (the partner exists but contributes
+        # zero synapses on this side); rule columns stay NaN.
+        merged["n_syn_out"] = merged["n_syn_out"].fillna(0)
+        merged["n_syn_in"] = merged["n_syn_in"].fillna(0)
+
+    merged["n_syn_out"] = merged["n_syn_out"].astype(int)
+    merged["n_syn_in"] = merged["n_syn_in"].astype(int)
+    merged["root_id"] = merged["root_id"].astype(int)
+    return merged.reset_index(drop=True)
 
 
 # ----- resolver ---------------------------------------------------------------
@@ -1200,7 +1263,8 @@ def resolve_plot(
     elif spec.data_query.source == "partners_out":
         df = nq.partners_out().copy()
     else:  # partners_both — unified frame spanning both directions
-        df = _build_unified_frame(nq)
+        with timer("build_unified_frame"):
+            df = _build_unified_frame(nq)
         # Synthetic 'direction' column on the unified frame so the SPA can
         # bind hue to it; values mirror the direction-class buckets used by
         # the per-axis scope filter below.
@@ -1255,16 +1319,17 @@ def resolve_plot(
         # Pass the datastack's soma_table so num_soma / cell_id columns are
         # available as bar-plot grouping targets. The SWR + warmup machinery
         # means the second request hits the cached soma snapshot instantly.
-        served, _groups, _reval = lookup_decorations(
-            client_factory=client_factory,
-            ds=nq.datastack,
-            mat_version=nq.mat_version,
-            cell_type_table=cell_type_table,
-            soma_table=nq.soma_table,
-            soma_root_id_column=nq.soma_root_id_column,
-            root_ids=df["root_id"].astype(int).tolist(),
-            decoration_tables=decoration_tables or [],
-        )
+        with timer("lookup_decorations"):
+            served, _groups, _reval = lookup_decorations(
+                client_factory=client_factory,
+                ds=nq.datastack,
+                mat_version=nq.mat_version,
+                cell_type_table=cell_type_table,
+                soma_table=nq.soma_table,
+                soma_root_id_column=nq.soma_root_id_column,
+                root_ids=df["root_id"].astype(int).tolist(),
+                decoration_tables=decoration_tables or [],
+            )
         # Each served record carries arbitrary keys (flat for cell_type_table,
         # `<table>.<col>` for decoration_tables). Materialize them as columns.
         # `pt_position` is internal scaffolding for the spatial computation
@@ -1285,7 +1350,8 @@ def resolve_plot(
     # counts so the SPA can show "N / M cells" under the analytics rail.
     pre_filter_count = int(len(df))
     if cell_filters:
-        df = _apply_cell_filters(df, cell_filters)
+        with timer("apply_cell_filters"):
+            df = _apply_cell_filters(df, cell_filters)
     matched_count = int(len(df))
 
     # Spatial features. Same two-tier rule as connectivity_bundle:
@@ -1295,25 +1361,36 @@ def resolve_plot(
     # Both tiers require partner soma positions, which means the soma
     # decoration must have been fetched above (it's part of `served`).
     if served:
-        from .spatial import attach_spatial_features, load_streamline, load_transform
+        from .spatial import attach_spatial_features_cached, load_streamline, load_transform
         transform = load_transform(spatial_transform_name) if spatial_transform_name else None
         streamline = load_streamline(spatial_transform_name) if spatial_transform_name else None
         root_soma = nq.soma_summary().get("soma_pt_position")
         source = spec.data_query.source
-        # Unified frames need both directions' synapse stats; single-direction
-        # frames only need the matching one. attach_spatial_features takes
-        # None for the side it should skip.
+        # Cached helper computes BOTH directions internally (cheap — synapse
+        # dfs are cached) so the entry is reusable across plot panels with
+        # different `source` values. After the connectivity endpoint warms
+        # the cache, every plot-panel request on this neuron skips the
+        # ~1.2s numpy compute. The caller still selects which directional
+        # lookups to materialize on the resolved frame below.
         want_in = source in ("partners_in", "partners_both")
         want_out = source in ("partners_out", "partners_both")
-        intrinsic, median_in, median_out, syn_depth_in, syn_depth_out = attach_spatial_features(
+        intrinsic, median_in, median_out, syn_depth_in, syn_depth_out = attach_spatial_features_cached(
+            nq=nq,
             transform=transform,
             streamline=streamline,
             decoration_lookup=served,
             root_soma_position_nm=root_soma,
-            syn_df_in=nq._synapse_df("post") if want_in else None,
-            syn_df_out=nq._synapse_df("pre") if want_out else None,
             syn_position_prefix=nq.synapse_position_prefix,
         )
+        # Drop the per-direction lookups the plot doesn't want — keeps
+        # downstream `_attach_per_direction` calls from materializing
+        # columns the plot won't use.
+        if not want_in:
+            median_in = {}
+            syn_depth_in = {}
+        if not want_out:
+            median_out = {}
+            syn_depth_out = {}
         # Intrinsic columns only materialize when the transform was available.
         if intrinsic:
             for col in ("soma_depth", "soma_x", "soma_z", "radial_dist_root_soma"):
@@ -1462,7 +1539,8 @@ def resolve_plot(
     builder = _BUILDERS.get(spec.kind)
     if builder is None:
         raise ValueError(f"Unknown plot kind: {spec.kind!r}")
-    fig = builder(df, spec)
+    with timer(f"plot_builder[{spec.kind}]"):
+        fig = builder(df, spec)
     _apply_layout(fig, spec.layout)
     _apply_auto_titles(fig, spec)
     _maybe_flip_depth(fig, spec)

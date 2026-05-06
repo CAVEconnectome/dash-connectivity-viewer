@@ -25,7 +25,7 @@ npm run dev      # vite dev server
 npm run build    # tsc -b && vite build
 ```
 
-`DCV_DEV_AUTH_BYPASS=1` skips middle-auth-client so a local dev environment doesn't need a CAVE token in cookies; production must run without it. Datastack YAMLs live in `dash_connectivity_viewer/api/datastacks/` (bundled) and additional ones can be loaded from `DCV_DATASTACK_CONFIG_DIR`.
+`DCV_DEV_AUTH_BYPASS=1` skips middle-auth-client so a local dev environment doesn't need a CAVE token in cookies; production must run without it. Datastack and aligned-volume YAMLs live in the top-level `config/` directory (`config/datastacks/`, `config/aligned_volumes/`) — bundled into the wheel via hatchling `force-include`, with `DCV_DATASTACK_CONFIG_DIR` / `DCV_ALIGNED_VOLUME_CONFIG_DIR` for deployment overrides.
 
 There are no automated tests yet. The dev workflow is to start the API + SPA and exercise it in a browser against `minnie65_public`.
 
@@ -51,7 +51,7 @@ Services in `api/services/` are the orchestration layer: `neuron.py` builds the 
 
 ### Per-datastack YAML config
 
-`dash_connectivity_viewer/api/datastacks/<datastack>.yaml` overrides synapse columns, aggregation rules, position-column prefix, cell-id lookup tables/views, and warmup behavior. Loaded via `services/datastack_config.py`. Adding a new dataset means dropping a YAML in this directory.
+`config/datastacks/<datastack>.yaml` overrides synapse columns, aggregation rules, position-column prefix, cell-id lookup tables/views, and warmup behavior. Loaded via `services/datastack_config.py`, which checks the repo-root `config/` (source installs), the in-wheel `_bundled_config/` (wheel installs), then `DCV_DATASTACK_CONFIG_DIR` (last-wins override). Adding a new dataset means dropping a YAML in `config/datastacks/`.
 
 ### Caching strategy (`api/caches.py` + `services/swr.py`)
 

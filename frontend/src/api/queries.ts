@@ -11,6 +11,7 @@ import type {
   TableRowsResponse,
   TableUniqueValuesResponse,
   TablesResponse,
+  ToursResponse,
   VersionsResponse,
 } from "./types";
 
@@ -41,6 +42,23 @@ export function useDatastackInfo(ds: string | null) {
     queryFn: () => apiFetch<DatastackInfo>(`/api/v1/datastacks/${ds}/info`),
     enabled: !!ds,
     staleTime: 60 * 60 * 1000, // 1h — info_cache is server-side too
+    retry: META_RETRY,
+    retryDelay: META_RETRY_DELAY,
+  });
+}
+
+/**
+ * Operator-curated landing-page tours (examples + recipes) for one datastack.
+ * The YAML changes only with a deployment-config change, so cache aggressively
+ * — same staleTime as the datastack list. Backend serves a fresh dump on
+ * every request (cheap; no upstream calls).
+ */
+export function useTours(ds: string | null) {
+  return useQuery<ToursResponse>({
+    queryKey: ["tours", ds],
+    queryFn: () => apiFetch<ToursResponse>(`/api/v1/datastacks/${ds}/tours`),
+    enabled: !!ds,
+    staleTime: 60 * 60 * 1000,
     retry: META_RETRY,
     retryDelay: META_RETRY_DELAY,
   });

@@ -10,10 +10,12 @@ longer depends on Dash.
 
 - `dash_connectivity_viewer/api/` — Flask backend
 - `frontend/` — Vite + React + TypeScript SPA
-- `dash_connectivity_viewer/api/datastacks/*.yaml` — per-datastack config
-  (synapse columns, aggregation rules, cell-id lookup tables, warmup)
+- `config/datastacks/*.yaml`, `config/aligned_volumes/*.yaml` — deployment
+  config (synapse columns, aggregation rules, cell-id lookup tables, warmup,
+  spatial transforms). Bundled into the wheel via hatchling `force-include`.
 - `dash_connectivity_viewer/api/templates/{links,plots}/*.yaml` — declarative
-  Neuroglancer link recipes and Plotly figure specs
+  Neuroglancer link recipes and Plotly figure specs (app resources, not
+  per-deployment config)
 
 ## Running locally
 
@@ -31,8 +33,9 @@ npm run dev
 environment doesn't need a CAVE token in cookies. Production must run without it.
 
 Additional datastack configs can be loaded by setting
-`DCV_DATASTACK_CONFIG_DIR` to a directory of YAML files alongside the bundled
-ones in `api/datastacks/`.
+`DCV_DATASTACK_CONFIG_DIR` to a directory of YAML files; entries there
+override the bundled ones in `config/datastacks/`. Same pattern with
+`DCV_ALIGNED_VOLUME_CONFIG_DIR` for `config/aligned_volumes/`.
 
 ## Architecture notes
 

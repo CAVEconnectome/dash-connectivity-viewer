@@ -5,6 +5,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["dash_connectivity_viewer"]
 
+# Top-level `config/` lives outside the package so config and code don't
+# intermingle on disk (see services/datastack_config.py for the resolver).
+# For wheel installs, ship it inside the package as `_bundled_config/` so
+# the resolver finds it via `Path(__file__).resolve().parents[2]`. The
+# directory may be empty or absent — the loader tolerates that.
+[tool.hatch.build.targets.wheel.force-include]
+"config" = "dash_connectivity_viewer/_bundled_config"
+
 [project]
 name = "dash-connectivity-viewer"
 version = "2.2.7"
@@ -24,7 +32,6 @@ dependencies = [
     # Core CAVE stack — bumped for TableManager (8.x) and the modern nglui helpers (4.x).
     "caveclient>=8.0.1",
     "nglui>=4.7.3",
-    "dfbridge>=0.0.2",
     "standard-transform>=1",
     # New API backend
     "flask>=3.0",
@@ -37,12 +44,12 @@ dependencies = [
     # Data + plotting (server emits Plotly figure JSON)
     "pandas",
     "numpy",
-    "seaborn",
     "plotly>=5",
-    # Misc
-    "requests",
-    "loguru",
-    "orjson",
+    # Note: `requests` is needed transitively (caveclient / nglui /
+    # middle-auth-client all pull it) but isn't listed here directly —
+    # nothing in our source imports it. `dfbridge`, `loguru`, `orjson`
+    # were removed; none were imported in the codebase and none are
+    # transitively required.
 ]
 
 [project.urls]

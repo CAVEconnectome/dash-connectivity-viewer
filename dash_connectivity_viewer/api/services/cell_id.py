@@ -30,6 +30,7 @@ from cachetools import TTLCache
 
 from .keys import is_live
 from .query_runner import run_query
+from .request_state import current_timestamp
 
 
 # ----- caches -----------------------------------------------------------------
@@ -102,11 +103,13 @@ def cell_ids_to_root_ids(
 
     if live and not df.empty:
         # Live mode: the view's pt_root_id is at-mat-version; resolve supervoxels
-        # to current roots via the chunkedgraph.
+        # to current roots via the chunkedgraph. Use the request's pinned
+        # consistency timestamp so this lookup matches synapse / soma / decoration
+        # reads done in the same request. Falls back to now() outside a request
+        # context (e.g. tests calling this helper directly).
+        ts = current_timestamp() or _dt.datetime.now(_dt.timezone.utc)
         sv_ids = df["pt_supervoxel_id"].astype("int64").tolist()
-        roots = client.chunkedgraph.get_roots(
-            sv_ids, timestamp=_dt.datetime.now(_dt.timezone.utc)
-        )
+        roots = client.chunkedgraph.get_roots(sv_ids, timestamp=ts)
         df = df.assign(pt_root_id=roots)
 
     indexed = df.set_index("id") if not df.empty else df
@@ -175,11 +178,15 @@ def root_ids_to_cell_ids(
 
     fresh: dict[int, int | None] = {rid: None for rid in misses}
     live = is_live(mat_version)
+    # Pinned consistency timestamp from the request (live mode only).
+    # See `services/request_state.py`. None outside a request context;
+    # `run_query` falls back to `now()` in that case.
+    pinned_ts = current_timestamp()
 
     # 1) Main table: pt_root_id → id. Drop rows where the same root appears
     #    multiple times — that's an ambiguous mapping; leave None.
     qf = client.materialize.tables[main](pt_root_id=misses)
-    df = run_query(qf, live=live, split_positions=False)
+    df = run_query(qf, live=live, timestamp=pinned_ts, split_positions=False)
     if not df.empty:
         df = df.drop_duplicates(subset="pt_root_id", keep=False)
         for _, row in df.iterrows():
@@ -195,7 +202,7 @@ def root_ids_to_cell_ids(
             break
         try:
             qf = client.materialize.tables[alt](pt_ref_root_id=unmapped)
-            df = run_query(qf, live=live, split_positions=False)
+            df = run_query(qf, live=live, timestamp=pinned_ts, split_positions=False)
         except Exception:
             continue
         if df.empty:

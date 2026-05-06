@@ -2,9 +2,11 @@ from typing import Any
 
 import pandas as pd
 
-from ..caches import query_cache
+from ..caches import query_cache, soma_summary_cache
 from .keys import canonical_query_hash, is_live
 from .query_runner import run_query
+from .request_state import current_timestamp
+from .timing import timer
 
 
 DEFAULT_DESIRED_RESOLUTION = [1, 1, 1]
@@ -38,7 +40,18 @@ class NeuronQuery:
         self.synapse_columns = synapse_columns
         self.synapse_position_prefix = synapse_position_prefix
         self.desired_resolution = desired_resolution or DEFAULT_DESIRED_RESOLUTION
-        self.timestamp_used = None  # populated when df.attrs carries one back
+        # Pinned consistency timestamp captured at NQ construction. For
+        # live mode the endpoint pins `datetime.now(utc)` on `flask.g`
+        # before instantiating NQ; we read it here so every CAVE call
+        # this NQ makes uses the same point in time. None for
+        # materialized mode (queries are implicitly consistent via
+        # version number) and outside a request context (warmup, tests).
+        self.timestamp_for_consistency = current_timestamp() if is_live(mat_version) else None
+        # Legacy field — `df.attrs["timestamp"]` from the synapse query
+        # that CAVE echoes back. Kept for backwards-compat in callers
+        # that still read `timestamp_used`, but `timestamp_for_consistency`
+        # is now the source of truth surfaced on the response payload.
+        self.timestamp_used = None
 
     def _cache_key(self, kind: str, **extra: Any) -> str | None:
         if is_live(self.mat_version):
@@ -54,7 +67,10 @@ class NeuronQuery:
             raise ValueError("synapse_table is not configured for this datastack")
         key = self._cache_key("synapses", direction=direction)
         if key and key in query_cache:
-            return query_cache[key]
+            # Cache hits are timed separately so the difference between a
+            # warm and cold neuron is visible in the per-request log line.
+            with timer(f"synapse_cache_hit[{direction}]"):
+                return query_cache[key]
         partner_col = "pre_pt_root_id" if direction == "post" else "post_pt_root_id"
         own_col = "post_pt_root_id" if direction == "post" else "pre_pt_root_id"
         qf = self.client.materialize.tables[self.synapse_table](**{own_col: self.root_id})
@@ -64,7 +80,13 @@ class NeuronQuery:
         }
         if self.synapse_columns is not None:
             query_kwargs["select_columns"] = self.synapse_columns
-        df = run_query(qf, live=is_live(self.mat_version), **query_kwargs)
+        with timer(f"synapse_query[{direction}]"):
+            df = run_query(
+                qf,
+                live=is_live(self.mat_version),
+                timestamp=self.timestamp_for_consistency,
+                **query_kwargs,
+            )
         df = df[df[partner_col] != 0].copy()
         df = df[df[partner_col] != self.root_id].copy()  # drop autapses
         if df.attrs.get("timestamp"):
@@ -73,9 +95,20 @@ class NeuronQuery:
             query_cache[key] = df
         return df
 
-    def _aggregate(self, syn_df: pd.DataFrame, partner_col: str) -> pd.DataFrame:
+    def _aggregate(self, syn_df: pd.DataFrame, partner_col: str, *, timer_label: str | None = None) -> pd.DataFrame:
         if syn_df.empty:
             return pd.DataFrame(columns=["root_id", "num_syn"])
+        # Timer wraps just the groupby + per-rule aggregation work, NOT
+        # the synapse fetch (already tagged separately as
+        # `synapse_query[*]` / `synapse_cache_hit[*]`). Caller passes
+        # `timer_label` to tag per-direction cost cleanly without the
+        # implicit-overlap problem the earlier wrap had.
+        if timer_label is not None:
+            with timer(timer_label):
+                return self._aggregate_inner(syn_df, partner_col)
+        return self._aggregate_inner(syn_df, partner_col)
+
+    def _aggregate_inner(self, syn_df: pd.DataFrame, partner_col: str) -> pd.DataFrame:
         grp = syn_df.groupby(partner_col, sort=False)
         out = grp.size().to_frame("num_syn")
         for new_col, rule in self.synapse_aggregation_rules.items():
@@ -84,28 +117,47 @@ class NeuronQuery:
         return out.sort_values("num_syn", ascending=False).reset_index(drop=True)
 
     def partners_out(self) -> pd.DataFrame:
-        return self._aggregate(self._synapse_df("pre"), "post_pt_root_id")
+        return self._aggregate(self._synapse_df("pre"), "post_pt_root_id", timer_label="aggregate_partners[out]")
 
     def partners_in(self) -> pd.DataFrame:
-        return self._aggregate(self._synapse_df("post"), "pre_pt_root_id")
+        return self._aggregate(self._synapse_df("post"), "pre_pt_root_id", timer_label="aggregate_partners[in]")
 
     def soma_summary(self) -> dict:
+        # Cross-request cache keyed on the invariants — (datastack,
+        # mat_version, root_id, soma_table). Live mode keeps `mat_version`
+        # in the key as the literal string "live" so the cache short-
+        # circuits naturally without a separate live-mode branch.
+        # Saves ~200-300ms per warm plot request (the single-row soma
+        # fetch otherwise re-fires on every fresh NeuronQuery instance).
+        cache_key = (self.datastack, self.mat_version, self.root_id, self.soma_table)
+        cached = soma_summary_cache.get(cache_key)
+        if cached is not None:
+            with timer("soma_cache_hit"):
+                return cached
         if self.soma_table is None:
-            return {"num_soma": 0, "soma_pt_position": None}
+            result = {"num_soma": 0, "soma_pt_position": None}
+            soma_summary_cache[cache_key] = result
+            return result
         try:
             qf = self.client.materialize.tables[self.soma_table](
                 **{self.soma_root_id_column: self.root_id}
             )
-            df = run_query(
-                qf,
-                live=is_live(self.mat_version),
-                split_positions=False,
-                desired_resolution=self.desired_resolution,
-            )
+            with timer("soma_query"):
+                df = run_query(
+                    qf,
+                    live=is_live(self.mat_version),
+                    timestamp=self.timestamp_for_consistency,
+                    split_positions=False,
+                    desired_resolution=self.desired_resolution,
+                )
         except Exception:
+            # Don't cache failures — transient CAVE errors shouldn't
+            # poison a 30-min cache window. The next request retries.
             return {"num_soma": 0, "soma_pt_position": None}
         if df.empty:
-            return {"num_soma": 0, "soma_pt_position": None}
+            result = {"num_soma": 0, "soma_pt_position": None}
+            soma_summary_cache[cache_key] = result
+            return result
         pt_col = next((c for c in df.columns if c.endswith("pt_position")), None)
         soma_pt = None
         if pt_col is not None:
@@ -113,7 +165,78 @@ class NeuronQuery:
             if hasattr(value, "tolist"):
                 value = value.tolist()
             soma_pt = list(value) if value is not None else None
-        return {"num_soma": int(len(df)), "soma_pt_position": soma_pt}
+        result = {"num_soma": int(len(df)), "soma_pt_position": soma_pt}
+        soma_summary_cache[cache_key] = result
+        return result
+
+
+import logging as _logging
+_root_xlate_logger = _logging.getLogger("dcv.root_translation")
+
+
+def suggest_current_root(
+    client,
+    root_id: int,
+    *,
+    mat_version: int | str | None,
+) -> int | None:
+    """Ask the chunkedgraph what root_id `root_id` maps to at the
+    request's "current" timestamp.
+
+    Timestamp resolution:
+      - Live mode: the request's pinned consistency timestamp
+        (`current_timestamp()`), so the suggestion shares the same point
+        in time as every other CAVE call in this request.
+      - Materialized mode: the version's frozen timestamp, derived from
+        `client.materialize.get_versions_metadata()` via
+        `services.datastack_config.version_timestamp`. The suggested
+        root is what was canonical at that materialization.
+
+    Returns:
+      - A new int root_id when the chunkedgraph thinks the input has
+        been split/merged into something else, or
+      - The same `root_id` when nothing changed (caller treats this as
+        no-op), or
+      - `None` when the chunkedgraph call fails or no timestamp can be
+        derived (caller skips the translation).
+    """
+    from .datastack_config import version_timestamp
+    from .request_state import current_timestamp
+
+    if is_live(mat_version):
+        ts = current_timestamp()
+    else:
+        ts = version_timestamp(client, mat_version)
+    if ts is None:
+        _root_xlate_logger.info(
+            "suggest_current_root(%s, mv=%s): no usable timestamp — skipped",
+            root_id, mat_version,
+        )
+        return None
+    try:
+        with timer("suggest_latest_roots"):
+            # Method name is plural in caveclient (`suggest_latest_roots`)
+            # even though we pass a single root and get a single root back.
+            # An earlier attempt called the singular spelling, which
+            # silently AttributeError'd through the broad except below
+            # and degraded the whole feature to a no-op for weeks.
+            suggested = client.chunkedgraph.suggest_latest_roots(int(root_id), timestamp=ts)
+    except Exception as exc:
+        # Chunkedgraph hiccup, or root_id unknown — caller falls back to
+        # serving an empty bundle on the original root, which is safer
+        # than failing the whole request.
+        _root_xlate_logger.warning(
+            "suggest_current_root(%s, mv=%s, ts=%s): exception %s: %s",
+            root_id, mat_version, ts, type(exc).__name__, exc,
+        )
+        return None
+    _root_xlate_logger.info(
+        "suggest_current_root(%s, mv=%s, ts=%s) -> %r (type=%s)",
+        root_id, mat_version, ts, suggested, type(suggested).__name__,
+    )
+    if suggested is None:
+        return None
+    return int(suggested)
 
 
 def connectivity_bundle(
@@ -143,6 +266,9 @@ def connectivity_bundle(
     }
     need_in = "partners_in" in include or "summary" in include
     need_out = "partners_out" in include or "summary" in include
+    # `partners_in()` / `partners_out()` time their own `_aggregate` step
+    # internally as `aggregate_partners[in/out]` — synapse_query[*] and
+    # the groupby are tagged separately so the breakdown is additive.
     pin = nq.partners_in() if need_in else None
     pout = nq.partners_out() if need_out else None
 
@@ -153,6 +279,9 @@ def connectivity_bundle(
         if client_factory is None:
             raise ValueError("connectivity_bundle requires client_factory when enriching")
         from .decoration import lookup_decorations
+        # The lookup itself is timed; per-table CAVE round-trips inside
+        # are tagged separately as decoration_query[<table>] (see
+        # decoration.py).
         # Only enrich partners that will actually be in the response —
         # plus the queried root, which the SPA's "Cell" tab renders as a
         # standalone row alongside the partner tabs. Including the root
@@ -169,16 +298,17 @@ def connectivity_bundle(
         # if the root happens to also appear as a partner (self-loop).
         decoration_ids = list(dict.fromkeys([*partner_ids, int(nq.root_id)]))
         if decoration_ids:
-            decoration_lookup, decoration_groups, revalidation = lookup_decorations(
-                client_factory=client_factory,
-                ds=nq.datastack,
-                mat_version=nq.mat_version,
-                cell_type_table=cell_type_table,
-                soma_table=nq.soma_table,
-                soma_root_id_column=nq.soma_root_id_column,
-                root_ids=decoration_ids,
-                decoration_tables=decoration_tables or [],
-            )
+            with timer("lookup_decorations"):
+                decoration_lookup, decoration_groups, revalidation = lookup_decorations(
+                    client_factory=client_factory,
+                    ds=nq.datastack,
+                    mat_version=nq.mat_version,
+                    cell_type_table=cell_type_table,
+                    soma_table=nq.soma_table,
+                    soma_root_id_column=nq.soma_root_id_column,
+                    root_ids=decoration_ids,
+                    decoration_tables=decoration_tables or [],
+                )
 
     # Spatial features. Two tiers:
     #   - median_dist_to_target_soma is plain Euclidean — runs whenever any
@@ -197,7 +327,7 @@ def connectivity_bundle(
     # gate on `decoration_lookup` (they need partner soma positions);
     # the per-cell depth profile only needs the synapse df + transform.
     from .spatial import (
-        attach_spatial_features,
+        attach_spatial_features_cached,
         compute_synapse_depth_profile,
         load_streamline,
         load_transform,
@@ -206,41 +336,45 @@ def connectivity_bundle(
     streamline = load_streamline(spatial_transform_name) if spatial_transform_name else None
 
     if decoration_lookup:
-        # `nq.soma_summary()` is cached on the NeuronQuery via the underlying
-        # CAVEclient call; calling here is free if the summary block also runs
-        # below. Root soma is only used for radial-dist; missing → that single
-        # column is omitted but the others still flow.
+        # `nq.soma_summary()` is now backed by a cross-request cache;
+        # calling it here piggybacks on that cache too. Root soma is
+        # used both for radial-dist and as the seed for the cached
+        # spatial-features result (so the SPA's Cell tab always gets
+        # soma_depth even when only plots ran first).
         root_soma = nq.soma_summary().get("soma_pt_position")
+        # Cached helper — always computes both directions internally
+        # (synapse dfs are cached, so this is free), keyed only on
+        # invariants. Subsequent plot requests on the same neuron will
+        # cache-hit and skip the ~1.2s numpy compute entirely.
         (
             spatial_intrinsic,
             spatial_median_in,
             spatial_median_out,
             spatial_syn_depth_in,
             spatial_syn_depth_out,
-        ) = attach_spatial_features(
+        ) = attach_spatial_features_cached(
+            nq=nq,
             transform=transform,
             streamline=streamline,
             decoration_lookup=decoration_lookup,
             root_soma_position_nm=root_soma,
-            # Reuse the cached synapse dfs from the aggregation step.
-            syn_df_in=nq._synapse_df("post") if pin is not None else None,
-            syn_df_out=nq._synapse_df("pre") if pout is not None else None,
             syn_position_prefix=nq.synapse_position_prefix,
         )
 
     # Per-cell synapse depth profile — populated when the datastack has a
     # transform. Independent of decoration / partner enrichment because
     # it's a property of the cell's full synapse cloud, not of any
-    # particular partner.
-    synapse_depth_profile = compute_synapse_depth_profile(
-        transform=transform,
-        syn_df_in=nq._synapse_df("post") if need_in else None,
-        syn_df_out=nq._synapse_df("pre") if need_out else None,
-        syn_position_prefix=nq.synapse_position_prefix,
-        depth_range=depth_range,
-        layer_boundaries=layer_boundaries,
-        layer_names=layer_names,
-    )
+    # particular partner. Numpy histogram over every synapse depth.
+    with timer("synapse_depth_profile"):
+        synapse_depth_profile = compute_synapse_depth_profile(
+            transform=transform,
+            syn_df_in=nq._synapse_df("post") if need_in else None,
+            syn_df_out=nq._synapse_df("pre") if need_out else None,
+            syn_position_prefix=nq.synapse_position_prefix,
+            depth_range=depth_range,
+            layer_boundaries=layer_boundaries,
+            layer_names=layer_names,
+        )
     if synapse_depth_profile is not None:
         payload["synapse_depth_profile"] = synapse_depth_profile
 
@@ -275,10 +409,17 @@ def connectivity_bundle(
             rec["root_id"] = str(rid)
         return records
 
+    # `_enrich_records` is the per-partner Python loop that merges the
+    # decoration + spatial dicts onto each partner row. Currently O(n)
+    # over the partner count with a small constant factor; suspect of
+    # hidden cost on heavily-connected neurons. Timed separately per
+    # direction to surface a per-direction asymmetry if one exists.
     if "partners_in" in include and pin is not None:
-        payload["partners_in"] = _enrich_records(pin, spatial_median_in, spatial_syn_depth_in)
+        with timer("enrich_records[in]"):
+            payload["partners_in"] = _enrich_records(pin, spatial_median_in, spatial_syn_depth_in)
     if "partners_out" in include and pout is not None:
-        payload["partners_out"] = _enrich_records(pout, spatial_median_out, spatial_syn_depth_out)
+        with timer("enrich_records[out]"):
+            payload["partners_out"] = _enrich_records(pout, spatial_median_out, spatial_syn_depth_out)
 
     # The queried cell, shaped as a single partner-record so the SPA's
     # "Cell" tab can reuse PartnersTable's column rendering. Synapse
@@ -310,7 +451,13 @@ def connectivity_bundle(
             "num_syn_out": int(nq._synapse_df("pre").shape[0]),
             **soma,
         }
-    payload["timestamp_used"] = nq.timestamp_used
+    # Prefer the pinned consistency timestamp when set (live mode); fall
+    # back to the legacy CAVE-echoed value (df.attrs["timestamp"]) for
+    # materialized mode where pinning is implicit via version number.
+    if nq.timestamp_for_consistency is not None:
+        payload["timestamp_used"] = nq.timestamp_for_consistency.isoformat()
+    else:
+        payload["timestamp_used"] = nq.timestamp_used
     payload["synapse_columns_meta"] = {
         "aggregation_rules": [
             {"name": k, **v} for k, v in nq.synapse_aggregation_rules.items()

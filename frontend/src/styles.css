@@ -269,17 +269,6 @@ body, html, #root { margin: 0; padding: 0; height: 100%; }
   padding-top: 12px;
 }
 
-.banner {
-  background: var(--accent-bg);
-  padding: 6px 8px;
-  border-radius: var(--r-md);
-  font-size: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
 .main {
   padding: 16px 24px;
   overflow: auto;
@@ -1999,3 +1988,501 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .table-meta-footer .meta { white-space: nowrap; }
 
 .hint { color: var(--muted); font-style: italic; font-size: 12px; }
+
+/* Stale-root translation notice. Sits above the workbench when the
+   backend swapped a root_id via chunkedgraph.suggest_latest_root.
+   Visual weight: subtle accent-bg (matches the other banner-style
+   surfaces in the app) so the user notices without it feeling
+   alarming. Dismissable via the × in the corner. */
+.root-swap-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 12px;
+  margin: 0 0 12px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-md);
+  color: var(--accent-strong);
+  font-size: 13px;
+}
+.root-swap-text {
+  flex: 1;
+  line-height: 1.4;
+}
+.root-swap-text code {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+  color: var(--fg);
+}
+.root-swap-dismiss {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  color: var(--accent-strong);
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.root-swap-dismiss:hover {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+
+/* 404 view — rendered inside the Workspace shell so the sidebar +
+   breadcrumb context stay visible around the not-found message.
+   Keeps the visual weight low; the failure state shouldn't feel
+   alarming when the recovery is "type a different URL". */
+.not-found {
+  padding: 32px 24px;
+  max-width: 520px;
+}
+.not-found h1 {
+  font-size: 48px;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.not-found-detail {
+  font-size: 14px;
+  margin: 0 0 16px;
+  color: var(--fg);
+}
+.not-found-detail code,
+.not-found-hint code {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  color: var(--fg);
+}
+.not-found-hint {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+.not-found-links {
+  display: flex;
+  gap: 16px;
+}
+.not-found-links a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 14px;
+}
+.not-found-links a:hover {
+  text-decoration: underline;
+}
+
+/* ---- Landing page (operator-curated tours) ------------------------------ */
+
+.landing {
+  padding: 24px 32px 48px;
+  max-width: 1100px;
+}
+.landing-header h2 {
+  margin: 0 0 8px;
+  font-weight: var(--fw-title);
+  font-size: 22px;
+}
+.landing-header p {
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 70ch;
+  line-height: 1.5;
+}
+.landing .muted { color: var(--muted); font-size: 13px; }
+
+.landing-datastack {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.landing-datastack:last-child { border-bottom: none; }
+.landing-datastack h3 {
+  margin: 0 0 12px;
+  font-weight: var(--fw-title);
+  font-size: 16px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.tour-section { margin-top: 16px; }
+.tour-section h4 {
+  margin: 0 0 8px;
+  font-weight: var(--fw-label);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.tour-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.tour-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+.tour-card h5 {
+  margin: 0 0 6px;
+  font-weight: var(--fw-title);
+  font-size: 14px;
+}
+.tour-card .tour-desc {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg);
+}
+.tour-card .tour-meta {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.tour-card .tour-cta {
+  align-self: flex-start;
+  padding: 4px 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  cursor: pointer;
+}
+.tour-card .tour-cta:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+.tour-card .tour-cta:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--surface-2);
+  color: var(--muted);
+  border-color: var(--line);
+}
+.tour-card.is-personal {
+  border-style: dashed;
+}
+.tour-card-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tour-secondary {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+.tour-secondary:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.tour-subgroup {
+  margin: 12px 0 6px;
+  font-size: 11px;
+  font-weight: var(--fw-label);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* ---- Recipe YAML uploader (LandingPage) -------------------------------- */
+
+.recipe-uploader {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+}
+.recipe-uploader h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: var(--fw-label);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.recipe-uploader p.muted {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.recipe-uploader-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.recipe-uploader-actions > button {
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+.recipe-uploader-actions > button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.recipe-uploader-paste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.recipe-uploader-paste textarea {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: var(--r-sm);
+  padding: 8px;
+  resize: vertical;
+}
+.recipe-uploader-paste button[type="submit"] {
+  align-self: flex-start;
+  padding: 4px 16px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  cursor: pointer;
+}
+.recipe-uploader-paste button[type="submit"]:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.recipe-uploader-result {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+}
+.recipe-uploader-result.is-error { border-color: var(--danger, #c54); }
+.recipe-uploader-result.is-success { border-color: var(--accent); }
+.recipe-uploader-result-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.recipe-uploader-result-header > span:first-child { flex: 1; }
+.recipe-uploader-result ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.recipe-uploader-result details summary {
+  cursor: pointer;
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.sidebar-recipes-empty {
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+.recipes-group {
+  margin-top: 8px;
+}
+
+/* ---- Sidebar Recipes widget --------------------------------------------- */
+
+.sidebar-recipes {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.sidebar-recipes summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: var(--fw-label);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  list-style: none;
+}
+.sidebar-recipes summary::-webkit-details-marker { display: none; }
+.sidebar-recipes ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sidebar-recipes button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sidebar-recipes-cta {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.sidebar-recipes button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sidebar-recipes button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sidebar-recipes-group {
+  margin: 10px 0 4px;
+  padding: 0;
+  font-size: 10px;
+  font-weight: var(--fw-label);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.sidebar-recipes-personal {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.sidebar-recipes-personal > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-recipes-row-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.sidebar-recipes-row-actions button {
+  width: auto;
+  padding: 6px 6px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.sidebar-recipes-row-actions button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---- Sidebar Share / Save widget ---------------------------------------- */
+
+.sidebar-share {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.sidebar-share summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: var(--fw-label);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  list-style: none;
+}
+.sidebar-share summary::-webkit-details-marker { display: none; }
+.sidebar-share-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.sidebar-share-actions > button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--fg);
+}
+.sidebar-share-actions > button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sidebar-share-actions > button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sidebar-share-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  margin-top: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+}
+.sidebar-share-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.sidebar-share-form input,
+.sidebar-share-form textarea {
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 4px 6px;
+  resize: vertical;
+}
+.sidebar-share-form button[type="submit"] {
+  align-self: flex-end;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  color: var(--accent);
+  padding: 4px 12px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+.sidebar-share-form button[type="submit"]:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

@@ -9,7 +9,8 @@ from ..services.datastack_config import (
     load_datastack_config,
     resolve_synapse_config,
 )
-from ..services.neuron import NeuronQuery, connectivity_bundle
+from ..services.neuron import NeuronQuery, connectivity_bundle, suggest_current_root
+from ..services.timing import timer
 
 bp = Blueprint("connectivity", __name__, url_prefix="/datastacks")
 
@@ -88,20 +89,64 @@ def connectivity(ds: str, root_id: int):
         synapse_columns=synapse_columns,
         synapse_position_prefix=syn_cfg.position_prefix,
     )
+    bundle_kwargs = dict(
+        include=include,
+        cell_type_table=cell_type_table,
+        decoration_tables=decoration_tables,
+        client_factory=client_factory,
+        spatial_transform_name=av_cfg.spatial.transform,
+        depth_range=av_cfg.spatial.depth_range,
+        layer_boundaries=av_cfg.spatial.layer_boundaries,
+        layer_names=av_cfg.spatial.layer_names,
+    )
     try:
-        payload = connectivity_bundle(
-            nq,
-            include=include,
-            cell_type_table=cell_type_table,
-            decoration_tables=decoration_tables,
-            client_factory=client_factory,
-            spatial_transform_name=av_cfg.spatial.transform,
-            depth_range=av_cfg.spatial.depth_range,
-            layer_boundaries=av_cfg.spatial.layer_boundaries,
-            layer_names=av_cfg.spatial.layer_names,
-        )
+        payload = connectivity_bundle(nq, **bundle_kwargs)
     except ValueError as exc:
         raise ApiError(409, "neuron_query_failed", str(exc)) from exc
     except Exception as exc:
         raise ApiError(502, "cave_upstream", str(exc)) from exc
-    return jsonify(payload)
+
+    # Stale-root translation. When both partner directions come back
+    # empty, the most likely cause is that root_id was edited away by
+    # proofreading after the user obtained it. Ask the chunkedgraph for
+    # the current equivalent root at the request's pinned timestamp
+    # (live) or the version's snapshot time (materialized). If the
+    # chunkedgraph suggests a different root, re-run the bundle with
+    # the new id and surface `root_id_updated` so the SPA can update
+    # the URL + show a toast.
+    #
+    # No proactive check: the translation only fires when the request
+    # has already paid an "empty bundle" cost (synapse fetches at the
+    # cold root, both empty → fast). The retry is the path that does
+    # the real work.
+    pin_empty = not payload.get("partners_in")
+    pout_empty = not payload.get("partners_out")
+    if pin_empty and pout_empty:
+        suggested = suggest_current_root(client, root_id, mat_version=mat_version)
+        if suggested is not None and suggested != root_id:
+            nq2 = NeuronQuery(
+                client,
+                root_id=suggested,
+                datastack=ds,
+                mat_version=mat_version,
+                synapse_aggregation_rules=rules,
+                synapse_columns=synapse_columns,
+                synapse_position_prefix=syn_cfg.position_prefix,
+            )
+            try:
+                payload = connectivity_bundle(nq2, **bundle_kwargs)
+            except Exception as exc:
+                # Re-run failed; serve the original empty bundle but
+                # still flag the suggestion so the SPA can surface it.
+                raise ApiError(502, "cave_upstream", str(exc)) from exc
+            payload["root_id_updated"] = {
+                "original": str(root_id),
+                "current": str(suggested),
+                "reason": "empty_partners_at_pinned_timestamp",
+            }
+
+    # Wrap jsonify to surface serialization cost. The NumpyJSONProvider's
+    # `pd.NA → None` rule + per-key Python iteration over a 5K-partner
+    # response is potentially non-trivial.
+    with timer("jsonify"):
+        return jsonify(payload)
