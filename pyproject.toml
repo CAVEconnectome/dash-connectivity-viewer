@@ -45,3 +45,11 @@ include = [
     "README.md",
     "LICENSE.txt",
 ]
+
+[tool.bumpversion]
+current_version = "2.3.1"
+commit = true
+tag = true
+
+[[tool.bumpversion.files]]
+filename = "dash_connectivity_viewer/__init__.py"
