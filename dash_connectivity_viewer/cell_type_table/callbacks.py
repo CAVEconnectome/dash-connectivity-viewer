@@ -296,6 +296,17 @@ def register_callbacks(app, config):
             else:
                 output_report = f"Table {cell_type_table} materialized on {timestamp_ngl:%m/%d/%Y} (v{client.materialize.version})"
             output_color = "success"
+
+            if tv.updated_root_ids:
+                changed = ", ".join(
+                    f"{old} → {new}" for old, new in tv.updated_root_ids.items()
+                )
+                output_report = (
+                    "Warning: some root ids were not valid at the timestamp "
+                    f"queried; showing data for the most-overlapping valid root "
+                    f"id(s) ({changed}). — " + output_report
+                )
+                output_color = "warning"
         except Exception as e:
             df = pd.DataFrame(columns=c.ct_table_columns)
             output_report = str(e)

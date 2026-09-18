@@ -60,6 +60,7 @@ class TableViewer(object):
         self._id_query_type = id_query_type
         self._timestamp = timestamp
         self.is_live = is_live
+        self._updated_root_ids = {}
 
         self._process_id_query()
 
@@ -96,6 +97,13 @@ class TableViewer(object):
     def cell_type_bridge(self):
         return DataframeBridge(self._cell_type_bridge_schema)
 
+    @property
+    def updated_root_ids(self):
+        """dict of {queried_root_id: current_root_id} for any queried root ids
+        that were not valid at the query timestamp and were substituted with the
+        most-overlapping current root id."""
+        return self._updated_root_ids
+
     def _populate_data(self):
         id_column = None
         ids = None
@@ -119,7 +127,7 @@ class TableViewer(object):
 
     def _process_id_query(self):
         if self._id_query_type == "root":
-            self._id_query = self._id_query
+            self._id_query = self._update_stale_root_ids(self._id_query)
             self._annotation_query = None
         elif self._id_query_type == "nucleus":
             self._id_query = self._lookup_roots_from_nucleus(self._id_query)
@@ -127,6 +135,33 @@ class TableViewer(object):
         elif self._id_query_type == "annotation":
             self._annotation_query = copy(self._id_query)
             self._id_query = None
+
+    def _update_stale_root_ids(self, root_ids):
+        """Substitute any queried root ids that are not valid at the query
+        timestamp with the most-overlapping current root id, recording each
+        change in ``updated_root_ids`` so the app can warn the user."""
+        if root_ids is None:
+            return root_ids
+        root_ids = np.atleast_1d(np.array(root_ids, dtype=np.int64))
+        if len(root_ids) == 0:
+            return root_ids
+
+        is_latest = np.atleast_1d(
+            self.client.chunkedgraph.is_latest_roots(
+                root_ids, timestamp=self.timestamp
+            )
+        )
+
+        updated = root_ids.copy()
+        for idx in np.flatnonzero(~is_latest):
+            old_id = int(root_ids[idx])
+            new_id = self.client.chunkedgraph.suggest_latest_roots(
+                old_id,
+                timestamp=self.timestamp,
+            )
+            self._updated_root_ids[old_id] = int(new_id)
+            updated[idx] = new_id
+        return updated
 
     def _lookup_roots_from_nucleus(self, soma_ids):
         df = _coerce_nullable_dtypes(
